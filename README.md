@@ -16,7 +16,3 @@
 
 Зберігаються в браузері (IndexedDB) окремо на кожному пристрої.
 Щоб перенести прогрес — «Експорт» у JSON-файл на одному пристрої та «Імпорт» на іншому.
-
-## Публікація на GitHub Pages
-
-Settings → Pages → Source: *Deploy from a branch* → Branch: `main`, папка `/ (root)` → Save.
