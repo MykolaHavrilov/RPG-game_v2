@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>RPG Game — Головне меню</title>
+  <link rel="stylesheet" href="assets/css/main.css">
+  <meta name="theme-color" content="#1c1d24">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="assets/icons/favicon.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <script src="assets/js/pwa.js" defer></script>
+</head>
+<body data-page="index">
+
+  <main>
+    <nav class="menu">
+      <a class="wf wf-link" href="pages/new-game.html">Нова гра</a>
+      <a class="wf wf-link" href="pages/load.html">Завантажити гру</a>
+      <a class="wf wf-link" href="pages/settings.html?from=index">Налаштування</a>
+      <!-- Браузер не дозволяє закрити вкладку «силою», тому спершу вікно підтвердження (menu.js) -->
+      <button class="wf wf-button" id="exit-btn" type="button">Вихід</button>
+    </nav>
+
+    <dialog id="exit-dialog">
+      <p id="exit-text">Вийти з гри?</p>
+      <div class="dialog-actions" id="exit-actions">
+        <button class="wf wf-button" id="exit-yes" type="button">Так, вийти</button>
+        <button class="wf wf-link" id="exit-no" type="button">Ні, залишитись</button>
+      </div>
+    </dialog>
+  </main>
+
+  <script src="assets/js/menu.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Інвентар</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/game.css">
+  <meta name="theme-color" content="#1c1d24">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" type="image/png" href="../assets/icons/favicon.png">
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+  <script src="../assets/js/pwa.js" defer></script>
+</head>
+<body data-page="inventory">
+
+  <header>
+    <nav>
+      <a class="wf wf-link" href="game.html">Локація</a>
+      <a class="wf wf-link" href="character.html">Персонаж</a>
+      <a class="wf wf-link" href="maps.html">Мапа</a>
+      <a class="wf wf-link" href="inventory.html" aria-current="page">Інвентар</a>
+      <a class="wf wf-link" href="settings.html?from=inventory">Налаштування</a>
+      <a class="wf wf-link" href="../index.html">Головне меню</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Герої групи: у кожного своє спорядження, інвентар і скриня — спільні -->
+    <div class="row member-tabs" id="member-tabs" hidden></div>
+    <div class="row">
+
+      <section class="panel stack" style="flex:1 1 280px">
+        <h2 id="equip-title">Спорядження</h2>
+        <div class="stack" id="equip-list"></div>
+      </section>
+
+      <section class="stack" style="flex:2 1 460px">
+        <div class="panel stack">
+          <div class="inv-head">
+            <h2>Предмети</h2>
+            <span id="gold">Золото: 0</span>
+          </div>
+          <div class="slots slots-12" id="item-grid"></div>
+        </div>
+
+        <div class="panel stack">
+          <div class="inv-head">
+            <h2>Скриня в Домівці</h2>
+            <span id="chest-note"></span>
+          </div>
+          <div class="slots slots-12" id="chest-grid"></div>
+        </div>
+
+        <div class="wf wf-text item-desc" id="item-desc" aria-live="polite"></div>
+
+        <div class="row inv-actions">
+          <button class="wf wf-button" id="btn-equip" type="button" disabled>Вдягнути</button>
+          <button class="wf wf-button" id="btn-unequip" type="button" disabled>Зняти</button>
+          <button class="wf wf-button" id="btn-use" type="button" disabled>Використати</button>
+          <button class="wf wf-secondary" id="btn-to-chest" type="button" disabled>У скриню</button>
+          <button class="wf wf-secondary" id="btn-from-chest" type="button" disabled>Забрати зі скрині</button>
+          <button class="wf wf-danger" id="btn-drop" type="button" disabled>Викинути</button>
+        </div>
+        <div class="msg" id="msg" role="status" hidden></div>
+
+        <a class="wf wf-link" href="game.html">Назад до локації</a>
+      </section>
+    </div>
+  </main>
+
+  <script src="../assets/js/core.js" defer></script>
+  <script src="../assets/js/data/levels.js" defer></script>
+  <script src="../assets/js/data/items.js" defer></script>
+  <script src="../assets/js/data/classes.js" defer></script>
+  <script src="../assets/js/stats.js" defer></script>
+  <script src="../assets/js/data/enemies.js" defer></script>
+  <script src="../assets/js/data/skills.js" defer></script>
+  <script src="../assets/js/quests.js" defer></script>
+  <script src="../assets/js/rarity.js" defer></script>
+  <script src="../assets/js/save.js" defer></script>
+  <script src="../assets/js/character.js" defer></script>
+  <script src="../assets/js/party.js" defer></script>
+  <script src="../assets/js/battle.js" defer></script>
+  <script src="../assets/js/game.js" defer></script>
+  <script src="../assets/js/menu.js" defer></script>
+</body>
+</html>

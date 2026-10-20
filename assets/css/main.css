@@ -1,0 +1,362 @@
+/* =====================================================================
+   main.css — спільні стилі для ВСІХ сторінок
+   Кольори блоків:
+     фіолетовий — зображення         зелений  — кнопка (дія)
+     синій      — посилання-перехід  сірий    — текст / інформація
+     коричневий — слот інвентаря     червоний / синій / жовтий — HP / MP / EXP
+   ===================================================================== */
+
+:root {
+  --bg: #1c1d24;
+  --panel: #262833;
+  --text: #f4f4f6;
+
+  --c-image:  #6b4fa0;
+  --c-button: #2e8b57;
+  --c-link:   #1e6fbf;
+  --c-text:   #55606b;
+  --c-slot:   #8a5a2b;
+  --c-locked: #3a3d46;
+
+  --c-hp:  #c0392b;
+  --c-mp:  #2f5fd0;
+  --c-exp: #d4a017;
+  --c-lvl: #1f8f8f;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;          /* header, main, footer — один під одним */
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.4;
+}
+
+header, main, footer {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 12px 20px;
+}
+main { flex: 1; }
+
+
+/* ---------- Базовий «каркасний» блок ---------- */
+.wf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 2px dashed rgba(255, 255, 255, .55);
+  border-radius: 6px;
+  color: #fff;
+  font: inherit;
+  text-align: center;
+  text-decoration: none;
+}
+.wf .hint { font-size: .8rem; opacity: .8; }
+
+.wf-image  { background: var(--c-image); }
+.wf-button { background: var(--c-button); }
+.wf-link   { background: var(--c-link); }
+.wf-text   { background: var(--c-text); }
+.wf-slot   { background: var(--c-slot); }
+.wf-locked { background: var(--c-locked); opacity: .7; cursor: not-allowed; }
+
+a.wf, button.wf { cursor: pointer; }
+a.wf:hover, button.wf:hover { filter: brightness(1.2); }
+a.wf:focus-visible, button.wf:focus-visible,
+input:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.wf-locked:hover { filter: none; }
+
+/* ---------- Навігація ---------- */
+nav { display: flex; flex-wrap: wrap; gap: 12px; }
+nav a.wf { min-height: 40px; padding: 6px 16px; }
+nav a[aria-current="page"] { outline: 3px solid #fff; outline-offset: 2px; }
+
+/* ---------- Головне меню ---------- */
+.menu {
+  flex-direction: column;
+  max-width: 460px;
+  margin: 24px auto;
+  gap: 16px;
+}
+.menu .wf { width: 100%; min-height: 72px; font-size: 1.2rem; }
+
+/* ---------- Панелі та форми ---------- */
+.panel {
+  background: var(--panel);
+  border: 2px dashed rgba(255, 255, 255, .25);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.panel h2 { margin: 0 0 12px; font-size: 1.1rem; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.row   { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
+.row > * { flex: 1 1 200px; }
+.narrow { max-width: 640px; margin: 0 auto; }
+
+.field { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.field input[type="text"] {
+  padding: 10px;
+  font: inherit;
+  color: #111;
+  background: #e9e9ee;
+  border: 2px solid #fff;
+  border-radius: 6px;
+}
+.choice { display: flex; gap: 8px; align-items: center; }
+
+/* ---------- Діалог підтвердження ---------- */
+dialog {
+  padding: 20px;
+  color: var(--text);
+  background: var(--panel);
+  border: 2px dashed #fff;
+  border-radius: 8px;
+}
+dialog::backdrop { background: rgba(0, 0, 0, .6); }
+.dialog-actions { display: flex; gap: 12px; margin-top: 16px; }
+.dialog-actions .wf { flex: 1; }
+
+/* ---------- Смужки HP / MP / EXP ---------- */
+.bar {
+  position: relative;
+  min-height: 30px;
+  background: rgba(0, 0, 0, .45);
+  border: 2px dashed rgba(255, 255, 255, .55);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--value, 100%);      /* ширину задає game.js через setBar() */
+}
+.bar-label {
+  position: relative;
+  display: block;
+  padding: 4px 8px;
+  text-align: center;
+  font-size: .9rem;
+  font-weight: 600;
+  text-shadow: 0 1px 2px #000;
+}
+.bar-hp  .bar-fill { background: var(--c-hp); }
+.bar-mp  .bar-fill { background: var(--c-mp); }
+.bar-exp .bar-fill { background: var(--c-exp); }
+.bar-lvl { background: var(--c-lvl); }
+
+/* ---------- Сітка слотів ---------- */
+.slots { display: grid; gap: 8px; }
+.slots-4 { grid-template-columns: repeat(4, 1fr); }
+.slots-6 { grid-template-columns: repeat(6, 1fr); }
+/* Інвентар і сундук: комірки вдвічі менші (12 в ряд замість 6) */
+.slots-12 { grid-template-columns: repeat(12, 1fr); gap: 4px; }
+.slots .wf { aspect-ratio: 1; min-height: 0; padding: 4px; font-size: .75rem; }
+.slots-12 .wf { padding: 2px; font-size: .6rem; border-width: 1px; }
+.rarity-rare { box-shadow: inset 0 0 0 2px #c58bff; background: #6b3f8f; }
+
+@media (max-width: 700px) {
+  header, main, footer { padding: 10px 12px; }
+  .slots-6 { grid-template-columns: repeat(4, 1fr); }
+  .slots-12 { grid-template-columns: repeat(6, 1fr); }
+}
+@media (min-width: 701px) and (max-width: 1100px) {
+  .slots-12 { grid-template-columns: repeat(8, 1fr); }
+}
+
+/* ---------- Справжні зображення (герой, ворог) ----------
+   Рамка-«картка»: картинка 2:3 на весь блок, підпис (ім'я) внизу поверх неї */
+.pic {
+  position: relative;
+  margin: 0;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border: 2px solid rgba(255, 255, 255, .35);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pic figcaption {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 8px;
+  text-align: center;
+  font-weight: 700;
+  background: rgba(0, 0, 0, .55);
+}
+
+/* ---------- Кнопки: додаткові стани ---------- */
+.wf-danger    { background: #a33a2c; }
+.wf-secondary { background: #3c6e57; }
+button.wf:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  filter: none;
+}
+.slot-empty  { opacity: .35; }
+.slot-usable { outline: 2px solid rgba(255, 255, 255, .35); }
+.is-selected { outline: 3px solid #ffd54a; outline-offset: 1px; }
+[hidden] { display: none !important; }
+
+/* ---------- Повідомлення ---------- */
+.msg {
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #2e5d46;
+  border: 1px solid rgba(255, 255, 255, .3);
+}
+.msg-error { background: #7a2b22; }
+.note { margin: 0; font-size: .9rem; opacity: .85; }
+
+/* ---------- Список збережень ---------- */
+.save-row { display: flex; gap: 8px; }
+.save-row .save-load { flex: 1; align-items: flex-start; text-align: left; }
+.save-row .save-del  { flex: 0 0 auto; }
+.save-date { font-size: .85rem; opacity: .85; }
+
+/* Довгі назви предметів не вилазять за межі слота */
+.slots .wf { min-width: 0; overflow: hidden; overflow-wrap: anywhere; line-height: 1.2; }
+.slots button.wf:disabled { opacity: .8; cursor: default; }
+
+/* ---------- Іконки предметів (спрайт-листи assets/img/items/*.webp, клітинка 128×128) ---------- */
+.slots .wf { position: relative; }
+.slots .wf.has-icon { padding: 0; overflow: hidden; }
+.item-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.item-qty {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: .72rem;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 0 2px #000, 0 1px 2px #000;
+}
+.slots-12 .item-qty { font-size: .62rem; }
+.item-name { padding: 2px; }
+.mini-icon  { width: 28px; height: 28px; flex: 0 0 28px; border-radius: 3px; }
+.equip-icon { width: 36px; height: 36px; border-radius: 3px; }
+.desc-icon  { width: 64px; height: 64px; border-radius: 4px; }
+
+/* =====================================================================
+   ТЕЛЕФОНИ ТА ПЛАНШЕТИ
+   ===================================================================== */
+
+/* Без затримки й подвійного-тапу-зуму на кнопках, без синього спалаху */
+a, button, input, label { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+/* Висота екрана на мобільних з урахуванням панелі браузера */
+body { min-height: 100dvh; }
+
+/* Вирізи екрана (камера) у повноекранному режимі застосунку */
+header, main, footer {
+  padding-left:  max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+}
+
+/* На сенсорних екранах :hover «залипає» після дотику — замінюємо на :active */
+@media (hover: none) {
+  a.wf:hover, button.wf:hover { filter: none; }
+  a.wf:active, button.wf:active { filter: brightness(1.25); transform: scale(.98); }
+}
+
+dialog { max-width: calc(100vw - 32px); }
+
+@media (max-width: 700px) {
+  header, main, footer {
+    padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  }
+
+  /* Навігація: компактна сітка по 3 кнопки в ряд замість 6 рядків */
+  header nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  header nav a.wf { min-height: 40px; padding: 4px 6px; font-size: .85rem; }
+
+  .menu { margin: 12px auto; }
+  .menu .wf { min-height: 64px; }
+
+  .panel { padding: 12px; }
+  .row > * { flex-basis: 140px; }
+
+  /* Підписи кількості в дрібних слотах — читабельні */
+  .slots-12 .wf { font-size: .7rem; }
+  .slots-12 .item-qty { font-size: .7rem; }
+
+  .dialog-actions { flex-direction: column; }
+}
+
+/* ---------- Рідкість зброї та броні (rarity.js) ---------- */
+.rarity-broken    { box-shadow: inset 0 0 0 2px #7d7d7d; }
+.rarity-common    { box-shadow: inset 0 0 0 1px rgba(232, 232, 232, .45); }
+.rarity-magic     { box-shadow: inset 0 0 0 2px #4f8dff, 0 0 6px rgba(79, 141, 255, .45); }
+.rarity-epic      { box-shadow: inset 0 0 0 2px #b265ff, 0 0 8px rgba(178, 101, 255, .55); }
+.rarity-legendary { box-shadow: inset 0 0 0 2px #ff9d2e, 0 0 10px rgba(255, 157, 46, .7); }
+.rt-broken    { color: #a3a3a3; }
+.rt-common    { color: #f0f0f0; }
+.rt-magic     { color: #6ea2ff; }
+.rt-epic      { color: #c58bff; }
+.rt-legendary { color: #ffb04d; text-shadow: 0 0 6px rgba(255, 157, 46, .5); }
+
+/* ---------- Спрайт-листи: іконки предметів і герой ---------- */
+.sprite-icon { display: inline-block; flex: 0 0 auto; background-repeat: no-repeat; }
+.item-icon.sprite-icon { display: block; }
+.ri-broken { filter: grayscale(1) brightness(.75); }          /* зламана річ — сіра */
+.hero-sprite {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  transform: translateY(-55%);
+  background-repeat: no-repeat;
+}
+
+/* Герой з шарів («паперова лялька», data/classes.js → heroDoll) */
+.doll-layer { position: absolute; background-repeat: no-repeat; pointer-events: none; }
+.doll-base  { inset: 0; }
+
+/* ---------- Заглушки для предметів без картинки ---------- */
+.item-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+  text-align: center;
+  font-size: .62rem;
+  line-height: 1.15;
+  font-weight: 600;
+}
+.mini-ph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 0 0 1px currentColor;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+}

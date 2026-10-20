@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Локація</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/game.css">
+  <meta name="theme-color" content="#1c1d24">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" type="image/png" href="../assets/icons/favicon.png">
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+  <script src="../assets/js/pwa.js" defer></script>
+</head>
+<body data-page="game">
+
+  <header>
+    <nav>
+      <a class="wf wf-link" href="game.html" aria-current="page">Локація</a>
+      <a class="wf wf-link" href="character.html">Персонаж</a>
+      <a class="wf wf-link" href="maps.html">Мапа</a>
+      <a class="wf wf-link" href="inventory.html">Інвентар</a>
+      <a class="wf wf-link" href="settings.html?from=game">Налаштування</a>
+      <a class="wf wf-link" href="../index.html">Головне меню</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="battle">
+
+      <!-- ЛІВА КОЛОНКА: персонаж -->
+      <section class="col" aria-label="Персонаж">
+        <figure class="pic portrait">
+          <span id="hero-img" class="hero-sprite" role="img" aria-label="Персонаж"></span>
+          <figcaption id="hero-name">Персонаж</figcaption>
+        </figure>
+        <div class="stats">
+          <div class="bar bar-hp" id="hero-hp" data-name="HP"><div class="bar-fill"></div><span class="bar-label">HP</span></div>
+          <div class="bar bar-mp" id="hero-mp" data-name="MP"><div class="bar-fill"></div><span class="bar-label">MP</span></div>
+          <div class="exp-row">
+            <div class="bar bar-exp" id="hero-exp" data-name="EXP"><div class="bar-fill"></div><span class="bar-label">EXP</span></div>
+            <div class="bar bar-lvl" id="hero-lvl">LVL 1</div>
+          </div>
+        </div>
+        <div class="note" id="regen-info"></div>
+        <!-- Напарники групи (game.js → renderPartyList) -->
+        <div class="party-list" id="party-list" hidden></div>
+
+        <div class="inv-head">
+          <span>Швидкий доступ</span>
+          <span id="gold">Золото: 0</span>
+        </div>
+        <!-- Перші 12 предметів інвентаря; зілля можна випити кліком (game.js) -->
+        <div class="slots slots-4" id="quick-slots"></div>
+
+        <a class="wf wf-link" href="inventory.html">Відкрити інвентар</a>
+      </section>
+
+      <!-- ЦЕНТР: локація і бій -->
+      <section class="col" aria-label="Локація">
+        <a class="wf wf-link location" href="maps.html" title="Змінити локацію">
+          <strong id="location-name">Локація</strong>
+          <span class="loc-desc" id="location-desc"></span>
+        </a>
+
+        <!-- Мирні локації (Домівка, Храм, Шинок) — вміст малює game.js -->
+        <div class="panel stack place" id="place-panel" hidden></div>
+
+        <!-- Бойові локації -->
+        <div class="stack" id="combat-ui" hidden>
+          <div class="wf wf-text arena" id="arena" aria-live="polite"></div>
+
+          <ol class="log" id="battle-log" aria-label="Журнал бою"></ol>
+
+          <!-- Чию чергу дій налаштовуємо (якщо в групі кілька героїв) -->
+          <div class="row member-tabs" id="queue-member" hidden></div>
+          <div class="queue-head">
+            <span>Черга дій (повторюється, поки триває бій)</span>
+            <span id="weapon-info"></span>
+          </div>
+          <div class="queue" id="queue"></div>
+
+          <div class="row actions">
+            <button class="wf wf-button" id="start-btn" type="button">Почати бій</button>
+            <button class="wf wf-link" id="reroll-btn" type="button">Шукати іншого ворога</button>
+          </div>
+        </div>
+
+        <button class="wf wf-button wf-secondary" id="save-btn" type="button">Зберегти гру</button>
+        <div class="msg" id="msg" role="status" hidden></div>
+      </section>
+
+      <!-- ПРАВА КОЛОНКА: ворог (лише в бойових локаціях) -->
+      <section class="col" aria-label="Ворог" id="enemy-col" hidden>
+        <figure class="pic portrait">
+          <span id="enemy-img" class="hero-sprite" role="img" aria-label="Ворог"></span>
+          <figcaption id="enemy-name">Ворог</figcaption>
+        </figure>
+        <div class="stats">
+          <div class="bar bar-hp" id="enemy-hp" data-name="HP"><div class="bar-fill"></div><span class="bar-label">HP</span></div>
+          <div class="bar bar-mp" id="enemy-mp" data-name="MP"><div class="bar-fill"></div><span class="bar-label">MP</span></div>
+        </div>
+        <!-- Якщо ворогів кілька — список з HP / MP кожного -->
+        <div class="party-list" id="enemy-list" hidden></div>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="../assets/js/core.js" defer></script>
+  <script src="../assets/js/data/levels.js" defer></script>
+  <script src="../assets/js/data/items.js" defer></script>
+  <script src="../assets/js/data/classes.js" defer></script>
+  <script src="../assets/js/stats.js" defer></script>
+  <script src="../assets/js/data/enemies.js" defer></script>
+  <script src="../assets/js/data/skills.js" defer></script>
+  <script src="../assets/js/quests.js" defer></script>
+  <script src="../assets/js/rarity.js" defer></script>
+  <script src="../assets/js/save.js" defer></script>
+  <script src="../assets/js/character.js" defer></script>
+  <script src="../assets/js/party.js" defer></script>
+  <script src="../assets/js/battle.js" defer></script>
+  <script src="../assets/js/game.js" defer></script>
+  <script src="../assets/js/menu.js" defer></script>
+</body>
+</html>

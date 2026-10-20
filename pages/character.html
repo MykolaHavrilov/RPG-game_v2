@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Персонаж</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/game.css">
+  <meta name="theme-color" content="#1c1d24">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" type="image/png" href="../assets/icons/favicon.png">
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+  <script src="../assets/js/pwa.js" defer></script>
+</head>
+<body data-page="character">
+
+  <header>
+    <nav>
+      <a class="wf wf-link" href="game.html">Локація</a>
+      <a class="wf wf-link" href="character.html" aria-current="page">Персонаж</a>
+      <a class="wf wf-link" href="maps.html">Мапа</a>
+      <a class="wf wf-link" href="inventory.html">Інвентар</a>
+      <a class="wf wf-link" href="settings.html?from=character">Налаштування</a>
+      <a class="wf wf-link" href="../index.html">Головне меню</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Герої групи: атрибути, характеристики й спорядження кожного окремо -->
+    <div class="row member-tabs" id="member-tabs" hidden></div>
+    <div class="row">
+
+      <section class="stack" style="flex:0 1 300px">
+        <figure class="pic">
+          <span id="hero-img" class="hero-sprite" role="img" aria-label="Персонаж"></span>
+          <figcaption id="hero-name">Персонаж</figcaption>
+        </figure>
+        <div class="stats">
+          <div class="bar bar-hp" id="hero-hp" data-name="HP"><div class="bar-fill"></div><span class="bar-label">HP</span></div>
+          <div class="bar bar-mp" id="hero-mp" data-name="MP"><div class="bar-fill"></div><span class="bar-label">MP</span></div>
+          <div class="exp-row">
+            <div class="bar bar-exp" id="hero-exp" data-name="EXP"><div class="bar-fill"></div><span class="bar-label">EXP</span></div>
+            <div class="bar bar-lvl" id="hero-lvl">LVL 1</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="stack" style="flex:2 1 400px">
+        <div class="row">
+          <div class="panel stack">
+            <h2>Атрибути</h2>
+            <div class="stat-list" id="attrs-list"></div>
+          </div>
+          <div class="panel stack">
+            <h2>Характеристики</h2>
+            <div class="stat-list" id="stats-list"></div>
+          </div>
+          <div class="panel stack">
+            <h2>Розвиток</h2>
+            <div class="stat-list" id="char-info"></div>
+          </div>
+        </div>
+
+        <div class="panel stack">
+          <h2>Спорядження</h2>
+          <div class="equip-grid" id="equip-slots"></div>
+          <a class="wf wf-link" href="inventory.html">Змінити спорядження</a>
+        </div>
+
+        <div class="panel stack">
+          <h2>Володіння зброєю та навички</h2>
+          <div class="stat-list" id="mastery-list"></div>
+        </div>
+
+        <a class="wf wf-link" href="game.html">Назад до локації</a>
+      </section>
+    </div>
+  </main>
+
+  <script src="../assets/js/core.js" defer></script>
+  <script src="../assets/js/data/levels.js" defer></script>
+  <script src="../assets/js/data/items.js" defer></script>
+  <script src="../assets/js/data/classes.js" defer></script>
+  <script src="../assets/js/stats.js" defer></script>
+  <script src="../assets/js/data/enemies.js" defer></script>
+  <script src="../assets/js/data/skills.js" defer></script>
+  <script src="../assets/js/quests.js" defer></script>
+  <script src="../assets/js/rarity.js" defer></script>
+  <script src="../assets/js/save.js" defer></script>
+  <script src="../assets/js/character.js" defer></script>
+  <script src="../assets/js/party.js" defer></script>
+  <script src="../assets/js/battle.js" defer></script>
+  <script src="../assets/js/game.js" defer></script>
+  <script src="../assets/js/menu.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Мапа</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/game.css">
+  <meta name="theme-color" content="#1c1d24">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" type="image/png" href="../assets/icons/favicon.png">
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+  <script src="../assets/js/pwa.js" defer></script>
+</head>
+<body data-page="maps">
+
+  <header>
+    <nav>
+      <a class="wf wf-link" href="game.html">Локація</a>
+      <a class="wf wf-link" href="character.html">Персонаж</a>
+      <a class="wf wf-link" href="maps.html" aria-current="page">Мапа</a>
+      <a class="wf wf-link" href="inventory.html">Інвентар</a>
+      <a class="wf wf-link" href="settings.html?from=maps">Налаштування</a>
+      <a class="wf wf-link" href="../index.html">Головне меню</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="stack">
+      <div class="panel stack">
+        <h2>Мапа світу</h2>
+        <!-- Зони локацій і фігурка героя малюються поверх картинки (game.js → WORLD_MAP) -->
+        <div class="world-map" id="world-map">
+          <img class="map-img" src="../assets/images/map_world.webp" alt="Мапа світу" width="1586" height="992">
+        </div>
+        <p class="note">Наведіть на місце на мапі, щоб побачити опис. Клік — обрати, подвійний клік — перейти. Місто можна обрати по районах.</p>
+      </div>
+      <div class="panel stack">
+        <h2>Локації</h2>
+        <div class="loc-grid" id="loc-list"></div>
+      </div>
+      <div class="panel stack" id="loc-details" aria-live="polite"></div>
+      <a class="wf wf-link" href="game.html">Назад до локації</a>
+    </div>
+  </main>
+
+  <script src="../assets/js/core.js" defer></script>
+  <script src="../assets/js/data/levels.js" defer></script>
+  <script src="../assets/js/data/items.js" defer></script>
+  <script src="../assets/js/data/classes.js" defer></script>
+  <script src="../assets/js/stats.js" defer></script>
+  <script src="../assets/js/data/enemies.js" defer></script>
+  <script src="../assets/js/data/skills.js" defer></script>
+  <script src="../assets/js/quests.js" defer></script>
+  <script src="../assets/js/rarity.js" defer></script>
+  <script src="../assets/js/save.js" defer></script>
+  <script src="../assets/js/character.js" defer></script>
+  <script src="../assets/js/party.js" defer></script>
+  <script src="../assets/js/battle.js" defer></script>
+  <script src="../assets/js/game.js" defer></script>
+  <script src="../assets/js/menu.js" defer></script>
+</body>
+</html>

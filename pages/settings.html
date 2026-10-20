@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Налаштування</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <meta name="theme-color" content="#1c1d24">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" type="image/png" href="../assets/icons/favicon.png">
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+  <script src="../assets/js/pwa.js" defer></script>
+</head>
+<body data-page="settings">
+
+  <main>
+    <div class="narrow stack">
+      
+      <div class="panel stack">
+        <h2>Звук</h2>
+        <label class="field">
+          <span>Гучність: <span id="volume-value">70%</span></span>
+          <input type="range" id="volume" min="0" max="100" value="70">
+        </label>
+      </div>
+      
+      <div class="panel stack">
+        <h2>Показ бою</h2>
+        <label class="choice"><input type="radio" name="battle-mode" value="stepByStep" checked> Покроково: текст з уроном кожної дії</label>
+        <label class="choice"><input type="radio" name="battle-mode" value="result"> Одразу фінальний результат з повним переліком дій</label>
+      </div>
+
+      <div class="panel stack">
+        <h2>Збереження</h2>
+        <button class="wf wf-button" id="export-btn" type="button">Експортувати поточну гру у файл (.json)</button>
+        <button class="wf wf-button" id="import-btn" type="button">Імпортувати збереження з файлу (.json)</button>
+      </div>
+      <div class="msg" id="msg" role="status" hidden></div>
+
+      <a class="wf wf-link" href="../index.html" data-back>Назад</a>
+    </div>
+  </main>
+
+  <script src="../assets/js/core.js" defer></script>
+  <script src="../assets/js/data/levels.js" defer></script>
+  <script src="../assets/js/data/items.js" defer></script>
+  <script src="../assets/js/data/classes.js" defer></script>
+  <script src="../assets/js/stats.js" defer></script>
+  <script src="../assets/js/data/enemies.js" defer></script>
+  <script src="../assets/js/data/skills.js" defer></script>
+  <script src="../assets/js/quests.js" defer></script>
+  <script src="../assets/js/rarity.js" defer></script>
+  <script src="../assets/js/save.js" defer></script>
+  <script src="../assets/js/character.js" defer></script>
+  <script src="../assets/js/party.js" defer></script>
+  <script src="../assets/js/battle.js" defer></script>
+  <script src="../assets/js/game.js" defer></script>
+  <script src="../assets/js/menu.js" defer></script>
+</body>
+</html>
