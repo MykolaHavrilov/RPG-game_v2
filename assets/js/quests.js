@@ -13,6 +13,12 @@
 //   3) убити 70 слаймів → відкривається Центральний район (Мерія, Дошка оголошень — найм у групу)
 // Стан: save.story.explore = { part: 0 (не взято) | 1..3 (поточна частина) | 4 (виконано), kills }
 //
+// КВЕСТ «ШЛЯХ ПРОФЕСІЇ» (з 15 рівня Селянина, видає Адміністратор гільдії) — 2 частини:
+//   1) убити 40 вовків; 2) принести 30 слизу.
+//   Після здачі герой отримує професію 2 рангу. Яку саме — вирішують приховані
+//   критерії (data/classes.js → pickProfession: які атрибути гравець прокачував).
+// Стан: save.story.profession = { part: 0 | 1..2 | 3 (виконано), kills, result }
+//
 // Підключається ПІСЛЯ items.js / enemies.js і ДО character.js.
 // ============================================================
 
@@ -146,6 +152,13 @@
       quest.have++;
       lines.push(`${questTitle(quest)}: ${quest.have}/${quest.need}`);
     }
+    // Квест професії: частина «убити»
+    const ps = professionState(save);
+    const ppart = PROFESSION.parts[ps.part - 1];
+    if (ppart?.kill && TARGETS[ppart.kill.target].match(enemyId) && ps.kills < ppart.kill.need) {
+      ps.kills++;
+      lines.push(`«${PROFESSION.name}»: ${TARGETS[ppart.kill.target].name} ${ps.kills}/${ppart.kill.need}`);
+    }
     // Особливе завдання: частина «убити»
     const st = storyState(save);
     const part = EXPLORE.parts[st.part - 1];
@@ -234,6 +247,67 @@
     return { ok: true, part, levelUps, finished: info.st.part > EXPLORE.parts.length };
   }
 
+  // ---------- Квест «Шлях професії» ----------
+  const PROFESSION = {
+    name: "Шлях професії",
+    parts: [
+      { title: "Випробування силою",
+        text: "«Селянином можна прожити все життя. Але ти вже більше, ніж селянин. Доведи це: убий 40 вовків на Лісовій стежці.»",
+        kill: { target: "wolf", need: 40 } },
+      { title: "Випробування витримкою",
+        text: "«Тепер — Печера в лісі. Принеси 30 слизу. Тренер тим часом подивиться, чого ти навчився і до чого лежить твоя душа.»",
+        bring: [{ id: "slime_gel", qty: 30 }] }
+    ]
+  };
+
+  function professionState(save) {
+    save.story ??= {};
+    save.story.profession ??= { part: 0, kills: 0, result: null };
+    return save.story.profession;
+  }
+
+  // null — квест ще не доступний (не Селянин або рівень < 15)
+  function professionInfo(save) {
+    const st = professionState(save);
+    const total = PROFESSION.parts.length;
+    if (st.part > total) return { done: true, st, total, result: st.result };
+    const ch = save.character;
+    if (st.part === 0) {
+      if (ch.classId !== RPG.DEFAULT_CLASS || ch.level < RPG.PROFESSION_LEVEL) return null;
+      return { canStart: true, st, total };
+    }
+    const part = PROFESSION.parts[st.part - 1];
+    const progress = part.bring
+      ? part.bring.map(b => ({ label: RPG.ITEMS[b.id].name, have: Math.min(RPG.countItem(save, b.id), b.qty), need: b.qty }))
+      : [{ label: "Убито " + TARGETS[part.kill.target].name, have: Math.min(st.kills, part.kill.need), need: part.kill.need }];
+    return { st, total, part, index: st.part, progress, complete: progress.every(p => p.have >= p.need) };
+  }
+
+  function startProfession(save) {
+    const info = professionInfo(save);
+    if (!info?.canStart) return { ok: false, reason: `Квест доступний Селянину з ${RPG.PROFESSION_LEVEL} рівня.` };
+    info.st.part = 1;
+    info.st.kills = 0;
+    return { ok: true };
+  }
+
+  // Здати частину. Остання частина — зміна професії.
+  // Повертає { ok, finished, classId, change }
+  function turnInProfession(save) {
+    const info = professionInfo(save);
+    if (!info || !info.part) return { ok: false, reason: "Немає активної частини квесту." };
+    if (!info.complete) return { ok: false, reason: "Частина квесту ще не виконана." };
+    for (const b of info.part.bring || []) RPG.removeItem(save, b.id, b.qty);
+    info.st.part++;
+    info.st.kills = 0;
+    if (info.st.part <= PROFESSION.parts.length) return { ok: true, finished: false };
+    const classId = RPG.pickProfession(save);
+    const change = RPG.changeClass(save, classId, { force: true });
+    if (!change.ok) { info.st.part--; return change; }
+    info.st.result = classId;
+    return { ok: true, finished: true, classId, change };
+  }
+
   // ---------- Нагороди за чемпіонів ----------
   function addChampionBounty(save, enemyId) {
     const q = state(save);
@@ -258,6 +332,7 @@
     QUEST_MAX_ACTIVE: MAX_ACTIVE,
     questState: state, fillOffers, questTitle, questProgress, isQuestComplete: isComplete,
     describeReward, acceptQuest, abandonQuest, turnInQuest, questOnKill,
-    EXPLORE, storyState, isCentralOpen, exploreInfo, describeExploreReward, startExplore, turnInExplore
+    EXPLORE, storyState, isCentralOpen, exploreInfo, describeExploreReward, startExplore, turnInExplore,
+    PROFESSION, professionState, professionInfo, startProfession, turnInProfession
   });
 })(window.RPG);

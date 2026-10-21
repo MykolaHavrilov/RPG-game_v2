@@ -222,7 +222,7 @@ const ITEMS = {
     name: "Дерев'яний посох", icon: ["weapon_mainHand", 12],
     type: "weapon", slot: "mainHand", tier: 1, levelReq: 1, price: 14, weaponType: "staff",
     stats: { attack: 1, magic: 6, mp: 10, int: 1 },
-    description: "Дерев'яний посох учня. Кидає «Іскру»."
+    description: "Дерев'яний посох учня. Чари — лише ті, що стоять у черзі дій; інакше б'є як палиця."
   },
   staff_t2: {
     name: "Кам'яний посох", icon: ["weapon_mainHand", 13],

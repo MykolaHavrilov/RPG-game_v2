@@ -13,6 +13,10 @@
 //         використовується з шансом chance, якщо вистачає мани
 // skills — унікальні навички (бос): по черзі, кожен 3-й власний хід ворога.
 //          kind: "magic" (шкода), "heal" (лікує healPct від макс. HP), "stun" (шкода + герой пропускає хід)
+// range — дальність атаки ворога: 1 — ближній бій, 2 — середній, 3 — дальній
+//         (бій починається з відстані 3; хто не дістає — підходить на 1 за хід)
+// move  — власний прийом ворога: { name, mult, chance } — фізичний удар attack × mult;
+//         якщо не вказано — береться типовий прийом за дальністю (MONSTER_MOVES)
 // noChampion — не може стати чемпіоном; boss — показується як бос
 // spawnWeight — множник шансу зустрічі (1 — звичайно, 0.1 — у 10 разів рідше)
 // ============================================================
@@ -21,10 +25,19 @@
   // Спрайт-лист ворогів: 5 стовпців × 2 рядки, кадр 256×256, відступ 2 px
   const ENEMY_SHEET = { file: "assets/images/ENEMIES_1", ext: ".webp", cols: 5, rows: 2, size: 256, gap: 2 };
 
+  // Типові прийоми монстрів за дальністю атаки
+  const MONSTER_MOVES = {
+    1: { name: "Шматування",        mult: 1.6,  chance: 0.25 },   // ближній бій
+    2: { name: "Удар з наскоку",     mult: 1.35, chance: 0.30 },   // середня дистанція
+    3: { name: "Прицільний постріл", mult: 1.45, chance: 0.30 }    // дальній бій
+  };
+  const RANGE_NAMES = { 1: "ближній бій", 2: "середня дистанція", 3: "дальній бій" };
+
   const ENEMIES = {
     // ---------- Щури (1–3 рівень) ----------
     rat: {
       name: "Щур з льоху",
+      range: 1, move: { name: "Сказений укус", mult: 1.5, chance: 0.25 },
       sprite: 0,
       level: 1,
       stats: { hp: 30, mp: 0, attack: 7, defense: 1, magicDefense: 0, speed: 4, crit: 3 },
@@ -39,6 +52,7 @@
     },
     rat2: {
       name: "Щур з поля",
+      range: 1, move: { name: "Сказений укус", mult: 1.5, chance: 0.25 },
       sprite: 1,
       level: 2,
       stats: { hp: 45, mp: 0, attack: 10, defense: 2, magicDefense: 1, speed: 5, crit: 4 },
@@ -56,6 +70,7 @@
     },
     rat3: {
       name: "Щур з підвалу",
+      range: 1, move: { name: "Сказений укус", mult: 1.55, chance: 0.28 },
       sprite: 2,
       level: 3,
       stats: { hp: 65, mp: 0, attack: 14, defense: 3, magicDefense: 1, speed: 6, crit: 5 },
@@ -78,6 +93,7 @@
     // ---------- Вовки (4–6 рівень) ----------
     wolf: {
       name: "Сірий вовк",
+      range: 1, move: { name: "Розірвати горлянку", mult: 1.6, chance: 0.25 },
       sprite: 3,
       level: 4,
       stats: { hp: 110, mp: 0, attack: 20, defense: 5, magicDefense: 2, speed: 8, crit: 6, blockPhys: 3 },
@@ -100,6 +116,7 @@
     },
     wolf2: {
       name: "Чорний вовк",
+      range: 1, move: { name: "Розірвати горлянку", mult: 1.65, chance: 0.28 },
       sprite: 4,
       level: 5,
       stats: { hp: 150, mp: 0, attack: 26, defense: 7, magicDefense: 3, speed: 9, crit: 8, blockPhys: 4 },
@@ -123,6 +140,7 @@
     },
     wolf3: {
       name: "Білий вовк",
+      range: 1, move: { name: "Розірвати горлянку", mult: 1.65, chance: 0.28 },
       sprite: 5,
       level: 6,
       stats: { hp: 200, mp: 0, attack: 32, defense: 9, magicDefense: 4, speed: 10, crit: 10, blockPhys: 5 },
@@ -148,6 +166,7 @@
     // ---------- Слайми (6–8 рівень) та Король слайм (Печера в лісі) ----------
     slime: {
       name: "Зелений слайм",
+      range: 2, move: { name: "Стрибок слизу", mult: 1.35, chance: 0.25 },
       sprite: 6, verb: "хлюпає",
       level: 6,
       stats: { hp: 170, mp: 40, attack: 22, magic: 26, defense: 7, magicDefense: 10, speed: 7, crit: 4, blockMag: 4 },
@@ -167,6 +186,7 @@
     },
     slime2: {
       name: "Синій слайм",
+      range: 2, move: { name: "Стрибок слизу", mult: 1.35, chance: 0.25 },
       sprite: 7, verb: "хлюпає",
       level: 7,
       stats: { hp: 220, mp: 60, attack: 25, magic: 33, defense: 8, magicDefense: 14, speed: 8, crit: 5, blockMag: 6 },
@@ -186,6 +206,7 @@
     },
     slime3: {
       name: "Фіолетовий слайм",
+      range: 2, move: { name: "Стрибок слизу", mult: 1.35, chance: 0.25 },
       sprite: 8, verb: "хлюпає",
       level: 8,
       stats: { hp: 270, mp: 80, attack: 29, magic: 40, defense: 9, magicDefense: 16, speed: 9, crit: 6, blockMag: 8 },
@@ -206,6 +227,7 @@
     },
     slime_king: {
       name: "Король слайм",
+      range: 2, move: { name: "Удар хвилею слизу", mult: 1.5, chance: 0.25 },
       sprite: 9, verb: "розчавлює вагою",
       level: 10,
       boss: true, noChampion: true, spawnWeight: 0.1,
@@ -337,6 +359,10 @@
   }
 
   // champion = true — повертає посилену копію ворога
+  // Дальність атаки й прийом ворога
+  function enemyRange(e) { return e?.range || 1; }
+  function enemyMove(e) { return e?.move || MONSTER_MOVES[enemyRange(e)]; }
+
   function getEnemy(id, champion = false) {
     const base = ENEMIES[id];
     if (!base || !champion || base.noChampion) return base || null;
@@ -432,6 +458,7 @@
   }
 
   Object.assign(RPG, {
+    MONSTER_MOVES, RANGE_NAMES, enemyRange, enemyMove,
     ENEMIES, LOCATIONS, DEFAULT_LOCATION, RESPAWN_LOCATION, GUILD_SHOP,
     CHAMPION, rollChampion, rollChampionDrop, championBounty,
     getEnemy, enemySpriteStyle, getLocation, isCombatLocation, canEnterLocation, pickEnemy, rollLoot

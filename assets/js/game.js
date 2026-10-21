@@ -218,7 +218,7 @@
       const dead = RPG.isMemberDead(ms);
       const row = el("div", "party-row" + (dead ? " is-dead" : ""));
       const face = el("span", "party-face");
-      Object.assign(face.style, RPG.heroSpriteStyle());
+      Object.assign(face.style, RPG.heroSpriteStyle(ms.character.classId));
       const info = el("div", "party-info");
       info.append(el("strong", null, `${ms.character.name} · рів. ${ms.character.level}${dead ? " · полеглий" : ""}`));
       const hp = miniBar("bar-hp", "HP", "party-hp-" + i), mp = miniBar("bar-mp", "MP", "party-mp-" + i);
@@ -252,7 +252,7 @@
     const st = RPG.calcStats(save);
     const ch = save.character;
     const img = $("hero-img");
-    if (img) renderHeroDoll(img, save);   // герой + зброя в руках (шари)
+    if (img) { img._save = save; renderHeroDoll(img, save); }   // герой + зброя в руках (шари)
     const name = $("hero-name");
     if (name) name.textContent = `${ch.name} — ${RPG.getClass(ch.classId).name}`;
 
@@ -262,8 +262,9 @@
     const p = RPG.expProgress(save);
     const expBar = $("hero-exp");
     if (expBar) {
-      if (p.max) setBar(expBar, 1, 1, `EXP ${fmtNum(p.exp)} (максимум)`);
-      else setBar(expBar, p.current, p.needed, `EXP ${fmtNum(p.exp)} / ${fmtNum(p.nextLevelAt)}`);
+      if (p.max) setBar(expBar, 1, 1, "EXP 100% (максимум)");
+      else setBar(expBar, p.current, p.needed, `EXP ${p.percent}%`);
+      bindExpInfo(expBar, save);
     }
     const lvl = $("hero-lvl");
     if (lvl) lvl.textContent = `LVL ${ch.level}`;
@@ -275,6 +276,35 @@
         (per.home ? " (з бонусом Домівки)" : "");
     }
     if (!save.memberIndex) renderPartyList(save);
+  }
+
+  // Смужка досвіду: мітка «i» і вікно з подробицями (рівень, %, досвід числами)
+  function expInfo(save) {
+    const ch = save.character;
+    const p = RPG.expProgress(save);
+    const cls = RPG.getClass(ch.classId);
+    const box = el("div", "info-body exp-info");
+    box.append(el("p", null, `Рівень ${ch.level} · ${cls.name}`));
+    if (p.max) {
+      box.append(el("p", null, `Максимальний рівень. Досвід: ${fmtNum(p.exp)}.`));
+    } else {
+      box.append(el("p", null, `Набрано ${p.percent}% до ${ch.level + 1} рівня.`));
+      box.append(el("p", null, `Цей рівень: ${fmtNum(p.current)} / ${fmtNum(p.needed)} EXP (ще ${fmtNum(p.needed - p.current)}).`));
+      box.append(el("p", null, `Усього в професії: ${fmtNum(p.exp)} / ${fmtNum(p.nextLevelAt)} EXP.`));
+    }
+    box.append(el("p", null, `Весь здобутий досвід: ${fmtNum(ch.totalExp || 0)} EXP.`));
+    box.append(el("p", null, `Загибель забирає не більше ${RPG.DEATH_MAX_PCT || 25}% смужки рівня і може знизити рівень.`));
+    return box;
+  }
+  function bindExpInfo(bar, save) {
+    bar._save = save;
+    const lbl = bar.querySelector(".bar-label");
+    if (lbl && !lbl.querySelector(".info-i")) lbl.append(el("span", "info-i bar-i", "i"));
+    if (bar.dataset.tip) return;
+    bar.dataset.tip = "1";
+    bar.setAttribute("role", "button");
+    bar.setAttribute("aria-label", "Досвід — детальніше");
+    RPG.bindTip(bar, () => expInfo(bar._save), null);
   }
 
   // ref — ID предмета або екземпляр з рідкістю
@@ -763,6 +793,7 @@
       if (RPG.questState(save).offers.length !== before) RPG.saveGame(save).catch(e => console.error(e));
       const qs = RPG.questState(save);
       renderExplore(box);
+      renderProfession(box);
       box.append(el("p", null,
         `«Роботи вистачає — беріть до ${RPG.QUEST_MAX_ACTIVE} завдань одночасно.» Виконано завдань: ${qs.done}.`));
 
@@ -874,6 +905,53 @@
       box.append(card);
     }
 
+    // --- Квест «Шлях професії» (з 15 рівня Селянина) ---
+    function renderProfession(box) {
+      const P = RPG.PROFESSION;
+      const info = RPG.professionInfo(save);
+      if (!info) {
+        if (save.character.classId === RPG.DEFAULT_CLASS) {
+          box.append(el("p", "note", `Квест «${P.name}» — зміна професії — Адміністратор дає Селянину з ${RPG.PROFESSION_LEVEL} рівня.`));
+        }
+        return;
+      }
+      const card = el("div", "stack explore-card");
+      card.append(el("h3", null, `Квест: «${P.name}»`));
+      if (info.done) {
+        card.append(el("p", null, `Ваша професія: ${RPG.getClass(save.character.classId).name}.`));
+      } else if (info.canStart) {
+        card.append(el("p", "note", "«Ти переріс селянське життя. Пройди два випробування — і я скажу, ким тобі судилося стати. " +
+          "Яким шляхом ти підеш, залежить від того, що ти в собі розвивав.»"));
+        card.append(button("Взяти квест", "wf wf-button", async () => {
+          const r = RPG.startProfession(save);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          showMsg(msg, `Взято квест «${P.name}». Частина 1: ${P.parts[0].title}.`);
+          renderAll();
+        }));
+      } else {
+        card.append(el("p", null, `Частина ${info.index} з ${info.total}: ${info.part.title}`));
+        card.append(el("p", "note", info.part.text));
+        for (const pr of info.progress) {
+          card.append(el("div", pr.have >= pr.need ? "rt-magic" : null, `${pr.label}: ${pr.have} / ${pr.need}`));
+        }
+        const last = info.index >= info.total;
+        const b = button(last ? "Завершити й отримати професію" : "Здати частину", "wf wf-button", async () => {
+          const r = RPG.turnInProfession(save);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          showMsg(msg, r.finished
+            ? `Ваша нова професія — ${RPG.getClass(r.classId).name}! ${RPG.getClass(r.classId).description} ` +
+              `Рівень професії почався з 1, а бонуси Селянина лишилися. Тренер навчить новим навичкам.`
+            : `Частину виконано! Далі: ${P.parts[RPG.professionState(save).part - 1].title}.`);
+          renderAll();
+        });
+        b.disabled = !info.complete;
+        card.append(b);
+      }
+      box.append(card);
+    }
+
     // --- Тренер: володіння зброєю та навички ---
     function masteryBonusText(type, lvl) {
       const parts = [];
@@ -920,30 +998,42 @@
         box.append(r);
       }
 
-      box.append(el("h3", null, "Активні навички та бафи"));
-      if (!type) { box.append(el("p", "note", "Вдягніть зброю, щоб тренер показав навички для неї.")); return; }
-      const mastery = RPG.getMastery(tms, type);
-      for (const id of RPG.skillsForWeapon(type)) {
+      box.append(el("h3", null, "Навички, заклинання та пасивні вміння"));
+      const ids = RPG.trainerSkills(tms);
+      if (!ids.length) { box.append(el("p", "status", "Вдягніть зброю, щоб тренер показав навички для неї.")); return; }
+      const KIND = { buff: "Баф", heal: "Лікування", passive: "Пасивне" };
+      const wName = sk => (Array.isArray(sk.weapon) ? sk.weapon : [sk.weapon]).map(t => RPG.WEAPON_TYPES[t].name.toLowerCase()).join(" / ");
+      for (const id of ids) {
         const sk = RPG.SKILLS[id];
         const lvl = RPG.skillLevel(tms, id);
-        const r = el("div", "shop-row skill-row");
-        const info = el("span", "shop-name", `${sk.kind === "buff" ? "Баф" : "Навичка"}: ${sk.name} — ${lvl}/${RPG.SKILL_MAX}`);
+        const mastery = RPG.skillMastery(tms, sk);
+        const r = el("div", "shop-row skill-row" + (sk.cls ? " is-class" : ""));
+        const icon = el("img", "skill-icon");
+        icon.alt = "";
+        icon.onerror = () => icon.remove();
+        icon.src = RPG.asset(`assets/images/skills/${id}.webp`);
+        const kind = KIND[sk.kind] || (sk.magic ? "Заклинання" : "Навичка");
+        const info = el("span", "shop-name", `${kind}: ${sk.name} — ${lvl}/${RPG.SKILL_MAX}`);
         info.append(el("small", null, ` · ${sk.desc} ${RPG.describeSkill(id, Math.max(1, lvl))}` +
-          (mastery < sk.req ? ` · потрібно володіння ${sk.req}` : "")));
+          (sk.school ? ` · школа: ${RPG.SCHOOLS[sk.school].name}` : "") +
+          (sk.weapon && !RPG.skillWeaponOk(sk, type) ? ` · потрібна зброя: ${wName(sk)}` : "") +
+          (sk.req && mastery < sk.req ? ` · потрібно володіння ${sk.req}` : "")));
         const cost = RPG.skillCost(lvl + 1);
+        const cap = RPG.skillCap(tms, id);
         const label = lvl >= RPG.SKILL_MAX ? "Максимум" : `${lvl ? "Покращити" : "Вивчити"} (${fmtNum(cost)} зол.)`;
         const b = button(label, "wf wf-button", async () => {
           const res = RPG.learnSkill(tms, id);
           if (!res.ok) { showMsg(msg, res.reason, true); return; }
           await RPG.saveGame(save);
-          showMsg(msg, `«${sk.name}»: рівень ${res.level} (−${fmtNum(res.cost)} золота). Додайте навичку в чергу дій у бою.`);
+          showMsg(msg, `«${sk.name}»: рівень ${res.level} (−${fmtNum(res.cost)} золота).` +
+            (sk.kind === "passive" ? " Бонус діє постійно." : " Додайте навичку в чергу дій у бою."));
           renderAll();
         });
-        b.disabled = lvl >= RPG.skillCap(tms, id) || mastery < sk.req || tms.character.gold < cost;
-        if (b.disabled && mastery >= sk.req && lvl >= RPG.skillCap(tms, id) && lvl < RPG.SKILL_MAX) {
-          b.title = "Рівень навички не може перевищувати рівень володіння зброєю";
+        b.disabled = lvl >= cap || mastery < (sk.req || 0) || tms.character.gold < cost;
+        if (b.disabled && lvl >= cap && lvl < RPG.SKILL_MAX) {
+          b.title = sk.kind === "passive" ? "Пасивне вміння — до половини рівня персонажа" : "Рівень навички не може перевищувати рівень володіння зброєю";
         }
-        r.append(info, b);
+        r.append(icon, info, b);
         box.append(r);
       }
     }
@@ -1017,9 +1107,10 @@
       const magicWeapon = weaponItem && (weaponSt.magic || 0) > (weaponSt.attack || 0);
       // Варіанти для кожної клітинки: порожньо, звичайний удар, вивчені навички цієї зброї
       const wtype = weaponItem?.weaponType || null;
-      const options = [["", "—"], ["attack", magicWeapon ? "Іскра" : "Удар"]];
+      const options = [["", "—"], ["attack", "Удар"]];
+      if (weaponItem?.weaponType === "staff") options.push(["spell", "Іскра (4 MP)"]);
       if (wtype) {
-        for (const id of RPG.skillsForWeapon(wtype)) {
+        for (const id of RPG.skillsForWeapon(wtype, qms.character.classId)) {
           if (RPG.skillLevel(qms, id) > 0) options.push([id, `${RPG.SKILLS[id].name} (${RPG.SKILLS[id].mp} MP)`]);
         }
       }
@@ -1031,7 +1122,7 @@
         const opts = options.slice();
         if (action && !opts.some(o => o[0] === action)) {
           const sk = RPG.SKILLS[action];
-          opts.push([action, sk ? `${sk.name} (інша зброя — буде удар)` : (action === "spell" ? "Іскра" : action)]);
+          opts.push([action, sk ? `${sk.name} (недоступна — буде удар)` : (action === "spell" ? "Іскра (лише з посохом)" : action)]);
         }
         for (const [val, text] of opts) {
           const o = el("option", null, `${i + 1}. ${text}`);
@@ -1051,7 +1142,7 @@
       }
       const who = RPG.partySize(save) > 1 ? `${qms.character.name}: ` : "";
       $("weapon-info").textContent = who + (weaponItem
-        ? `Зброя: ${RPG.itemFullName(weaponRef)}${magicWeapon ? " (магічна — витрачає MP)" : ""}`
+        ? `Зброя: ${RPG.itemFullName(weaponRef)} · дальність ${RPG.actionRange(weaponItem.weaponType, false)}${weaponItem.weaponType === "staff" ? " (заклинання — 2)" : ""}`
         : "Зброя: немає (бій кулаками)");
     }
 
@@ -1083,7 +1174,7 @@
     }
 
     function addLogLine(ev) {
-      const li = el("li", "log-" + ev.who + (ev.crit ? " log-crit" : ""), ev.text);
+      const li = el("li", "log-" + ev.who + (ev.crit ? " log-crit" : "") + (ev.move ? " log-move" : ""), ev.text);
       logBox.append(li);
       logBox.scrollTop = logBox.scrollHeight;
     }
@@ -1208,8 +1299,8 @@
       // Підсумок
       if (deaths) {
         const lines = deaths.map(({ ms, d }) =>
-          `${group ? ms.character.name + ": " : ""}штраф досвіду −${fmtNum(d.expLost)} EXP` +
-          (d.expLost < d.penalty ? ` (з ${fmtNum(d.penalty)}; рівень не знижується)` : "") +
+          `${group ? ms.character.name + ": " : ""}штраф досвіду −${d.expPct}% (${fmtNum(d.expLost)} EXP)` +
+          (d.levelDown ? `, рівень знижено до ${d.newLevel}${d.pointsLost ? ` (−${d.pointsLost} очок атрибутів)` : ""}` : "") +
           (d.lostItems.length ? `, втрачено: ${d.lostItems.map(ref => RPG.itemFullName(ref)).join(", ")}` : ""));
         lines.push(`${group ? "Уся група відродилася" : "Ви відродилися"} в Храмі з ${Math.round(RPG.RESPAWN_HP_PCT * 100)}% здоров'я і без мани.`);
         setArena(group ? "Група загинула" : "Загибель", lines);
@@ -1845,6 +1936,12 @@
     "inventory": pageInventory,
     "maps": pageMaps
   };
+
+  // Картинка професії завантажилась пізніше за сторінку — перемалювати героя
+  document.addEventListener("rpg:hero-sprite", () => {
+    const img = document.getElementById("hero-img");
+    if (img && img._save) renderHeroDoll(img, img._save);
+  });
 
   document.addEventListener("DOMContentLoaded", () => {
     const page = document.body.dataset.page;

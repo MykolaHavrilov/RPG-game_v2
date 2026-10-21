@@ -14,7 +14,8 @@ const REGEN_TICK_MS = 10000;      // відновлення кожні 10 сек
 const HOME_REGEN_PCT = 0.05;      // у Домівці додатково +5% HP і MP за 10 с
 const RESPAWN_HP_PCT = 0.10;      // після відродження — 10% здоров'я
 const RESPAWN_MP_PCT = 0;         // і 0% мани
-const DEATH_EXP_MULT = 10;        // штраф: досвід за переможця(ів) × 10
+const DEATH_EXP_MULT = 10;        // штраф: досвід за переможця(ів) × 10 …
+const DEATH_MAX_PCT = 25;         // … але не більше 25% смужки досвіду рівня
 const ITEM_LOSS_CHANCE = 0.005;   // 0,5% на кожну вдягнену річ
 
 // Скільки речей максимум можна втратити за одну смерть
@@ -114,6 +115,14 @@ function calcStats(save) {
   for (const key in mastery) {
     if (key !== "attackSpeedPct") stats[key] = (stats[key] || 0) + mastery[key];
   }
+
+  // Пасивні навички (data/skills.js → kind "passive"): % до характеристик, крит/ухилення — у пунктах
+  const pas = RPG.passiveBonus ? RPG.passiveBonus(save) : {};
+  const PCT = { hpPct: "hp", mpPct: "mp", attackPct: "attack", magicPct: "magic",
+                defensePct: "defense", magicDefensePct: "magicDefense", speedPct: "speed" };
+  for (const [k, stat] of Object.entries(PCT)) if (pas[k]) stats[stat] *= 1 + pas[k] / 100;
+  if (pas.crit) stats.crit += pas.crit;
+  if (pas.dodge) stats.dodge = (stats.dodge || 0) + pas.dodge;
 
   const CAP = RPG.STAT_CAP;
   stats.crit = Math.min(stats.crit, CAP.crit);
@@ -229,12 +238,71 @@ function addExp(save, amount) {
   return levelUps;
 }
 
-// Штраф досвіду. Рівень НЕ знижується: досвід не падає нижче
-// порогу поточного рівня. Повертає, скільки досвіду реально знято.
+// Межі смужки досвіду рівня level: { start, needed }
+function levelBar(table, level) {
+  const start = expForLevel(table, level);
+  let next = expForLevel(table, level + 1);
+  if (!isFinite(next)) next = start + (start - expForLevel(table, Math.max(1, level - 1)));   // максимальний рівень
+  return { start, needed: Math.max(1, next - start) };
+}
+
+// Штраф досвіду за смерть.
+// Знімається amount досвіду, але не більше DEATH_MAX_PCT (25%) смужки поточного рівня.
+// Якщо на поточному рівні набрано менше, ніж штраф, — залишок (у відсотках)
+// знімається вже зі смужки попереднього рівня: рівень знижується, а разом з ним
+// зникають бонуси за цей рівень (приріст професії, сталі атрибути, вільні очки).
+// Нижче 1 рівня поточної професії не опускається.
+// Повертає { pct, expLost, levelDown, newLevel, pointsLost }
+function deathExpPenalty(save, amount) {
+  const ch = save.character;
+  const table = getClass(ch.classId).levelTable;
+  const oldLevel = ch.level;
+  const before = ch.exp;
+  const bar = levelBar(table, ch.level);
+  const pct = Math.min(DEATH_MAX_PCT, (Math.max(0, amount) / bar.needed) * 100);
+  const curPct = ((ch.exp - bar.start) / bar.needed) * 100;
+  if (pct <= curPct || ch.level <= 1) {
+    ch.exp = Math.max(ch.level <= 1 ? 0 : bar.start, ch.exp - Math.round(pct / 100 * bar.needed));
+  } else {
+    const rest = pct - curPct;                          // скільки % лишилось зняти
+    const prev = levelBar(table, ch.level - 1);
+    ch.exp = Math.max(prev.start, bar.start - Math.max(1, Math.round(rest / 100 * prev.needed)));
+  }
+  ch.level = levelFromExp(table, ch.exp);
+  const lost = Math.max(0, oldLevel - ch.level);
+  const pointsLost = lost ? removeLevelPoints(save, lost * RPG.POINTS_PER_LEVEL) : 0;
+  if (lost) clampHpMp(save);
+  return { pct: Math.round(pct * 10) / 10, expLost: before - ch.exp, levelDown: lost > 0, newLevel: ch.level, pointsLost };
+}
+
+// Забрати вільні очки атрибутів за втрачені рівні: спершу невкладені,
+// потім — з найбільших вкладених атрибутів (стартові значення професії не чіпаємо)
+function removeLevelPoints(save, n) {
+  const ch = save.character;
+  let left = n;
+  const free = Math.min(ch.freePoints || 0, left);
+  ch.freePoints = (ch.freePoints || 0) - free;
+  left -= free;
+  const firstClass = getClass(ch.classHistory?.[0]?.classId || ch.classId);
+  const baseAttrs = firstClass.baseAttrs || {};
+  while (left > 0) {
+    let best = null, bestSpent = 0;
+    for (const k of Object.keys(RPG.ATTRS)) {
+      const spent = (ch.attrs[k] || 0) - (baseAttrs[k] || 0);
+      if (spent > bestSpent) { best = k; bestSpent = spent; }
+    }
+    if (!best) break;
+    ch.attrs[best]--;
+    left--;
+  }
+  return n - left;
+}
+
+// Старий штраф (лишився для сумісності): без зниження рівня
 function removeExp(save, amount) {
   const ch = save.character;
   const table = getClass(ch.classId).levelTable;
-  const floor = Math.min(expForLevel(table, ch.level), ch.exp);   // нижче поточного не опускаємо
+  const floor = Math.min(expForLevel(table, ch.level), ch.exp);
   const before = ch.exp;
   ch.exp = Math.max(floor, ch.exp - Math.floor(amount));
   return Math.max(0, before - ch.exp);
@@ -263,17 +331,19 @@ function expProgress(save) {
 
 // ---------- Загибель героя ----------
 // enemyIds — усі вороги, що були в бою (для групи — кілька).
-// 1) Штраф досвіду: сума exp усіх ворогів × 10
+// 1) Штраф досвіду: сума exp усіх ворогів × 10, але не більше 25% смужки рівня;
+//    може знизити рівень (див. deathExpPenalty)
 // 2) Кожна вдягнена річ — 0,5% шанс зникнути (ліміт залежить від рівня)
 // 3) Відродження в Храмі: 10% HP, 0% MP
 function applyDeath(save, enemyIds) {
   const ch = save.character;
   const expSum = enemyIds.reduce((sum, id) => sum + (RPG.getEnemy(id)?.exp || 0), 0);
   const penalty = expSum * DEATH_EXP_MULT;
-  const expLost = removeExp(save, penalty);
+  const limit = maxItemLoss(ch.level);       // ліміт — за рівнем до штрафу
+  const exp = deathExpPenalty(save, penalty);
+  const expLost = exp.expLost;
 
   // Перевірка втрати речей — у випадковому порядку слотів
-  const limit = maxItemLoss(ch.level);
   const slots = Object.keys(save.equipment).sort(() => Math.random() - 0.5);
   const lostItems = [];
   for (const slot of slots) {
@@ -295,7 +365,8 @@ function applyDeath(save, enemyIds) {
   ch.regenAt = Date.now();
   save.location.map = RPG.RESPAWN_LOCATION;
 
-  return { penalty, expLost, lostItems, itemLossLimit: limit };
+  return { penalty, expLost, expPct: exp.pct, levelDown: exp.levelDown, newLevel: exp.newLevel,
+           pointsLost: exp.pointsLost, lostItems, itemLossLimit: limit };
 }
 
 // Герой упав у бою, але група перемогла: лишається полеглим (0 HP), поки
@@ -331,10 +402,11 @@ function getClassChanges(save) {
   return availableClassChanges(save.character.classId, save.character.level);
 }
 
-function changeClass(save, newClassId) {
+// opts.force — без перевірки умов (професію видає квест «Шлях професії», quests.js)
+function changeClass(save, newClassId, opts = {}) {
   const ch = save.character;
   if (!CLASSES[newClassId]) return { ok: false, reason: "Такої професії немає." };
-  if (!getClassChanges(save).includes(newClassId)) {
+  if (!opts.force && !getClassChanges(save).includes(newClassId)) {
     return { ok: false, reason: "Умови для цієї професії не виконані." };
   }
 
@@ -642,7 +714,7 @@ Object.assign(RPG, {
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
   createNewSave, calcStats, clampHpMp, fullHeal,
   regenPerTick, applyRegen, msToNextRegen,
-  addExp, removeExp, expProgress, applyDeath, markFallen, pray,
+  addExp, removeExp, deathExpPenalty, DEATH_MAX_PCT, expProgress, applyDeath, markFallen, pray,
   getClassChanges, changeClass,
   countInList, addToList, addRefToList, removeFromList, countItem, addItem, removeItem,
   isAtHome, moveToChest, takeFromChest,

@@ -367,3 +367,167 @@ dialog { max-width: calc(100vw - 32px); }
   font-weight: 700;
   letter-spacing: .02em;
 }
+
+
+/* =====================================================================
+   СПЛИВАЮЧЕ ВІКНО (assets/js/ui.js) — для основної гри
+   ===================================================================== */
+.popover { --pop-bg: #23252f; --pop-text: #f4f4f6; --pop-border: rgba(255, 255, 255, .25);
+           --pop-radius: 8px; --pop-shadow: 0 10px 28px rgba(0, 0, 0, .55);
+           --select: #ffd54a; --text-dim: #b9bcc8; --border-color: rgba(255, 255, 255, .2);
+           --font-head: inherit; --gold: #f2c14e; --slot-bg: rgba(255, 255, 255, .06);
+           --radius-sm: 6px; --surface-3: #3a3d46; }
+.has-tip { cursor: pointer; }
+.has-popover { outline: 2px solid var(--select); outline-offset: 1px; }
+.popover {
+  position: fixed;
+  z-index: 1000;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 16px));
+  padding: 14px 14px 12px;
+  color: var(--pop-text);
+  background: var(--pop-bg);
+  border: 1px solid var(--pop-border);
+  border-radius: var(--pop-radius);
+  box-shadow: var(--pop-shadow);
+  font-size: .92rem;
+  opacity: 0;
+  transform: translateY(4px) scale(.98);
+  transition: opacity .14s ease-out, transform .14s ease-out;
+}
+.popover.is-open { opacity: 1; transform: none; }
+.popover.is-preview { pointer-events: none; }
+.popover::after {                              /* «носик» */
+  content: "";
+  position: absolute;
+  left: calc(var(--arrow-x, 50%) - 7px);
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  border: inherit;
+  border-width: 0 1px 1px 0;
+  transform: rotate(45deg);
+}
+.popover[data-side="top"]::after    { bottom: -8px; }
+.popover[data-side="bottom"]::after { top: -8px; transform: rotate(225deg); }
+.popover.is-sheet::after { display: none; }
+.popover-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  opacity: .7;
+  cursor: pointer;
+}
+.popover-close:hover { opacity: 1; background: rgba(255, 255, 255, .08); }
+.popover.is-preview .popover-close { display: none; }
+.popover-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.popover-actions .wf { flex: 1 1 120px; min-height: 42px; padding: 6px 10px; font-size: .9rem; }
+
+/* Телефон: вікно виїжджає знизу («шторка») */
+.popover.is-sheet {
+  left: 0 !important;
+  right: 0;
+  top: auto !important;
+  bottom: 0;
+  width: 100%;
+  max-width: none;
+  max-height: 75dvh;
+  overflow-y: auto;
+  padding: 22px 16px max(16px, env(safe-area-inset-bottom));
+  border-radius: var(--pop-radius) var(--pop-radius) 0 0;
+  transform: translateY(100%);
+  transition: transform .22s cubic-bezier(.2, .8, .2, 1);
+  opacity: 1;
+}
+.popover.is-sheet.is-open { transform: none; }
+.popover.is-sheet::before {                   /* «ручка» шторки */
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 40px;
+  height: 4px;
+  margin-left: -20px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: .3;
+}
+.popover.is-sheet .popover-actions .wf { min-height: 48px; font-size: 1rem; }
+
+/* Вміст опису предмета */
+.tip-item { display: grid; gap: 8px; min-width: 220px; }
+.tip-head { display: flex; gap: 12px; align-items: center; padding-right: 26px; }
+.tip-title { display: grid; gap: 2px; }
+.tip-name { font-size: 1.05rem; font-family: var(--font-head); }
+.tip-sub { font-size: .8rem; color: var(--text-dim); }
+.tip-stats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.tip-stats li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 8px; border-radius: 4px; background: rgba(255, 255, 255, .05); font-size: .85rem; }
+.tip-stats b { color: #8fe08f; font-variant-numeric: tabular-nums; }
+.tip-stats .is-neg b { color: #ff8a7a; }
+.tip-effect { color: #8fe08f; font-weight: 600; }
+.tip-set { font-size: .85rem; }
+.tip-req { font-size: .82rem; color: var(--text-dim); }
+.tip-desc { margin: 0; font-style: italic; color: var(--text-dim); font-size: .88rem; }
+.tip-price { font-size: .82rem; color: var(--gold); border-top: 1px solid var(--border-color); padding-top: 8px; }
+.tip-item .item-diff { font-size: .85rem; }
+
+
+/* =====================================================================
+   МІТКА «i» З ДОДАТКОВИМ ОПИСОМ (ui.js → .note / .desc)
+   ===================================================================== */
+.desc-collapsed { display: none !important; }
+.info-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #b9bcc8;
+  font: inherit;
+  font-size: .8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.info-i {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: .78rem;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.info-tip:hover, .info-tip.has-popover { color: #ffd54a; outline: 0; }
+.info-tip.has-label { margin: 2px 0; }
+.info-tip.has-label .info-label { font-size: .82rem; text-decoration: underline dotted; text-underline-offset: 3px; }
+@media (hover: none) { .info-i { width: 24px; height: 24px; flex-basis: 24px; } }
+.info-body { max-width: 300px; font-size: .92rem; padding-right: 22px; }
+.info-body p { margin: 0; }
+.info-body p + p { margin-top: 8px; }
+.popover.is-sheet .info-body { max-width: none; }
+.status { margin: 0; font-size: .92rem; }
+
+.bar.bar-exp[data-tip] { cursor: pointer; }
+.bar-i { width: 16px; height: 16px; flex-basis: 16px; margin-left: 6px; font-size: .65rem; vertical-align: 1px; }
+.log .log-round { margin: 6px 0 2px; color: #b9bcc8; font-size: .8rem; text-align: center; letter-spacing: .06em; border-top: 1px solid rgba(255, 255, 255, .15); padding-top: 4px; list-style: none; }
+.log .log-move { opacity: .7; font-style: italic; }
+.skill-icon { width: 32px; height: 32px; border-radius: 4px; flex: 0 0 32px; }
