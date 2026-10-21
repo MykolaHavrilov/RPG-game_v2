@@ -188,7 +188,8 @@
     if (!loc || loc.locked) save.location.map = RPG.DEFAULT_LOCATION;
     save.settings ??= { battleView: "stepByStep" };
     save.battleQueue ??= ["attack"];
-    if (!save.battleQueue.length) save.battleQueue = ["attack"];
+    save.battleQueue = save.battleQueue.slice(0, RPG.QUEUE_SIZE || 6);
+    if (!save.battleQueue.some(Boolean)) save.battleQueue = ["attack"];
 
     // Версія 2: атрибути, вільні очки, відновлення з часом, скриня, смерті
     if ((save.saveVersion || 1) < 2) {
@@ -246,7 +247,8 @@
         m.equipment[slot] = RPG.normalizeRef(renameRef(m.equipment[slot]));
         if (!ITEMS[m.equipment[slot]?.id] || !RPG.SLOTS[slot]) delete m.equipment[slot];
       }
-      m.battleQueue = Array.isArray(m.battleQueue) && m.battleQueue.length ? m.battleQueue : ["attack"];
+      m.battleQueue = Array.isArray(m.battleQueue) ? m.battleQueue.slice(0, RPG.QUEUE_SIZE || 6) : [];
+      if (!m.battleQueue.some(Boolean)) m.battleQueue = ["attack"];
       if (typeof ch.hp !== "number" || typeof ch.mp !== "number") {
         const st = RPG.calcStats({ ...save, character: ch, equipment: m.equipment });
         ch.hp = st.hp; ch.mp = st.mp;

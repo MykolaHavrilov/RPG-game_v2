@@ -6,13 +6,14 @@
   <title>Мапа</title>
   <link rel="stylesheet" href="../assets/css/main.css">
   <link rel="stylesheet" href="../assets/css/game.css">
-  <meta name="theme-color" content="#1c1d24">
+  <link rel="stylesheet" href="../assets/css/theme.css">
+  <meta name="theme-color" content="#0d0b09">
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="icon" type="image/png" href="../assets/icons/favicon.png">
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
   <script src="../assets/js/pwa.js" defer></script>
 </head>
-<body data-page="maps" data-show-notes>
+<body data-page="maps">
 
   <header>
     <nav>
@@ -33,7 +34,7 @@
         <div class="world-map" id="world-map">
           <img class="map-img" src="../assets/images/map_world.webp" alt="Мапа світу" width="1586" height="992">
         </div>
-        <p class="note">Наведіть на місце на мапі, щоб побачити опис. Клік — обрати, подвійний клік — перейти. Місто можна обрати по районах.</p>
+        <p class="note" data-anchor="heading">Наведіть на місце на мапі, щоб побачити опис. Клік — обрати, подвійний клік — перейти. Місто можна обрати по районах.</p>
       </div>
       <div class="panel stack">
         <h2>Локації</h2>
@@ -58,6 +59,7 @@
   <script src="../assets/js/character.js" defer></script>
   <script src="../assets/js/party.js" defer></script>
   <script src="../assets/js/battle.js" defer></script>
+  <script src="../assets/js/map_layout.js" defer></script>
   <script src="../assets/js/game.js" defer></script>
   <script src="../assets/js/menu.js" defer></script>
 </body>

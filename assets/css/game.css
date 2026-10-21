@@ -1,101 +1,158 @@
 /* =====================================================================
-   game.css — розкладка ігрових сторінок
+   game.css — розкладка ігрових сторінок (БАЗА; вигляд — у theme.css)
    Екран локації (pages/game.html), три колонки:
-     ЛІВА   — персонаж: зображення, HP / MP / EXP + LVL, швидкий доступ
-     ЦЕНТР  — локація: бій або панель мирної локації (Домівка, Храм, Шинок)
+     ЛІВА   — персонаж: портрет, HP / MP / EXP + LVL, швидкий доступ
+     ЦЕНТР  — локація: бій або панель мирної локації
      ПРАВА  — ворог (лише в бойових локаціях)
+   Колонки мають grid-area: hero / center / enemy — теми можуть
+   переставляти їх як завгодно через grid-template-areas.
    ===================================================================== */
 
 .battle {
   display: grid;
-  grid-template-columns: 300px 1fr 300px;
+  grid-template-columns: minmax(220px, 290px) minmax(0, 1fr) minmax(220px, 290px);
+  grid-template-areas: "hero center enemy";
   gap: 20px;
   align-items: start;
 }
-/* Мирна локація — колонки ворога немає */
-.battle.no-enemy { grid-template-columns: 300px 1fr; }
+.battle.no-enemy { grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); grid-template-areas: "hero center"; }
+.battle > .col:nth-child(1) { grid-area: hero; }
+.battle > .col:nth-child(2) { grid-area: center; }
+.battle > #enemy-col        { grid-area: enemy; }
 
-.col { display: flex; flex-direction: column; gap: 12px; }
+.col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
-/* Пропорція 2:3, як у картинок героя і ворогів (600×900) */
 .portrait { width: 100%; aspect-ratio: 2 / 3; }
 
-.stats { display: flex; flex-direction: column; gap: 8px; }
-.exp-row { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
-.exp-row .bar-lvl { display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.stats { display: flex; flex-direction: column; gap: 6px; }
+.exp-row { display: grid; grid-template-columns: 1fr 76px; gap: 6px; }
+.exp-row .bar-lvl { display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .85rem; }
 
-/* Центральна колонка */
-.location  { min-height: 56px; }
+/* ---------- Центральна колонка ---------- */
+.location { min-height: 56px; }
+.location strong { font-family: var(--font-head); font-size: 1.1rem; }
+.loc-desc { font-size: .85rem; opacity: .85; }
+
 .arena {
-  min-height: 160px;
+  position: relative;
+  min-height: 150px;
   gap: 8px;
+  padding: 16px;
+  border-radius: var(--radius);
 }
-.arena-title { font-size: 1.4rem; font-weight: 700; }
-.arena-line  { opacity: .9; }
+.arena-title { font-family: var(--font-head); font-size: 1.45rem; font-weight: 800; }
+.arena-line  { opacity: .92; }
 .arena .wf-link { margin-top: 8px; }
+.arena[data-state="win"] .arena-title  { color: #8fe08f; }
+.arena[data-state="lose"] .arena-title { color: #ff8a7a; }
+.arena[data-state="champion"] .arena-title { color: var(--gold); }
 
-/* Журнал бою */
+/* ---------- Журнал бою ---------- */
 .log {
   margin: 0;
-  padding: 10px 10px 10px 34px;
-  height: 260px;
+  padding: 8px;
+  height: 280px;
   overflow-y: auto;
-  background: var(--panel);
-  border: 2px solid rgba(255, 255, 255, .25);
-  border-radius: 6px;
+  list-style: none;
+  background: var(--surface);
+  border: var(--border-w) var(--border-style) var(--border-color);
+  border-radius: var(--radius);
   font-size: .92rem;
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
 }
-.log li { padding: 2px 0; }
-.log .log-hero  { color: #9fd8ff; }
-.log .log-enemy { color: #ffb4a8; }
+.log:empty::before { content: "Журнал бою порожній — почніть бій."; display: block; padding: 8px; color: var(--text-dim); font-style: italic; }
+.log li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 6px;
+  border-radius: 6px;
+  animation: log-in .25s ease-out;
+}
+.log li + li { margin-top: 2px; }
+.log-mark { flex: 0 0 1.2em; text-align: center; opacity: .85; }
+.log-text { flex: 1; min-width: 0; }
+.log-num { font-variant-numeric: tabular-nums; }
+.log .log-hero  { color: #a9dcff; }
+.log .log-enemy { color: #ffb8ad; }
 .log .log-info  { color: #ffe08a; font-weight: 600; }
-.log .log-crit  { font-weight: 700; }
-.queue     { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
-.queue .wf { aspect-ratio: 1; min-height: 0; padding: 2px; font-size: .75rem; }
+.log .log-crit  { font-weight: 800; }
+.log .log-crit .log-num { color: #ffd23f; }
+@keyframes log-in { from { opacity: 0; transform: translateY(4px); } }
+
+/* ---------- Черга дій ---------- */
+.queue { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.queue .wf { min-height: 0; padding: 2px; font-size: .75rem; }
+.queue .queue-select {
+  aspect-ratio: auto;
+  min-height: 46px;
+  width: 100%;
+  padding: 2px;
+  font: inherit;
+  font-size: .72rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.queue .queue-select option { color: #111; background: #fff; }
+@media (max-width: 1200px) { .queue { grid-template-columns: repeat(6, 1fr); } }
+
 .queue-head, .inv-head {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: .9rem;
+  font-size: .88rem;
 }
+.queue-head > span:first-child, .inv-head > span:first-child { font-weight: 700; }
 .inv-head h2 { margin: 0; }
+#gold { color: var(--gold); font-weight: 700; }
 .actions .wf { min-height: 56px; font-size: 1.1rem; }
-.loc-desc { font-size: .85rem; opacity: .85; }
 
-/* Мирні локації */
+/* ---------- Мирні локації ---------- */
 .place p { margin: 0; }
 .place h3 { margin: 0 0 4px; font-size: 1rem; }
 .shop { align-items: flex-start; }
 .shop > * { flex: 1 1 260px; }
 .shop-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 8px;
-  background: rgba(255, 255, 255, .06);
-  border-radius: 4px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, .05);
+  border-radius: var(--radius-sm);
 }
 .shop-row small { opacity: .75; }
-.shop-row .wf { min-height: 32px; padding: 4px 10px; flex: 0 0 auto; font-size: .85rem; }
+.shop-row .wf { min-height: 36px; padding: 4px 10px; flex: 0 0 auto; font-size: .85rem; }
+.shop-row .shop-name { flex: 1; }
+.shop-info { display: flex; align-items: center; gap: 8px; min-width: 0; border-radius: var(--radius-sm); padding: 2px; }
+.shop-info:hover { background: rgba(255, 255, 255, .06); }
+.shop-row .shop-qty {
+  width: 4.5em;
+  min-height: 36px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: .9rem;
+  color: inherit;
+  background: rgba(0, 0, 0, .25);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
 
-/* Мапа: компактні поля локацій (удвічі менші, ніж раніше) */
+/* ---------- Мапа: картки локацій ---------- */
 .loc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 160px));
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 8px;
 }
-.loc-card {
-  min-height: 50px;
-  padding: 6px 8px;
-  font-size: .85rem;
-  gap: 2px;
-}
+.loc-card { min-height: 54px; padding: 6px 8px; font-size: .88rem; gap: 2px; }
 .loc-card .loc-desc { font-size: .72rem; }
 .wf-locked.loc-card { cursor: pointer; }
 
-/* Характеристики та спорядження */
+/* ---------- Характеристики та спорядження ---------- */
 .stat-list { display: flex; flex-direction: column; gap: 6px; }
 .stat-row {
   display: flex;
@@ -103,137 +160,46 @@
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: rgba(255, 255, 255, .06);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, .05);
+  border-radius: var(--radius-sm);
 }
-.stat-row strong { margin-left: auto; }
-.attr-plus { min-height: 28px; width: 28px; padding: 0; font-weight: 700; }
-.equip-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.equip-cell { min-height: 70px; font-size: .85rem; }
-.equip-slot-name { font-size: .75rem; opacity: .8; }
-.item-desc { min-height: 120px; align-items: flex-start; text-align: left; }
+.stat-row strong { margin-left: auto; font-variant-numeric: tabular-nums; }
+.attr-plus { min-height: 30px; width: 30px; padding: 0; font-weight: 800; }
+/* Спорядження: квадратні комірки розміром з іконку предмета */
+.equip-grid {
+  --equip-size: 64px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--equip-size));
+  justify-content: start;
+  gap: 8px;
+}
+.equip-cell {
+  width: var(--equip-size);
+  height: var(--equip-size);
+  min-height: 0;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+.equip-cell.has-icon { padding: 3px; }
+.equip-cell .equip-icon, .equip-cell .mini-ph { width: 100%; height: 100%; flex: none; border-radius: calc(var(--slot-radius) - 2px); }
+.equip-slot-name { font-size: .6rem; line-height: 1.1; opacity: .7; text-transform: uppercase; letter-spacing: .02em; padding: 2px; overflow-wrap: anywhere; }
+.item-desc { min-height: 120px; align-items: stretch; text-align: left; padding: 14px; }
+.item-desc .tip-head { padding-right: 0; }
 .item-diff { color: #ffe08a; }
 .inv-actions > * { flex: 1 1 130px; }
 
 /* Під час бою */
-.is-fighting .slots .wf { pointer-events: none; }
-
-@media (max-width: 1000px) {
-  .battle, .battle.no-enemy { grid-template-columns: 1fr; }
-  .portrait { max-width: 300px; margin: 0 auto; }
-  .equip-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* Шинок: іконка, назва, ціна в один рядок */
-.shop-row .shop-name { flex: 1; }
-.shop-row { flex-wrap: wrap; }
-.shop-row .shop-qty {
-  width: 4.5em;
-  min-height: 32px;
-  padding: 2px 6px;
-  font: inherit;
-  font-size: .9rem;
-  color: inherit;
-  background: rgba(0, 0, 0, .25);
-  border: 1px solid rgba(255, 255, 255, .25);
-  border-radius: 4px;
-}
-
-/* =====================================================================
-   ТЕЛЕФОНИ
-   Герой і ворог — поруч угорі, бій і журнал — під ними на всю ширину
-   ===================================================================== */
-@media (hover: none) {
-  .attr-plus { min-height: 40px; width: 40px; }
-  .shop-row .wf { min-height: 40px; }
-  .shop-row .shop-qty { min-height: 40px; width: 5em; font-size: 1rem; }
-}
-
-@media (max-width: 700px) {
-  .battle {
-    grid-template-columns: 1fr 1fr;
-    grid-template-areas:
-      "hero   enemy"
-      "center center";
-    gap: 12px;
-  }
-  .battle.no-enemy {
-    grid-template-columns: 1fr;
-    grid-template-areas: "hero" "center";
-  }
-  .battle > .col:nth-child(1) { grid-area: hero; }
-  .battle > .col:nth-child(2) { grid-area: center; }
-  .battle > #enemy-col        { grid-area: enemy; }
-
-  .portrait { max-width: none; }
-  .battle.no-enemy .portrait { max-width: 200px; }
-  .battle.no-enemy #quick-slots { grid-template-columns: repeat(6, 1fr); }
-  .col { gap: 8px; }
-
-  .bar { min-height: 26px; }
-  .bar-label { font-size: .8rem; padding: 3px 4px; }
-  .exp-row { grid-template-columns: 1fr 64px; gap: 6px; }
-  .exp-row .bar-lvl { font-size: .8rem; }
-  .inv-head, .queue-head { font-size: .8rem; }
-
-  .arena { min-height: 120px; }
-  .arena-title { font-size: 1.15rem; }
-  .log { height: 200px; font-size: .85rem; padding-left: 28px; }
-
-  /* Черга дій: 2 ряди по 5 замість 10 в ряд */
-  .queue { grid-template-columns: repeat(5, 1fr); }
-  .queue .wf { font-size: .8rem; }
-  .actions .wf { min-height: 52px; font-size: 1rem; }
-
-  .loc-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
-  .loc-card { min-height: 56px; }
-  .equip-cell { min-height: 64px; }
-  .stat-row { padding: 4px 8px; }
-
-  /* Інвентар: спорядження 2×4 замість 8 рядків */
-  #equip-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  /* Сторінка персонажа: портрет не на весь екран */
-  body[data-page="character"] .pic { max-width: 220px; margin: 0 auto; }
-}
-
-/* ---------- Черга дій: вибір дії в кожній клітинці ---------- */
-.queue .queue-select {
-  aspect-ratio: auto;
-  min-height: 44px;
-  width: 100%;
-  padding: 2px;
-  font: inherit;
-  font-size: .7rem;
-  color: inherit;
-  cursor: pointer;
-}
-.queue .queue-select option { color: #111; }
-@media (max-width: 900px) {
-  .queue { grid-template-columns: repeat(5, 1fr); }
-}
-
-/* ---------- Місто та Гільдія авантюристів ---------- */
-.district-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
-}
-.district { padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, .04); }
-.npc-tabs { flex-wrap: wrap; }
-.npc-tabs .wf { flex: 1 1 140px; }
-.npc-panel h3 { margin-top: 6px; }
-.quest-row, .skill-row { flex-wrap: wrap; }
-.quest-done { box-shadow: inset 3px 0 0 #4caf50; }
-.skill-row.is-current { box-shadow: inset 3px 0 0 #ffb04d; }
+.is-fighting .slots .wf { pointer-events: none; opacity: .7; }
 
 /* ---------- Мапа світу (pages/maps.html) ---------- */
 .world-map {
   position: relative;
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
   user-select: none;
-  box-shadow: 0 0 0 1px rgba(201, 163, 90, .5);
+  box-shadow: 0 0 0 1px var(--border-color);
 }
 .world-map .map-img { display: block; width: 100%; height: auto; }
 .map-spot {
@@ -265,16 +231,17 @@
   max-width: min(270px, 60%);
   padding: 7px 10px;
   transform: translate(-50%, calc(-100% - 6px));
-  background: rgba(22, 17, 10, .93);
-  border: 1px solid #c9a35a;
-  border-radius: 6px;
+  color: var(--pop-text);
+  background: var(--pop-bg);
+  border: 1px solid var(--pop-border);
+  border-radius: var(--radius-sm);
   font-size: .8rem;
   line-height: 1.3;
   pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .5);
+  box-shadow: var(--pop-shadow);
 }
 .map-tip.tip-below { transform: translate(-50%, 6px); }
-.map-tip strong { display: block; font-size: .9rem; color: #ffe1a1; }
+.map-tip strong { display: block; font-size: .9rem; color: var(--gold); }
 .tip-status { font-weight: 600; margin: 2px 0; }
 .tip-here { color: #ffd27a; }
 .tip-open { color: #8fd18f; }
@@ -317,7 +284,7 @@ figure.is-champion {
   box-shadow: 0 0 0 3px #f2c14e, 0 0 18px 4px rgba(242, 193, 78, .65);
   animation: champion-glow 1.8s ease-in-out infinite;
 }
-figure.is-champion figcaption { color: #ffd76a; font-weight: 700; }
+figure.is-champion figcaption { color: #ffd76a; }
 #enemy-col.is-champion .bar-hp { box-shadow: 0 0 0 2px #f2c14e; }
 .champion-row { box-shadow: inset 3px 0 0 #f2c14e; }
 @keyframes champion-glow {
@@ -325,13 +292,14 @@ figure.is-champion figcaption { color: #ffd76a; font-weight: 700; }
 }
 @media (prefers-reduced-motion: reduce) { figure.is-champion { animation: none; } }
 
-/* ---------- Група героїв і кілька ворогів (game.js) ---------- */
+/* ---------- Група героїв і кілька ворогів ---------- */
 .party-list { display: grid; gap: 6px; }
 .party-title { font-size: .85rem; opacity: .85; }
 .party-row {
+  position: relative;
   display: flex; gap: 8px; align-items: center;
-  padding: 4px 6px; border-radius: 6px;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .12);
+  padding: 4px 6px; border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, .05); border: 1px solid var(--border-color);
 }
 .party-row.is-dead { opacity: .5; filter: grayscale(1); }
 .party-row.is-champion { border-color: #f2c14e; box-shadow: 0 0 6px rgba(242, 193, 78, .5); }
@@ -341,12 +309,202 @@ figure.is-champion figcaption { color: #ffd76a; font-weight: 700; }
 }
 .party-info { flex: 1; min-width: 0; display: grid; gap: 3px; }
 .party-info strong { font-size: .8rem; line-height: 1.2; overflow-wrap: anywhere; }
-.bar.bar-mini { min-height: 18px; border-width: 1px; border-radius: 4px; }
-.bar.bar-mini .bar-label { padding: 1px 6px; font-size: .66rem; line-height: 1.25; }
+.bar.bar-mini { min-height: 16px; }
+.bar.bar-mini .bar-label { padding: 0 6px; font-size: .66rem; line-height: 16px; }
 .member-tabs { gap: 6px; flex-wrap: wrap; }
-.member-tabs .member-tab { flex: 0 1 auto; min-height: 34px; padding: 4px 10px; font-size: .85rem; }
+.member-tabs .member-tab { flex: 0 1 auto; min-height: 36px; padding: 4px 12px; font-size: .85rem; }
 .explore-card {
-  padding: 10px; border-radius: 8px;
+  padding: 10px; border-radius: var(--radius);
   border: 1px solid rgba(242, 193, 78, .6); background: rgba(242, 193, 78, .08);
 }
 .map-district { border-radius: 30%; }
+
+/* ---------- Місто та Гільдія ---------- */
+.district-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.district { padding: 10px; border-radius: var(--radius-sm); background: rgba(255, 255, 255, .04); }
+.npc-tabs { flex-wrap: wrap; }
+.npc-tabs .wf { flex: 1 1 140px; }
+.npc-panel h3 { margin-top: 6px; }
+.quest-row, .skill-row { flex-wrap: wrap; }
+.quest-done { box-shadow: inset 3px 0 0 #4caf50; }
+.skill-row.is-current { box-shadow: inset 3px 0 0 #ffb04d; }
+
+/* =====================================================================
+   ПЛАНШЕТИ (701–1000): герой і ворог поруч угорі, бій — під ними
+   ===================================================================== */
+@media (max-width: 1000px) {
+  /* Колонки героя й ворога «розбираються» (display: contents), щоб
+     портрети й смужки стали поруч угорі, бій — під ними, а швидкий
+     доступ — у самому низу, на всю ширину. */
+  .battle:not(.no-enemy) {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: none;
+    column-gap: 12px;
+    row-gap: 8px;
+  }
+  .battle:not(.no-enemy) > .col:nth-child(1),
+  .battle:not(.no-enemy) > #enemy-col { display: contents; }
+  .battle:not(.no-enemy) > .col:nth-child(1) > * { grid-column: 1; }
+  .battle:not(.no-enemy) > #enemy-col > * { grid-column: 2; }
+  .battle:not(.no-enemy) .portrait { grid-row: 1; aspect-ratio: 1 / 1; }
+  .battle:not(.no-enemy) .stats { grid-row: 2; }
+  .battle:not(.no-enemy) .party-list { grid-row: 3; }
+  .battle:not(.no-enemy) > .col:nth-child(2) { grid-area: auto; grid-column: 1 / -1; grid-row: 4; margin-top: 4px; }
+  .battle:not(.no-enemy) > .col:nth-child(1) > #regen-info { grid-row: 5; grid-column: 1 / -1; }
+  .battle:not(.no-enemy) > .col:nth-child(1) > .inv-head { grid-row: 6; grid-column: 1 / -1; margin-top: 6px; }
+  .battle:not(.no-enemy) > .col:nth-child(1) > #quick-slots { grid-row: 7; grid-column: 1 / -1; grid-template-columns: repeat(6, 1fr); }
+  .battle:not(.no-enemy) > .col:nth-child(1) > a.wf { grid-row: 8; grid-column: 1 / -1; }
+
+  .battle.no-enemy { grid-template-columns: 1fr; grid-template-areas: "hero" "center"; }
+}
+@media (min-width: 701px) and (max-width: 1000px) {
+  .battle:not(.no-enemy) .portrait { aspect-ratio: 5 / 4; }
+  /* широкий портрет: спрайт підганяємо за висотою, щоб не різати голову */
+  .battle:not(.no-enemy) .portrait .hero-sprite { left: 50%; width: auto; height: 112%; transform: translate(-50%, -52%); }
+  .battle:not(.no-enemy) > .col:nth-child(1) > #quick-slots { grid-template-columns: repeat(12, 1fr); }
+}
+
+@media (hover: none) {
+  .attr-plus { min-height: 42px; width: 42px; }
+  .shop-row .wf { min-height: 42px; }
+  .shop-row .shop-qty { min-height: 42px; width: 5em; font-size: 1rem; }
+}
+
+/* =====================================================================
+   ТЕЛЕФОНИ (до 700)
+   ===================================================================== */
+@media (max-width: 700px) {
+  .battle { gap: 10px; }
+  .battle.no-enemy .portrait { max-width: 200px; margin: 0 auto; }
+  .battle.no-enemy #quick-slots { grid-template-columns: repeat(6, 1fr); }
+  .col { gap: 8px; }
+
+  .bar { min-height: 22px; }
+  .bar-label { font-size: .75rem; padding: 2px 4px; }
+  .exp-row { grid-template-columns: 1fr 58px; }
+  .exp-row .bar-lvl { font-size: .75rem; }
+  .inv-head, .queue-head { font-size: .8rem; }
+
+  .arena { min-height: 110px; padding: 12px; }
+  .arena-title { font-size: 1.15rem; }
+  .log { height: 220px; font-size: .86rem; }
+
+  .queue { grid-template-columns: repeat(3, 1fr); }
+  .actions .wf { min-height: 52px; font-size: 1rem; }
+
+  .loc-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  .stat-row { padding: 6px 8px; }
+
+  .equip-grid { --equip-size: calc((100% - 5 * 6px) / 6); gap: 6px; grid-template-columns: repeat(6, 1fr); }
+  .equip-grid .equip-cell { width: auto; height: auto; aspect-ratio: 1; }
+  body[data-page="character"] .pic { max-width: 220px; margin: 0 auto; }
+}
+
+
+/* ---------- Банер локації (мирні локації, деталі на мапі) ---------- */
+.place-banner {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 120px;
+  margin: -4px -4px 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background:
+    linear-gradient(0deg, rgba(0, 0, 0, .72), rgba(0, 0, 0, .05) 70%),
+    var(--loc-img, none) center / cover no-repeat,
+    var(--surface-3);
+  color: #fff;
+}
+.place-banner h2 { margin: 0; color: #fff; text-shadow: 0 2px 6px rgba(0, 0, 0, .8); }
+.place-banner .info-tip { color: rgba(255, 255, 255, .85); margin-bottom: 2px; }
+@media (max-width: 700px) { .place-banner { min-height: 96px; } }
+
+/* ---------- Шинок: рядок = предмет; купівля й продаж — у спливаючому вікні ---------- */
+button.shop-row {
+  width: 100%;
+  border: 1px solid transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  flex-wrap: nowrap;
+}
+button.shop-row:hover { border-color: var(--border-color); filter: brightness(1.08); }
+.shop-row .shop-name { flex: 1; min-width: 0; }
+.shop-lvl { opacity: .7; white-space: nowrap; }
+.shop-price { flex: 0 0 auto; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.shop-price.is-short { opacity: .5; }
+.shop-price.is-sell { color: #8fe08f; }
+.shop-gold { font-weight: 700; color: var(--gold); }
+.sell-qty { display: flex; gap: 6px; align-items: stretch; }
+.sell-qty .qty-btn { width: 44px; min-height: 42px; padding: 0; font-size: 1.2rem; flex: 0 0 44px; }
+.sell-qty .shop-qty { flex: 1; min-width: 0; min-height: 42px; text-align: center; font: inherit; font-weight: 700; color: inherit; background: rgba(0, 0, 0, .2); border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.tip-item > .wf { min-height: 42px; }
+
+/* ---------- Мапа: «чиста» основа + будівлі окремими картинками ---------- */
+.map-buildings { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.map-building { position: absolute; transform: translate(-50%, -50%); object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .35)); }
+.world-map .map-spot { z-index: 2; }
+
+/* ---------- Журнал: раунди та переміщення (battle.js) ---------- */
+.log li[data-who="round"] {
+  display: block;
+  margin: 8px 0 4px;
+  padding: 3px 0 0;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
+  background: none !important;
+  box-shadow: none !important;
+  color: var(--text-dim);
+  font-size: .76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  text-align: center;
+  max-width: none;
+  width: auto;
+}
+.log li[data-who="round"] .log-mark { display: none; }
+.log li.log-move { opacity: .72; font-style: italic; }
+.log li.log-heal .log-num { color: #8fe08f; }
+
+/* ---------- Смужка досвіду з міткою «i» ---------- */
+.bar.bar-exp[data-tip] { cursor: pointer; }
+.bar-i { width: 16px; height: 16px; flex-basis: 16px; margin-left: 6px; font-size: .62rem; border-width: 1px; vertical-align: 1px; }
+.exp-info p { margin: 0; }
+
+/* ---------- Тренер: іконки навичок, навички професії ---------- */
+.skill-icon { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 6px; object-fit: cover; }
+.skill-row.is-class { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* ---------- Розмови з NPC (data/npcs.js) ---------- */
+.npc-dialog {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--surface-2, rgba(255, 255, 255, .03));
+}
+.npc-head { display: flex; align-items: center; gap: 12px; }
+.npc-portrait {
+  width: 72px; height: 72px; flex: none;
+  object-fit: cover; border-radius: 50%;
+  border: 2px solid var(--border-color);
+}
+.npc-name { font-size: 1.05rem; color: var(--gold); }
+.npc-line { margin: 0; line-height: 1.5; font-style: italic; }
+.npc-result { margin: 0; padding: 6px 10px; border-left: 3px solid var(--gold); background: rgba(255, 255, 255, .04); }
+.npc-result.is-error { border-left-color: #c9564a; }
+.npc-replies { display: grid; gap: 6px; }
+.npc-replies .wf.npc-reply { justify-content: flex-start; text-align: left; white-space: normal; min-height: 0; padding: 8px 12px; }
+
+/* Пауза 0,5 с після покупки — кнопки купівлі неактивні */
+body.buy-locked .buy-btn,
+body.buy-locked .popover .wf-button { pointer-events: none; opacity: .55; }
+@media (max-width: 700px) {
+  .npc-portrait { width: 56px; height: 56px; }
+}

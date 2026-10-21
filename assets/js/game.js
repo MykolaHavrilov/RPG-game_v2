@@ -165,6 +165,28 @@
     return cell;
   }
 
+  // Комірка спорядження розміром з іконку: річ — лише картинка,
+  // порожня — коротка назва слота. Повна назва — у спливаючому вікні.
+  const SLOT_SHORT = {
+    mainHand: "Зброя", offHand: "Ліва рука", head: "Голова", chest: "Тіло", legs: "Штани", hands: "Наручі",
+    feet: "Взуття", earring1: "Сережка", ring1: "Кільце", amulet: "Амулет", ring2: "Кільце", earring2: "Сережка"
+  };
+  function fillEquipCell(cell, ref, slot) {
+    const item = ref && RPG.ITEMS[RPG.refId(ref)];
+    cell.textContent = "";
+    cell.dataset.slot = slot;
+    if (item) {
+      cell.classList.add("has-icon");
+      cell.append(smallIcon(ref, "equip-icon"));
+      cell.setAttribute("aria-label", `${RPG.SLOTS[slot]}: ${RPG.itemFullName(ref)}`);
+    } else {
+      cell.append(el("span", "equip-slot-name", SLOT_SHORT[slot] || RPG.SLOTS[slot]));
+      cell.setAttribute("aria-label", `${RPG.SLOTS[slot]}: порожньо`);
+      cell.title = RPG.SLOTS[slot];
+    }
+    return cell;
+  }
+
   // Маленька іконка поруч із текстом (спорядження, шинок, опис)
   function smallIcon(ref, className = "mini-icon") {
     return itemIcon(ref, className) || miniPlaceholder(ref, className);
@@ -272,8 +294,10 @@
     const regen = $("regen-info");
     if (regen) {
       const per = RPG.regenPerTick(save);
+      const grace = RPG.graceLeft(save);
       regen.textContent = `Відновлення за 10 с: +${per.hp.toFixed(1)} HP, +${per.mp.toFixed(1)} MP` +
-        (per.home ? " (з бонусом Домівки)" : "");
+        (per.home ? " (з бонусом Домівки)" : "") +
+        (grace ? ` · Молитва благодаті: ще ${Math.ceil(grace / 60000)} хв (+2% HP за 5 с, +3% MP за 10 с)` : "");
     }
     if (!save.memberIndex) renderPartyList(save);
   }
@@ -329,6 +353,81 @@
     if (r.healedHp) parts.push(`+${r.healedHp} HP`);
     if (r.healedMp) parts.push(`+${r.healedMp} MP`);
     return `${item.name}: ${parts.join(", ") || "нічого не змінилось"}`;
+  }
+
+  // Картинка локації для CSS (var(--loc-img))
+  function locImage(id) {
+    return `url("${RPG.asset("assets/images/locations/loc_" + id + ".webp")}")`;
+  }
+
+  // ---------- Опис предмета для спливаючого вікна та інвентаря ----------
+  const TYPE_NAMES = {
+    weapon: "Зброя", armor: "Броня", accessory: "Прикраса", consumable: "Зілля",
+    material: "Матеріал", offhand: "Ліва рука", shield: "Щит"
+  };
+  const RARITY_NAMES = {
+    broken: "зламана", common: "звичайна", magic: "магічна", epic: "епічна", legendary: "легендарна"
+  };
+
+  // ref — ID або екземпляр; qty — кількість у стопці; ms — сейв героя (для комплектів)
+  function itemInfo(ref, qty = 1, ms = null) {
+    const id = RPG.refId(ref);
+    const item = RPG.ITEMS[id];
+    const box = el("div", "tip-item");
+    if (!item) return box;
+
+    const head = el("div", "tip-head");
+    head.append(smallIcon(ref, "tip-icon"));
+    const title = el("div", "tip-title");
+    const name = RPG.hasRarity(id) ? rarityName(ref) : el("strong", item.rarity === "rare" ? "rt-epic" : null, item.name);
+    name.classList.add("tip-name");
+    title.append(name);
+    const sub = [TYPE_NAMES[item.type] || "Предмет"];
+    if (RPG.hasRarity(id)) sub.push(RARITY_NAMES[RPG.rarityOf(ref)] || "");
+    else if (item.rarity === "rare") sub.push("рідкісне");
+    if (qty > 1) sub.push(`×${fmtNum(qty)}`);
+    title.append(el("span", "tip-sub", sub.filter(Boolean).join(" · ")));
+    head.append(title);
+    box.append(head);
+
+    const stats = Object.entries(RPG.itemStats(ref));
+    if (stats.length) {
+      const list = el("ul", "tip-stats");
+      for (const [k, v] of stats) {
+        const li = el("li", v < 0 ? "is-neg" : null);
+        li.append(el("span", null, RPG.STAT_NAMES[k] || k), el("b", null, (v > 0 ? "+" : "") + v));
+        list.append(li);
+      }
+      box.append(list);
+    }
+
+    const eff = describeEffect(item);
+    if (eff) box.append(el("div", "tip-effect", eff));
+
+    const set = item.set && RPG.ITEM_SETS && RPG.ITEM_SETS[item.set];
+    if (set) {
+      const have = ms && RPG.equippedSetCounts ? (RPG.equippedSetCounts(ms)[item.set] || 0) : 0;
+      box.append(el("div", "tip-set" + (have >= set.pieces ? " rt-magic" : ""),
+        `${set.name}: ${set.pieces} речі — ${set.text}` + (ms ? ` (вдягнено ${Math.min(have, set.pieces)}/${set.pieces})` : "")));
+    }
+
+    const req = [];
+    if (item.slot) req.push(`Слот: ${RPG.slotsFor(item.slot).map(s => RPG.SLOTS[s]).join(" / ")}`);
+    if (item.levelReq > 1 || item.slot) req.push(`рівень ${item.levelReq || 1}`);
+    if (item.weaponType) {
+      const need = RPG.TIER_MASTERY[item.tier] || 0;
+      req.push(RPG.WEAPON_TYPES[item.weaponType].name +
+        (need ? ` · ${RPG.WEAPON_TYPES[item.weaponType].mastery.toLowerCase()} ${need}` : "") +
+        (item.weaponType === "bow" ? " · дворучна" : ""));
+    }
+    if (req.length) box.append(el("div", "tip-req", req.join(" · ")));
+
+    if (item.description) box.append(el("p", "tip-desc", item.description));
+
+    box.append(el("div", "tip-price",
+      `Ціна: ${fmtNum(item.price || 0)} зол. · продаж: ${fmtNum(RPG.refSellPrice(ref))} зол.` +
+      (item.noShop ? " · не продається" : "")));
+    return box;
   }
 
   // ============================================================
@@ -496,6 +595,10 @@
     const locData = RPG.getLocation(locId);
     $("location-name").textContent = locData.name;
     $("location-desc").textContent = locData.description;
+    // Фон локації (assets/images/locations/loc_<id>.webp) — за портретами та в банері.
+    // Якщо картинки ще немає, лишається фон теми.
+    document.body.style.setProperty("--loc-img", locImage(locId));
+    document.body.dataset.loc = locId;
 
     const combat = RPG.isCombatLocation(locId);
     $("enemy-col").hidden = !combat;
@@ -514,21 +617,27 @@
         if (!entry) { box.append(el("div", "wf wf-slot slot-empty", "")); continue; }
         const item = RPG.ITEMS[entry.id];
         const cell = fillItemCell(button("", slotClass(entry)), entry, entry.qty);
-        cell.title = itemLabel(entry) + " — " + item.description +
-          (item.type === "consumable" ? " (натисніть, щоб використати)" : "");
-        if (item.type === "consumable") {
+        cell.removeAttribute("title");
+        cell.setAttribute("aria-label", itemLabel(entry));
+        const usable = item.type === "consumable";
+        const use = async () => {
+          if (fighting) return;
+          const r = RPG.useItem(save, entry.id);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          showMsg(msg, useResultText(item, r));
+          await RPG.saveGame(save);
+          renderAll();
+        };
+        if (usable) {
           cell.classList.add("slot-usable");
-          cell.addEventListener("click", async () => {
-            if (fighting) return;
-            const r = RPG.useItem(save, entry.id);
-            if (!r.ok) { showMsg(msg, r.reason, true); return; }
-            showMsg(msg, useResultText(item, r));
-            await RPG.saveGame(save);
-            renderAll();
-          });
+          cell.addEventListener("dblclick", () => { RPG.popover.hide(); use(); });
         } else {
-          cell.disabled = true;
+          cell.classList.add("slot-passive");
         }
+        RPG.bindTip(cell, () => itemInfo(entry, entry.qty, save), () => [
+          usable && { text: "Використати", className: "wf-button", onClick: use },
+          { text: "Інвентар", className: "wf-link", onClick: () => { location.href = "inventory.html"; } }
+        ]);
         box.append(cell);
       }
       $("gold").textContent = `Золото: ${fmtNum(save.character.gold)}`;
@@ -539,7 +648,9 @@
 
     function renderPlace() {
       place.innerHTML = "";
-      place.append(el("h2", null, locData.name));
+      const banner = el("div", "place-banner info-anchor");
+      banner.append(el("h2", null, locData.name));
+      place.append(banner);
       if (locData.type === "home") renderHome();
       else if (locData.type === "temple") renderTemple();
       else if (locData.type === "tavern") renderTavern();
@@ -548,41 +659,96 @@
 
     function renderHome() {
       const per = RPG.regenPerTick(save);
-      place.append(el("p", null, "Тут битися заборонено — монстри сюди не заходять."));
-      place.append(el("p", null,
+      place.append(el("p", "note", "Тут битися заборонено — монстри сюди не заходять."));
+      place.append(el("p", "note",
         `Відпочинок: додатково +${Math.round(RPG.HOME_REGEN_PCT * 100)}% здоров'я та мани кожні 10 секунд ` +
         `понад звичайне відновлення. Зараз: +${per.hp.toFixed(1)} HP і +${per.mp.toFixed(1)} MP за 10 с.`));
       const used = save.chest.length;
-      place.append(el("p", null, `Скриня: ${used ? `${used} клітинок зайнято` : "порожній"}. Речі в скрині не зникають, навіть якщо герой загине.`));
+      place.append(el("p", "note", `Скриня: ${used ? `${used} клітинок зайнято` : "порожній"}. Речі в скрині не зникають, навіть якщо герой загине.`));
       const row = el("div", "row");
       row.append(link("Інвентар і скриня", "inventory.html"), link("Вирушити (Мапа)", "maps.html"));
       place.append(row);
     }
 
     function renderTemple() {
-      place.append(el("p", null,
+      place.append(el("p", "note",
         `Сюди повертаються загиблі. Відроджені мають ${Math.round(RPG.RESPAWN_HP_PCT * 100)}% здоров'я та 0% мани — ` +
         "відновіться зіллям або вирушайте відпочити в Домівку."));
-      place.append(el("p", "note",
-        "Якщо в групі хтось загинув, а інші вижили, живим треба прийти сюди й помолитися, щоб відродити полеглих."));
+      renderNpc(place, "nun");
       const row = el("div", "row");
-      row.append(
-        button("Помолитися", "wf wf-button", async () => {
-          const r = RPG.pray(save);
-          if (!r.ok) { showMsg(msg, r.reason, true); return; }
-          await RPG.saveGame(save);
-          showMsg(msg, r.revived.length
-            ? `Відроджено: ${r.revived.join(", ")}.`
-            : "У вашій групі немає полеглих. Боги чують вас.");
-        }),
-        link("До Домівки", "game.html?loc=home"),
-        link("Мапа", "maps.html")
-      );
+      row.append(link("До Домівки", "game.html?loc=home"), link("Мапа", "maps.html"));
       place.append(row);
     }
 
+    // ---------- Розмови з NPC (data/npcs.js) ----------
+    const npcNode = {};      // на якому вузлі розмова з кожним NPC
+    const npcResult = {};    // відповідь на останню дію (молитва, оплата…)
+    const npcCtx = { member: 0 };
+
+    const NPC_ACTIONS = {
+      async pray() {
+        const r = RPG.pray(save);
+        if (!r.ok) return { text: r.reason, error: true };
+        await RPG.saveGame(save);
+        return { text: r.revived.length
+          ? `Сестра Ївга довго молиться над полеглими. Відроджено: ${r.revived.join(", ")}.`
+          : "«У твоїй групі немає полеглих. Хай так буде й надалі.»" };
+      },
+      async grace() {
+        const r = RPG.buyGrace(save);
+        if (!r.ok) return { text: `«${r.reason}»`, error: true, to: "grace" };
+        await RPG.saveGame(save);
+        return { text: `Сестра Ївга читає Молитву благодаті${r.count > 1 ? " над усією групою" : ""}. Пожертва: ${fmtNum(r.cost)} золота. Благодать діятиме 10 хвилин.` };
+      },
+      async reset() {
+        const ms = RPG.memberSave(save, npcCtx.member);
+        const r = RPG.resetAttrs(ms);
+        if (!r.ok) return { text: `«${r.reason}»`, error: true, to: "reset" };
+        await RPG.saveGame(save);
+        return { text: `Захар Вергун переписує записи. ${ms.character.name}: повернуто ${r.points} очок атрибутів, мито — ${fmtNum(r.cost)} золота. ` +
+          "Розподілити очки знову можна на сторінці «Персонаж»." };
+      }
+    };
+
+    function renderNpc(box, npcId) {
+      const npc = RPG.NPCS[npcId];
+      const node = npc.nodes[npcNode[npcId]] || npc.nodes.start;
+      const wrap = el("div", "npc-dialog");
+      const head = el("div", "npc-head");
+      const img = new Image();
+      img.className = "npc-portrait";
+      img.alt = "";
+      img.addEventListener("error", () => img.remove());
+      img.src = RPG.asset(`assets/images/npc/${npc.portrait}.webp`);
+      head.append(img, el("strong", "npc-name", npc.name));
+      wrap.append(head);
+      const res = npcResult[npcId];
+      if (res) wrap.append(el("p", "npc-result" + (res.error ? " is-error" : ""), res.text));
+      const text = typeof node.text === "function" ? node.text(save, npcCtx) : node.text;
+      wrap.append(el("p", "npc-line", text));
+      const replies = el("div", "npc-replies");
+      for (const r of node.replies) {
+        if (r.show && !r.show(save, npcCtx)) continue;
+        const label = typeof r.text === "function" ? r.text(save, npcCtx) : r.text;
+        replies.append(button("➤ " + label, "wf wf-link npc-reply", async () => {
+          npcResult[npcId] = null;
+          if (r.action) {
+            const out = await NPC_ACTIONS[r.action]();
+            npcResult[npcId] = out;
+            npcNode[npcId] = out.to || r.to || "start";
+          } else {
+            npcNode[npcId] = r.to || "start";
+          }
+          renderAll();
+        }));
+      }
+      wrap.append(replies);
+      box.append(wrap);
+    }
+
     function renderTavern() {
-      place.append(el("p", null,
+      renderNpc(place, "ostap");
+      place.append(el("p", "note",
         `${locData.merchant || "Торговець"} продає за ${Math.round(RPG.SHOP_SELL_RATE * 100)}% вартості, ` +
         `а купує за ${Math.round(RPG.SHOP_BUY_RATE * 100)}%. Великі та чарівні зілля тут не купиш — лише здобути в бою.`));
       renderShop(place, locData.shop || []);
@@ -592,49 +758,93 @@
     }
 
     // Купівля / продаж (Шинок, торговець Гільдії)
+    // Після покупки кнопки «Купити» на пів секунди вимикаються — щоб не купити двічі випадково
+    const BUY_PAUSE_MS = 500;
+    let buyLockUntil = 0;
+    function lockBuyButtons() {
+      document.body.classList.add("buy-locked");
+      setTimeout(() => document.body.classList.remove("buy-locked"), BUY_PAUSE_MS);
+    }
     function renderShop(box, shopIds) {
-      box.append(el("p", null, `Ваше золото: ${fmtNum(save.character.gold)}`));
+      box.append(el("p", "status shop-gold", `Ваше золото: ${fmtNum(save.character.gold)}`));
 
       const cols = el("div", "row shop");
-      const buyBox = el("div", "stack");
+      const buyBox = el("div", "stack shop-list");
       buyBox.append(el("h3", null, "Купити"));
       for (const id of shopIds) {
         const item = RPG.ITEMS[id];
         if (!item || item.noShop) continue;
         const price = RPG.shopSellPrice(id);
-        const r = el("div", "shop-row");
-        r.append(smallIcon(id));
-        const info = el("span", "shop-name", item.name);
-        info.title = [item.description, describeStats(id), describeEffect(item)].filter(Boolean).join(" · ");
-        if (item.levelReq > 1) info.append(el("small", null, ` · рів. ${item.levelReq}`));
-        const b = button(`${price} зол.`, "wf wf-button", async () => {
-          const res = RPG.buyItem(save, id);
+        const r = el("button", "shop-row shop-info");
+        r.type = "button";
+        r.append(smallIcon(id), el("span", "shop-name", item.name));
+        if (item.levelReq > 1) r.append(el("small", "shop-lvl", `рів. ${item.levelReq}`));
+        r.append(el("span", "shop-price" + (save.character.gold < price ? " is-short" : ""), `${fmtNum(price)} зол.`));
+        const buy = async (qty = 1) => {
+          if (Date.now() < buyLockUntil) return;          // пауза після покупки
+          buyLockUntil = Date.now() + BUY_PAUSE_MS;
+          lockBuyButtons();
+          const res = RPG.buyItem(save, id, qty);
           if (!res.ok) { showMsg(msg, res.reason, true); return; }
           await RPG.saveGame(save);
-          showMsg(msg, `Куплено: ${item.name} за ${res.price} золота.`);
+          showMsg(msg, `Куплено: ${item.name}${res.qty > 1 ? ` × ${res.qty}` : ""} за ${fmtNum(res.price)} золота.`);
           renderAll();
-        });
-        b.disabled = save.character.gold < price;
-        r.append(info, b);
+        };
+        const stack = item.stackable ? (item.maxStack || 99) : 0;
+        // Вікно покупки: опис + вибір кількості
+        const build = () => {
+          const box = itemInfo(id, 1, save);
+          const most = Math.max(1, Math.min(RPG.BUY_MAX, Math.floor(save.character.gold / price)));
+          const buyRow = el("div", "sell-qty");
+          const minus = button("−", "wf wf-secondary qty-btn");
+          const plus = button("+", "wf wf-secondary qty-btn");
+          const qtyInput = el("input", "shop-qty");
+          Object.assign(qtyInput, { type: "number", min: 1, max: RPG.BUY_MAX, step: 1, value: 1, inputMode: "numeric" });
+          qtyInput.setAttribute("aria-label", `Кількість: ${item.name}`);
+          const buySome = button("", "wf wf-button buy-btn", () => {
+            const n = Math.floor(Number(qtyInput.value));
+            if (!(n >= 1 && n <= RPG.BUY_MAX)) { showMsg(msg, `Вкажіть кількість від 1 до ${RPG.BUY_MAX}.`, true); return; }
+            RPG.popover.hide();
+            buy(n);
+          });
+          const upd = () => {
+            const n = Math.min(RPG.BUY_MAX, Math.max(1, Math.floor(Number(qtyInput.value)) || 1));
+            buySome.textContent = `Купити ${n} · ${fmtNum(price * n)} зол.`;
+            buySome.disabled = save.character.gold < price * n;
+          };
+          const step = d => { qtyInput.value = Math.min(RPG.BUY_MAX, Math.max(1, (Number(qtyInput.value) || 1) + d)); upd(); };
+          minus.addEventListener("click", () => step(-1));
+          plus.addEventListener("click", () => step(1));
+          qtyInput.addEventListener("input", upd);
+          qtyInput.addEventListener("keydown", e => { if (e.key === "Enter") buySome.click(); });
+          upd();
+          buyRow.append(minus, qtyInput, plus);
+          box.append(buyRow, buySome);
+          if (most > 1) box.append(el("p", "note", `На ваше золото — до ${fmtNum(most)} шт.`));
+          return box;
+        };
+        RPG.bindTip(r, build, () => [
+          stack && { text: `Повна комірка (${stack} шт.) · ${fmtNum(price * stack)} зол.`, className: "wf-secondary buy-btn",
+            onClick: () => buy(stack), disabled: save.character.gold < price * stack,
+            title: save.character.gold < price * stack ? "Не вистачає золота" : "" }
+        ].filter(Boolean));
         buyBox.append(r);
       }
 
-      const sellBox = el("div", "stack");
+      const sellBox = el("div", "stack shop-list");
       sellBox.append(el("h3", null, "Продати (з інвентаря)"));
-      if (!save.inventory.length) sellBox.append(el("p", "note", "Інвентар порожній. Вдягнені речі спершу зніміть."));
+      if (!save.inventory.length) sellBox.append(el("p", "status", "Інвентар порожній. Вдягнені речі спершу зніміть."));
       save.inventory.forEach((entry, index) => {
         const item = RPG.ITEMS[entry.id];
         const unit = RPG.refSellPrice(entry);
-        const r = el("div", "shop-row");
-        const name = el("span", "shop-name", itemLabel(entry));
-        if (RPG.hasRarity(entry.id)) {
-          name.classList.add("rt-" + RPG.rarityOf(entry));
-          name.title = describeStats(entry);
-        }
-        name.append(el("small", null, ` · ${unit} зол./шт.`));
-        r.append(smallIcon(entry), name);
+        const r = el("button", "shop-row shop-info");
+        r.type = "button";
+        const label = el("span", "shop-name", itemLabel(entry));
+        if (RPG.hasRarity(entry.id)) label.classList.add("rt-" + RPG.rarityOf(entry));
+        r.append(smallIcon(entry), label, el("span", "shop-price is-sell", `+${fmtNum(unit)} зол.`));
 
         async function sell(qty) {
+          RPG.popover.hide();
           const res = RPG.sellItem(save, index, qty);
           if (!res.ok) { showMsg(msg, res.reason, true); return; }
           await RPG.saveGame(save);
@@ -642,32 +852,39 @@
           renderAll();
         }
 
-        if (entry.qty > 1) {
-          // Своя кількість: поле + «Продати», і окремо — уся стопка
-          const qtyInput = el("input", "shop-qty");
-          Object.assign(qtyInput, { type: "number", min: 1, max: entry.qty, step: 1, value: 1, inputMode: "numeric" });
-          qtyInput.title = `Скільки продати (1–${entry.qty})`;
-          qtyInput.setAttribute("aria-label", `Кількість: ${item.name}`);
-          const sellSome = button(`+${unit} зол.`, "wf wf-secondary", () => {
-            const n = Math.floor(Number(qtyInput.value));
-            if (!(n >= 1 && n <= entry.qty)) {
-              showMsg(msg, `Вкажіть кількість від 1 до ${entry.qty}.`, true);
-              return;
-            }
-            sell(n);
-          });
-          const updateLabel = () => {
-            const n = Math.min(entry.qty, Math.max(1, Math.floor(Number(qtyInput.value)) || 1));
-            sellSome.textContent = `Продати +${fmtNum(unit * n)} зол.`;
-          };
-          qtyInput.addEventListener("input", updateLabel);
-          qtyInput.addEventListener("keydown", e => { if (e.key === "Enter") sellSome.click(); });
-          updateLabel();
-          const sellAll = button(`Усе (${entry.qty}) +${fmtNum(unit * entry.qty)} зол.`, "wf wf-secondary", () => sell(entry.qty));
-          r.append(qtyInput, sellSome, sellAll);
-        } else {
-          r.append(button(`+${unit} зол.`, "wf wf-secondary", () => sell(1)));
-        }
+        // Вікно продажу: опис + (для стопки) вибір кількості
+        const build = () => {
+          const box = itemInfo(entry, entry.qty, save);
+          if (entry.qty > 1) {
+            const sellRow = el("div", "sell-qty");
+            const minus = button("−", "wf wf-secondary qty-btn");
+            const plus = button("+", "wf wf-secondary qty-btn");
+            const qtyInput = el("input", "shop-qty");
+            Object.assign(qtyInput, { type: "number", min: 1, max: entry.qty, step: 1, value: 1, inputMode: "numeric" });
+            qtyInput.setAttribute("aria-label", `Кількість: ${item.name}`);
+            const sellSome = button("", "wf wf-button", () => {
+              const n = Math.floor(Number(qtyInput.value));
+              if (!(n >= 1 && n <= entry.qty)) { showMsg(msg, `Вкажіть кількість від 1 до ${entry.qty}.`, true); return; }
+              sell(n);
+            });
+            const upd = () => {
+              const n = Math.min(entry.qty, Math.max(1, Math.floor(Number(qtyInput.value)) || 1));
+              sellSome.textContent = `Продати ${n} · +${fmtNum(unit * n)} зол.`;
+            };
+            const step = d => { qtyInput.value = Math.min(entry.qty, Math.max(1, (Number(qtyInput.value) || 1) + d)); upd(); };
+            minus.addEventListener("click", () => step(-1));
+            plus.addEventListener("click", () => step(1));
+            qtyInput.addEventListener("input", upd);
+            qtyInput.addEventListener("keydown", e => { if (e.key === "Enter") sellSome.click(); });
+            upd();
+            sellRow.append(minus, qtyInput, plus);
+            box.append(sellRow, sellSome);
+          }
+          return box;
+        };
+        RPG.bindTip(r, build, () => entry.qty > 1
+          ? [{ text: `Продати все (${entry.qty}) · +${fmtNum(unit * entry.qty)} зол.`, className: "wf-secondary", onClick: () => sell(entry.qty) }]
+          : [{ text: `Продати · +${fmtNum(unit)} зол.`, className: "wf-button", onClick: () => sell(1) }]);
         sellBox.append(r);
       });
 
@@ -688,7 +905,7 @@
     let trainMember = 0;            // кого навчає Тренер (герой групи)
 
     function renderCity() {
-      place.append(el("p", null, locData.description));
+      place.append(el("p", "note", locData.description));
       const grid = el("div", "district-grid");
       for (const d of locData.districts || []) {
         const locked = districtLocked(d);
@@ -703,8 +920,8 @@
       const d = (locData.districts || []).find(x => x.id === cityDistrict);
       if (d) {
         const box = el("div", "stack district");
-        box.append(el("h3", null, `${d.name} — ${d.building}`), el("p", null, d.description));
-        if (districtLocked(d)) box.append(el("p", "note", d.id === "center"
+        box.append(el("h3", null, `${d.name} — ${d.building}`), el("p", "note", d.description));
+        if (districtLocked(d)) box.append(el("p", "status", d.id === "center"
           ? "Прохід закритий. Його відкриває Адміністратор гільдії авантюристів після особливого завдання «Час дослідити» (з 10 рівня)."
           : "Закрито — відкриється згодом."));
         else if (d.id === "south") renderGuild(box);
@@ -717,9 +934,28 @@
     }
 
     // --- Мерія: Дошка оголошень (найм у групу) ---
+    let hallNpc = "board";     // board | steward
     function renderTownHall(box) {
+      const stewardOpen = save.character.level >= RPG.STEWARD_MIN_LEVEL;
+      if (stewardOpen) {
+        const tabs = el("div", "row npc-tabs");
+        for (const [id, name] of [["board", "Дошка оголошень"], ["steward", "Розпорядник Захар"]]) {
+          tabs.append(button(name, "wf " + (hallNpc === id ? "wf-button" : "wf-link"), () => { hallNpc = id; renderPlace(); }));
+        }
+        box.append(tabs);
+      } else hallNpc = "board";
+      if (hallNpc === "steward") {
+        if (npcCtx.member >= RPG.partySize(save)) npcCtx.member = 0;
+        if (RPG.partySize(save) > 1) {
+          const mt = el("div", "row member-tabs");
+          memberTabs(mt, save, npcCtx.member, i => { npcCtx.member = i; npcResult.steward = null; renderPlace(); });
+          box.append(mt);
+        }
+        renderNpc(box, "steward");
+        return;
+      }
       const size = RPG.partySize(save);
-      box.append(el("p", null, "Біля Мерії стоїть Дошка оголошень: авантюристи шукають собі напарників, щоб об'єднатися в групу. " +
+      box.append(el("p", "note", "Біля Мерії стоїть Дошка оголошень: авантюристи шукають собі напарників, щоб об'єднатися в групу. " +
         `За кожного нового члена групи Мерія бере внесок. У групі може бути до ${RPG.MAX_PARTY} героїв.`));
 
       box.append(el("h3", null, `Ваша група: ${size} / ${RPG.MAX_PARTY}`));
@@ -742,14 +978,14 @@
 
       box.append(el("h3", null, "Дошка оголошень"));
       const cost = RPG.nextHireCost(save);
-      if (cost == null) { box.append(el("p", "note", "Група вже повна.")); return; }
-      box.append(el("p", "note", `Внесок у Мерію за наступного (${size + 1}-го) героя групи: ${fmtNum(cost)} золота. ` +
+      if (cost == null) { box.append(el("p", "status", "Група вже повна.")); return; }
+      box.append(el("p", "status", `Внесок у Мерію за наступного (${size + 1}-го) героя групи: ${fmtNum(cost)} золота. ` +
         `Далі — ${RPG.HIRE_COSTS.slice(size).map(fmtNum).join(" → ")} золота. Новачки починають з 1 рівня.`));
       const can = RPG.canHire(save);
-      if (!can.ok) box.append(el("p", "note", can.reason));
+      if (!can.ok) box.append(el("p", "status", can.reason));
       for (const name of RPG.boardState(save)) {
         const r = el("div", "shop-row");
-        r.append(el("span", "shop-name", `«Шукаю групу. ${name}, Рекрут, 1 рівень.»`));
+        r.append(el("span", "shop-name", `«Шукаю групу. ${name}, ${RPG.getClass(RPG.DEFAULT_CLASS).name}, 1 рівень.»`));
         const b = button(`Найняти (${fmtNum(cost)} зол.)`, "wf wf-button", async () => {
           const res = RPG.hireMember(save, name);
           if (!res.ok) { showMsg(msg, res.reason, true); return; }
@@ -778,7 +1014,7 @@
       const npc = el("div", "stack npc-panel");
       if (guildNpc === "admin") renderQuestBoard(npc);
       else if (guildNpc === "trader") {
-        npc.append(el("p", null,
+        npc.append(el("p", "note",
           `Торговець гільдії продає зброю 1–2 виду, малі й середні зілля (за ${Math.round(RPG.SHOP_SELL_RATE * 100)}% вартості), ` +
           `а купує будь-що за ${Math.round(RPG.SHOP_BUY_RATE * 100)}%.`));
         renderShop(npc, RPG.GUILD_SHOP || []);
@@ -794,7 +1030,7 @@
       const qs = RPG.questState(save);
       renderExplore(box);
       renderProfession(box);
-      box.append(el("p", null,
+      box.append(el("p", "note",
         `«Роботи вистачає — беріть до ${RPG.QUEST_MAX_ACTIVE} завдань одночасно.» Виконано завдань: ${qs.done}.`));
 
       if (qs.bounties.length) {
@@ -816,7 +1052,7 @@
       }
 
       box.append(el("h3", null, "Ваші завдання"));
-      if (!qs.active.length) box.append(el("p", "note", "Немає взятих завдань."));
+      if (!qs.active.length) box.append(el("p", "status", "Немає взятих завдань."));
       for (const quest of qs.active) {
         const done = RPG.isQuestComplete(save, quest);
         const r = el("div", "shop-row quest-row" + (done ? " quest-done" : ""));
@@ -870,10 +1106,10 @@
       const card = el("div", "stack explore-card");
       card.append(el("h3", null, `Особливе завдання: «${E.name}»`));
       if (info.done) {
-        card.append(el("p", null, E.finale));
+        card.append(el("p", "note", E.finale));
         card.append(link("До Центрального району (Мерія)", "game.html?loc=city&district=center"));
       } else if (info.canStart) {
-        card.append(el("p", null, `«Ви вже досвідчений авантюрист. Час дослідити світ далі — але спершу допоможіть нам. ` +
+        card.append(el("p", "note", `«Ви вже досвідчений авантюрист. Час дослідити світ далі — але спершу допоможіть нам. ` +
           `Завдання з ${info.total} частин, кожна відкривається після попередньої.»`));
         card.append(button("Взяти завдання", "wf wf-button", async () => {
           const r = RPG.startExplore(save);
@@ -884,11 +1120,11 @@
         }));
       } else {
         card.append(el("p", null, `Частина ${info.index} з ${info.total}: ${info.part.title}`));
-        card.append(el("p", null, info.part.text));
+        card.append(el("p", "note", info.part.text));
         for (const pr of info.progress) {
           card.append(el("div", pr.have >= pr.need ? "rt-magic" : null, `${pr.label}: ${pr.have} / ${pr.need}`));
         }
-        card.append(el("p", "note", "Нагорода: " + RPG.describeExploreReward(info.part)));
+        card.append(el("p", "status", "Нагорода: " + RPG.describeExploreReward(info.part)));
         const b = button(info.index < info.total ? "Здати частину" : "Завершити завдання", "wf wf-button", async () => {
           const r = RPG.turnInExplore(save);
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
@@ -970,7 +1206,7 @@
       const tms = RPG.memberSave(save, trainMember);
       const type = RPG.weaponTypeOf(tms);
       const cap = RPG.masteryCap(tms.character.level);
-      box.append(el("p", null, "«Покажи, чим б'єшся, — і я навчу тебе володіти цим краще.» " +
+      box.append(el("p", "note", "«Покажи, чим б'єшся, — і я навчу тебе володіти цим краще.» " +
         "Тренер навчає лише тієї зброї, яка зараз у вас у правій руці."));
       box.append(el("p", "note",
         `Межа володіння зараз: ${cap}` + (cap < RPG.MASTERY_MAX ? " (з 10 рівня персонажа — 20)." : ".") +
@@ -1114,7 +1350,7 @@
           if (RPG.skillLevel(qms, id) > 0) options.push([id, `${RPG.SKILLS[id].name} (${RPG.SKILLS[id].mp} MP)`]);
         }
       }
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < RPG.QUEUE_SIZE; i++) {
         const action = qms.battleQueue[i] || "";
         const sel = el("select", "wf wf-slot queue-select" + (action ? "" : " slot-empty"));
         sel.title = `Дія ${i + 1}`;
@@ -1133,7 +1369,8 @@
         sel.addEventListener("change", async () => {
           if (fighting) return;
           qms.battleQueue[i] = sel.value;
-          for (let k = 0; k < 10; k++) qms.battleQueue[k] ??= "";
+          for (let k = 0; k < RPG.QUEUE_SIZE; k++) qms.battleQueue[k] ??= "";
+          qms.battleQueue.length = RPG.QUEUE_SIZE;
           if (!qms.battleQueue.some(Boolean)) qms.battleQueue[0] = "attack";
           await RPG.saveGame(save);
           renderQueue();
@@ -1171,12 +1408,47 @@
       if (!fighters().length) lines.push("Усі герої групи полягли — помоліться за них у Храмі.");
       lines.push("Натисніть «Почати бій» або пошукайте іншого суперника.");
       setArena(anyChampion() ? "Чемпіон!" : "Готові до бою", lines);
+      arena.dataset.state = anyChampion() ? "champion" : "ready";
     }
 
+    // Рядок журналу: позначка «хто діє» + текст, числа виділені
     function addLogLine(ev) {
-      const li = el("li", "log-" + ev.who + (ev.crit ? " log-crit" : "") + (ev.move ? " log-move" : ""), ev.text);
+      const li = el("li", "log-" + ev.who + (ev.crit ? " log-crit" : "") + (ev.move ? " log-move" : "") + (ev.heal ? " log-heal" : ""));
+      li.dataset.who = ev.who;
+      li.append(el("span", "log-mark", ev.who === "round" ? "" : ev.move ? "➜" : ev.who === "hero" ? "⚔" : ev.who === "enemy" ? "✸" : "◆"));
+      const text = el("span", "log-text");
+      String(ev.text).split(/(\d+)/).forEach((part, i) => {
+        if (!part) return;
+        text.append(i % 2 ? el("b", "log-num", part) : document.createTextNode(part));
+      });
+      li.append(text);
       logBox.append(li);
       logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // Ефекти: хто діє — спалах; у кого змінилось HP — число над портретом
+    let lastSnap = null;
+    const heroFig = () => $("hero-img").closest("figure");
+    const enemyFig = () => $("enemy-img").closest("figure");
+    function rowOf(id) { const b = $(id); return b ? b.closest(".party-row") : null; }
+    function battleFx(ev, team) {
+      if (ev.who === "hero") RPG.fx.act(heroFig());
+      else if (ev.who === "enemy") RPG.fx.act(enemyFig());
+      if (lastSnap) {
+        team.forEach((ms, k) => {
+          const now = ev.heroes?.[k], was = lastSnap.heroes?.[k];
+          if (!now || !was) return;
+          const i = ms.memberIndex || 0;
+          const target = i === 0 ? heroFig() : rowOf("party-hp-" + i);
+          if (now.hp !== was.hp) RPG.fx.hit(target, now.hp - was.hp, ev.crit ? "crit" : "");
+        });
+        (ev.enemies || []).forEach((now, i) => {
+          const was = lastSnap.enemies?.[i];
+          if (!was || now.hp === was.hp) return;
+          RPG.fx.hit(i === 0 ? enemyFig() : rowOf("foe-hp-" + i), now.hp - was.hp, ev.crit ? "crit" : "");
+        });
+      }
+      lastSnap = ev;
     }
 
     // Смужки під час показу бою. team — герої, що б'ються; maxStats — їхні максимуми
@@ -1285,10 +1557,13 @@
       // Показ бою
       const stepByStep = RPG.getSettings().battleView !== "result";
       setArena(`${team.map(ms => ms.character.name).join(", ")} проти: ${foesText()}`, ["Бій триває…"]);
+      arena.dataset.state = "fight";
+      lastSnap = null;
       if (stepByStep) {
         for (const ev of result.events) {
           addLogLine(ev);
           applyEventToBars(ev, team, maxStats);
+          battleFx(ev, team);
           await sleep(ev.who === "info" ? 400 : 550);
         }
       } else {
@@ -1304,6 +1579,7 @@
           (d.lostItems.length ? `, втрачено: ${d.lostItems.map(ref => RPG.itemFullName(ref)).join(", ")}` : ""));
         lines.push(`${group ? "Уся група відродилася" : "Ви відродилися"} в Храмі з ${Math.round(RPG.RESPAWN_HP_PCT * 100)}% здоров'я і без мани.`);
         setArena(group ? "Група загинула" : "Загибель", lines);
+        arena.dataset.state = "lose";
         addLogLine({ who: "info", text: lines.join(" ") });
         arena.append(link("Прокинутися в Храмі", "game.html?loc=temple"));
         renderHeroBars(save);
@@ -1320,9 +1596,11 @@
         for (const l of levelLines) lines.push(l + " Здоров'я та мана відновлені, є нові вільні очки атрибутів (сторінка «Персонаж»).");
         lines.push(`Переможено ворогів: ${save.character.kills}`);
         setArena("Перемога!", lines);
+        arena.dataset.state = "win";
         addLogLine({ who: "info", text: "Нагорода: " + summary.join(", ") });
       } else {
         setArena(foes.length > 1 ? "Вороги втекли" : "Ворог утік", ["Нагороди немає."]);
+        arena.dataset.state = "draw";
       }
 
       // Наступні суперники
@@ -1407,7 +1685,7 @@
       const total = RPG.totalAttrs(ms);
       const byLevel = RPG.levelAttrs(ms);
       const cls = RPG.getClass(ch.classId);
-      attrBox.append(el("p", "note", ch.freePoints
+      attrBox.append(el("p", ch.freePoints ? "status" : "note", ch.freePoints
         ? `Вільних очок: ${ch.freePoints}. Натисніть «+», щоб вкласти.`
         : `Вільних очок немає. За кожен новий рівень — ${RPG.POINTS_PER_LEVEL}.`));
       const autoTxt = RPG.describeAttrs(cls.levelAttrs);
@@ -1467,10 +1745,10 @@
         const ref = ms.equipment[slot];
         const item = RPG.ITEMS[RPG.refId(ref)];
         const cell = el("div", item ? slotClass(ref, "equip-cell") : "wf wf-slot equip-cell slot-empty");
-        if (item) cell.append(smallIcon(ref, "equip-icon"));
-        cell.append(el("span", "equip-slot-name", RPG.SLOTS[slot]));
-        cell.append(item ? rarityName(ref) : el("strong", null, "порожньо"));
-        if (item) cell.title = describeStats(ref);
+        fillEquipCell(cell, ref, slot);
+        if (item) RPG.bindTip(cell, () => itemInfo(ref, 1, ms), () => [
+          { text: "Змінити в інвентарі", className: "wf-link", onClick: () => { location.href = "inventory.html"; } }
+        ]);
         slots.append(cell);
       }
 
@@ -1520,13 +1798,15 @@
     }
 
     const msg = $("msg");
-    const desc = $("item-desc");
-    const btnEquip = $("btn-equip");
-    const btnUnequip = $("btn-unequip");
-    const btnUse = $("btn-use");
-    const btnDrop = $("btn-drop");
-    const btnToChest = $("btn-to-chest");
-    const btnFromChest = $("btn-from-chest");
+    // Дії з предметами — лише у спливаючому вікні. Кнопки створюються
+    // «в пам'яті» (не на сторінці): вікно бере з них назву, стан і дію.
+    const desc = el("div", "item-desc");
+    const btnEquip = button("Вдягнути", "wf wf-button");
+    const btnUnequip = button("Зняти", "wf wf-button");
+    const btnUse = button("Використати", "wf wf-button");
+    const btnDrop = button("Викинути", "wf wf-danger");
+    const btnToChest = button("У скриню", "wf wf-secondary");
+    const btnFromChest = button("Забрати зі скрині", "wf wf-secondary");
     const atHome = RPG.isAtHome(ms);
 
     // selected: { kind: "inv", index } | { kind: "eq", slot } | { kind: "chest", index }
@@ -1539,8 +1819,12 @@
         const entry = list[i];
         if (!entry) { box.append(el("div", "wf wf-slot slot-empty", "")); continue; }
         const cell = fillItemCell(button("", slotClass(entry)), entry, entry.qty);
+        cell.removeAttribute("title");
+        cell.setAttribute("aria-label", itemLabel(entry));
+        cell.dataset.key = kind + ":" + i;
         if (selected?.kind === kind && selected.index === i) cell.classList.add("is-selected");
-        cell.addEventListener("click", () => { selected = { kind, index: i }; render(); });
+        RPG.bindTip(cell, () => itemInfo(entry, entry.qty, ms), null,
+          { onOpen: () => { pick({ kind, index: i }, cell.dataset.key); return false; } });
         box.append(cell);
       }
     }
@@ -1553,11 +1837,15 @@
         const ref = ms.equipment[slot];
         const item = RPG.ITEMS[RPG.refId(ref)];
         const cell = button("", item ? slotClass(ref, "equip-cell") : "wf wf-slot equip-cell slot-empty");
-        if (item) cell.append(smallIcon(ref, "equip-icon"));
-        cell.append(el("span", "equip-slot-name", RPG.SLOTS[slot]));
-        cell.append(item ? rarityName(ref) : el("strong", null, "порожньо"));
+        fillEquipCell(cell, ref, slot);
         if (selected?.kind === "eq" && selected.slot === slot) cell.classList.add("is-selected");
-        cell.addEventListener("click", () => { selected = item ? { kind: "eq", slot } : null; render(); });
+        cell.dataset.key = "eq:" + slot;
+        if (item) {
+          RPG.bindTip(cell, () => itemInfo(ref, 1, ms), null,
+            { onOpen: () => { pick({ kind: "eq", slot }, cell.dataset.key); return false; } });
+        } else {
+          cell.addEventListener("click", () => { selected = null; RPG.popover.hide(); render(); });
+        }
         eq.append(cell);
       }
 
@@ -1569,6 +1857,33 @@
 
       $("gold").textContent = `Золото: ${fmtNum(ms.character.gold)}`;
       renderDesc();
+    }
+
+    // Клік по предмету: виділити його і показати вікно з описом та діями.
+    // Повторний клік по тому ж предмету — закрити вікно.
+    let openKey = null;
+    function pick(sel, key) {
+      const popOpen = document.querySelector(".popover:not([hidden]):not(.is-preview)");
+      if (popOpen && openKey === key) { RPG.popover.hide(); openKey = null; return; }
+      selected = sel;
+      render();
+      const cell = document.querySelector(`[data-key="${CSS.escape(key)}"]`);
+      const ref = selectedRef();
+      if (!cell || !ref) return;
+      const box = itemInfo(ref, ref.qty || 1, ms);
+      const diff = desc.querySelector(".item-diff");
+      if (diff) box.append(diff.cloneNode(true));
+      RPG.popover.show(cell, box, { actions: invActions() });
+      openKey = key;
+    }
+
+    // Кнопки дій у вікні — дублюють активні кнопки під інвентарем
+    function invActions() {
+      return [
+        [btnEquip, "wf-button"], [btnUnequip, "wf-button"], [btnUse, "wf-button"],
+        [btnToChest, "wf-secondary"], [btnFromChest, "wf-secondary"], [btnDrop, "wf-danger"]
+      ].filter(([b]) => !b.disabled)
+        .map(([b, cls]) => ({ text: b.textContent, className: cls, onClick: () => { openKey = null; b.click(); } }));
     }
 
     // Обраний запис: екземпляр речі (з рідкістю) або стопка
@@ -1594,33 +1909,7 @@
       }
       const ref = selectedRef();
       const item = RPG.ITEMS[id];
-      desc.append(smallIcon(ref, "desc-icon"));
-      if (RPG.hasRarity(id)) desc.append(rarityName(ref));
-      else desc.append(el("strong", null, item.name + (item.rarity === "rare" ? " · рідкісне" : "")));
-      desc.append(el("div", null, item.description));
-      const st = describeStats(ref);
-      if (st) desc.append(el("div", null, "Характеристики: " + st));
-      const set = item.set && RPG.ITEM_SETS[item.set];
-      if (set) {
-        const have = RPG.equippedSetCounts(ms)[item.set] || 0;
-        desc.append(el("div", have >= set.pieces ? "rt-magic" : null,
-          `${set.name}: ${set.pieces} речі — ${set.text} (вдягнено ${Math.min(have, set.pieces)}/${set.pieces})`));
-      }
-      if (item.slot) {
-        const slotName = RPG.slotsFor(item.slot).map(s => RPG.SLOTS[s]).join(" / ");
-        desc.append(el("div", null, `Слот: ${slotName} · потрібен рівень ${item.levelReq || 1}`));
-      }
-      if (item.weaponType) {
-        const need = RPG.TIER_MASTERY[item.tier] || 0;
-        desc.append(el("div", null, `Зброя: ${RPG.WEAPON_TYPES[item.weaponType].name}` +
-          (need ? ` · потрібно ${RPG.WEAPON_TYPES[item.weaponType].mastery.toLowerCase()} ${need}` : "") +
-          (item.weaponType === "bow" ? " · дворучна (у лівій руці — лише колчан)" : "")));
-      }
-      const eff = describeEffect(item);
-      if (eff) desc.append(el("div", null, eff));
-      desc.append(el("div", null,
-        `Вартість: ${item.price || 0} золота · шинкар купить за ${RPG.refSellPrice(ref)}` +
-        (item.noShop ? " · у продажу не буває" : "")));
+      desc.append(itemInfo(ref, ref.qty || 1, ms));
 
       if (selected.kind === "inv" && item.slot) {
         const diff = RPG.previewEquip(ms, selected.index);
@@ -1719,6 +2008,55 @@
     rest:   { x: 64.73, y: 21.49, w: 9.08,  h: 17.97 },
     south:  { x: 55.87, y: 35.49, w: 12.11, h: 12.44 }
   };
+
+  // Нова мапа: «чиста» основа без будівель (assets/images/map/map_world_base.webp, 2048×1280)
+  // + будівлі окремими картинками поверх неї (вирізані зі старої мапи).
+  // x, y — центр, w, h — розмір картинки будівлі у % від мапи.
+  // Якщо основи ще немає — показується стара мапа map_world.webp (будівлі на ній уже намальовані).
+  const MAP_BASE = "assets/images/map/map_world_base.webp";
+  const MAP_BUILDINGS = {
+    home:          { x: 9.46,  y: 78.63, w: 10.5, h: 14.2 },
+    temple:        { x: 15.01, y: 65.52, w: 9.0,  h: 16.5 },
+    village_start: { x: 18.92, y: 45.87, w: 10.5, h: 14.4 },
+    tavern:        { x: 32.79, y: 46.88, w: 10.5, h: 14.8 },
+    city:          { x: 55.87, y: 21.5,  w: 30.0, h: 43.0 },
+    forest_path:   { x: 48.87, y: 63.0,  w: 12.0, h: 14.0 },
+    forest_cave:   { x: 91.11, y: 46.88, w: 12.0, h: 15.5 }
+  };
+
+  // Свої координати під згенеровану мапу варіанта: assets/js/map_layout.js → RPG.MAP_LAYOUT
+  //   { buildings: { id: {x,y,w,h} }, spots: { id: {x,y,w,h} }, city: { id: {x,y,w,h} } }
+  // Діють лише тоді, коли є нова основа мапи.
+  function applyMapLayout() {
+    const L = RPG.MAP_LAYOUT;
+    if (!L) return false;
+    for (const [id, v] of Object.entries(L.buildings || {})) MAP_BUILDINGS[id] = Object.assign(MAP_BUILDINGS[id] || {}, v);
+    for (const [id, v] of Object.entries(L.spots || {})) WORLD_MAP[id] = Object.assign(WORLD_MAP[id] || {}, v);
+    for (const [id, v] of Object.entries(L.city || {})) CITY_MAP[id] = Object.assign(CITY_MAP[id] || {}, v);
+    return true;
+  }
+
+  function setupMapLayers(mapBox, onReady) {
+    const img = mapBox && mapBox.querySelector(".map-img");
+    if (!img) return;
+    const probe = new Image();
+    probe.onload = () => {
+      img.src = probe.src;
+      mapBox.classList.add("has-base");
+      if (applyMapLayout() && onReady) onReady();
+      const layer = el("div", "map-buildings");
+      for (const [id, b] of Object.entries(MAP_BUILDINGS)) {
+        const bi = el("img", "map-building");
+        bi.src = RPG.asset(`assets/images/map/bld_${id}.webp`);
+        bi.alt = "";
+        bi.dataset.loc = id;
+        Object.assign(bi.style, { left: b.x + "%", top: b.y + "%", width: b.w + "%", height: b.h + "%" });
+        layer.append(bi);
+      }
+      img.after(layer);
+    };
+    probe.src = RPG.asset(MAP_BASE);
+  }
 
   // Фігурка героя (SVG)
   const HERO_FIGURE = `<svg viewBox="0 0 24 40" aria-hidden="true">
@@ -1899,12 +2237,15 @@
     function renderDetails() {
       const loc = RPG.LOCATIONS[selected];
       details.innerHTML = "";
-      details.append(el("h2", null, loc.name));
+      const banner = el("div", "place-banner info-anchor");
+      banner.style.setProperty("--loc-img", locImage(selected));
+      banner.append(el("h2", null, loc.name));
+      details.append(banner);
       if (loc.locked) {
-        details.append(el("p", null, "Закрито — відкриється згодом."));
+        details.append(el("p", "status", "Закрито — відкриється згодом."));
         return;
       }
-      details.append(el("p", null, loc.description));
+      details.append(el("p", "note", loc.description));
       if (loc.type === "combat") {
         const enemies = (loc.enemies || []).map(e => `${RPG.getEnemy(e).name} (рів. ${RPG.getEnemy(e).level})`).join(", ");
         details.append(el("p", "note", "Вороги: " + enemies));
@@ -1913,9 +2254,9 @@
       }
       const d = selected === "city" && selDistrict && districts.find(x => x.id === selDistrict);
       if (d) {
-        details.append(el("p", null, `${d.name} — ${d.building}. ${d.description}`));
+        details.append(el("p", "note", `${d.name} — ${d.building}. ${d.description}`));
         if (districtLocked(d)) {
-          details.append(el("p", "note", d.id === "center"
+          details.append(el("p", "status", d.id === "center"
             ? "Прохід закритий: його відкриває Адміністратор гільдії після особливого завдання «Час дослідити»."
             : "Закрито — відкриється згодом."));
           return;
@@ -1932,10 +2273,11 @@
         go.addEventListener("click", ev => { ev.preventDefault(); travel(selected, selDistrict); });
         details.append(go);
       } else {
-        details.append(el("p", "note", `Доступ з ${loc.minLevel} рівня персонажа (зараз у вас ${save.character.level}).`));
+        details.append(el("p", "status", `Доступ з ${loc.minLevel} рівня персонажа (зараз у вас ${save.character.level}).`));
       }
     }
 
+    setupMapLayers(mapBox, () => { buildWorldMap(); render(); });
     buildWorldMap();
     render();
   }

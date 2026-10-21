@@ -6,13 +6,14 @@
   <title>Інвентар</title>
   <link rel="stylesheet" href="../assets/css/main.css">
   <link rel="stylesheet" href="../assets/css/game.css">
-  <meta name="theme-color" content="#1c1d24">
+  <link rel="stylesheet" href="../assets/css/theme.css">
+  <meta name="theme-color" content="#0d0b09">
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="icon" type="image/png" href="../assets/icons/favicon.png">
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
   <script src="../assets/js/pwa.js" defer></script>
 </head>
-<body data-page="inventory" data-show-notes>
+<body data-page="inventory">
 
   <header>
     <nav>
@@ -32,7 +33,7 @@
 
       <section class="panel stack" style="flex:1 1 280px">
         <h2 id="equip-title">Спорядження</h2>
-        <div class="stack" id="equip-list"></div>
+        <div class="equip-grid" id="equip-list"></div>
       </section>
 
       <section class="stack" style="flex:2 1 460px">
@@ -47,21 +48,11 @@
         <div class="panel stack">
           <div class="inv-head">
             <h2>Скриня в Домівці</h2>
-            <span id="chest-note"></span>
+            <span class="note" id="chest-note"></span>
           </div>
           <div class="slots slots-12" id="chest-grid"></div>
         </div>
 
-        <div class="wf wf-text item-desc" id="item-desc" aria-live="polite"></div>
-
-        <div class="row inv-actions">
-          <button class="wf wf-button" id="btn-equip" type="button" disabled>Вдягнути</button>
-          <button class="wf wf-button" id="btn-unequip" type="button" disabled>Зняти</button>
-          <button class="wf wf-button" id="btn-use" type="button" disabled>Використати</button>
-          <button class="wf wf-secondary" id="btn-to-chest" type="button" disabled>У скриню</button>
-          <button class="wf wf-secondary" id="btn-from-chest" type="button" disabled>Забрати зі скрині</button>
-          <button class="wf wf-danger" id="btn-drop" type="button" disabled>Викинути</button>
-        </div>
         <div class="msg" id="msg" role="status" hidden></div>
 
         <a class="wf wf-link" href="game.html">Назад до локації</a>

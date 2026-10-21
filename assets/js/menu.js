@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.close();
     setTimeout(() => {
       if (window.closed) return;
-      text.textContent = 'Дякуємо за гру! Тепер можна закрити вікно або застосунок.';
+      text.textContent = 'Дякуємо за гру! Закрити вікно самостійно браузер не дозволяє — тепер застосунок можна закрити.';
       document.getElementById('exit-yes').hidden = true;
       document.getElementById('exit-no').textContent = 'Повернутися в меню';
       actions.hidden = false;

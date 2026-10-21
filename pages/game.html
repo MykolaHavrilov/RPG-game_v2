@@ -6,13 +6,14 @@
   <title>Локація</title>
   <link rel="stylesheet" href="../assets/css/main.css">
   <link rel="stylesheet" href="../assets/css/game.css">
-  <meta name="theme-color" content="#1c1d24">
+  <link rel="stylesheet" href="../assets/css/theme.css">
+  <meta name="theme-color" content="#0d0b09">
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="icon" type="image/png" href="../assets/icons/favicon.png">
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
   <script src="../assets/js/pwa.js" defer></script>
 </head>
-<body data-page="game" data-show-notes>
+<body data-page="game">
 
   <header>
     <nav>
@@ -42,7 +43,7 @@
             <div class="bar bar-lvl" id="hero-lvl">LVL 1</div>
           </div>
         </div>
-        <div class="note" id="regen-info"></div>
+        <div class="note" id="regen-info" data-label="Відновлення"></div>
         <!-- Напарники групи (game.js → renderPartyList) -->
         <div class="party-list" id="party-list" hidden></div>
 
@@ -60,7 +61,7 @@
       <section class="col" aria-label="Локація">
         <a class="wf wf-link location" href="maps.html" title="Змінити локацію">
           <strong id="location-name">Локація</strong>
-          <span class="loc-desc" id="location-desc"></span>
+          <span class="loc-desc note" id="location-desc"></span>
         </a>
 
         <!-- Мирні локації (Домівка, Храм, Шинок) — вміст малює game.js -->
@@ -75,8 +76,9 @@
           <!-- Чию чергу дій налаштовуємо (якщо в групі кілька героїв) -->
           <div class="row member-tabs" id="queue-member" hidden></div>
           <div class="queue-head">
-            <span>Черга дій (повторюється, поки триває бій)</span>
-            <span id="weapon-info"></span>
+            <span class="info-anchor">Черга дій</span>
+            <span class="note">Дії виконуються по черзі й повторюються по колу, поки триває бій.</span>
+            <span class="note" id="weapon-info"></span>
           </div>
           <div class="queue" id="queue"></div>
 
@@ -120,6 +122,7 @@
   <script src="../assets/js/save.js" defer></script>
   <script src="../assets/js/character.js" defer></script>
   <script src="../assets/js/party.js" defer></script>
+  <script src="../assets/js/data/npcs.js" defer></script>
   <script src="../assets/js/battle.js" defer></script>
   <script src="../assets/js/game.js" defer></script>
   <script src="../assets/js/menu.js" defer></script>

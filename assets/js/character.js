@@ -17,6 +17,20 @@ const RESPAWN_MP_PCT = 0;         // і 0% мани
 const DEATH_EXP_MULT = 10;        // штраф: досвід за переможця(ів) × 10 …
 const DEATH_MAX_PCT = 25;         // … але не більше 25% смужки досвіду рівня
 const ITEM_LOSS_CHANCE = 0.005;   // 0,5% на кожну вдягнену річ
+const QUEUE_SIZE = 6;             // скільки дій у черзі бою
+const BUY_MAX = 999;              // найбільше штук за одну покупку
+
+// «Молитва благодаті» (Храм): +2% макс. HP кожні 5 с і +3% макс. MP кожні 10 с,
+// діє 10 хвилин реального часу (і поки гра закрита теж).
+const GRACE = { durationMs: 10 * 60 * 1000, hpPct: 0.02, hpEveryMs: 5000, mpPct: 0.03, mpEveryMs: 10000 };
+// Ціна: сам — 100; група з n героїв (2–6) — 100 + (100 + 10 × n)
+function graceCost(n) {
+  return n <= 1 ? 100 : 100 + (100 + 10 * n);
+}
+// Перерозподіл атрибутів у Мерії: n — скільки разів уже скидали
+function attrResetCost(n) {
+  return 2 * ((500 * n) / 100) + 500;
+}
 
 // Скільки речей максимум можна втратити за одну смерть
 function maxItemLoss(level) {
@@ -58,7 +72,7 @@ function createNewSave(name, classId = DEFAULT_CLASS) {
     inventory: [],
     lootLuck: RPG.newLuck(),   // прихований лічильник рідкісних речей (rarity.js)
     chest: [],              // скриня в Домівці — речі не зникають при смерті
-    battleQueue: ["attack"],   // черга дій у бою (до 10)
+    battleQueue: ["attack"],   // черга дій у бою (до QUEUE_SIZE)
     location: { map: cls.startLocation, page: "game" },
     settings: { battleView: "stepByStep" }   // або "result"
   };
@@ -188,11 +202,80 @@ function regenPerTick(save) {
   };
 }
 
+// Тики «Молитви благодаті»: окремо від звичайного відновлення
+function applyGrace(save, now) {
+  const ch = save.character, g = ch.grace;
+  if (!g) return false;
+  const end = Math.min(now, g.until);
+  const hpTicks = Math.max(0, Math.floor((end - g.hpAt) / GRACE.hpEveryMs));
+  const mpTicks = Math.max(0, Math.floor((end - g.mpAt) / GRACE.mpEveryMs));
+  g.hpAt += hpTicks * GRACE.hpEveryMs;
+  g.mpAt += mpTicks * GRACE.mpEveryMs;
+  let changed = false;
+  if ((hpTicks || mpTicks) && ch.hp > 0 && !ch.dead) {
+    const s = calcStats(save);
+    const hp = Math.min(s.hp, ch.hp + Math.round(s.hp * GRACE.hpPct * hpTicks));
+    const mp = Math.min(s.mp, ch.mp + Math.round(s.mp * GRACE.mpPct * mpTicks));
+    changed = hp !== ch.hp || mp !== ch.mp;
+    ch.hp = hp; ch.mp = mp;
+  }
+  if (now >= g.until) { delete ch.grace; changed = true; }
+  return changed;
+}
+
+// Скільки мілісекунд ще діє «Молитва благодаті» (0 — не діє)
+function graceLeft(save, now = Date.now()) {
+  const g = save.character.grace;
+  return g ? Math.max(0, g.until - now) : 0;
+}
+
+// Храм, Черниця: «Молитва благодаті» для всієї групи
+function buyGrace(save, now = Date.now()) {
+  if (RPG.getLocation(save.location.map).type !== "temple") return { ok: false, reason: "Молитву читають лише в Храмі." };
+  const members = RPG.partyMembers ? RPG.partyMembers(save) : [save];
+  const cost = graceCost(members.length);
+  if (save.character.gold < cost) return { ok: false, reason: `Потрібно ${cost} золота на пожертву.` };
+  save.character.gold -= cost;
+  for (const ms of members) {
+    applyRegen(ms, now);
+    ms.character.grace = { until: now + GRACE.durationMs, hpAt: now, mpAt: now };
+  }
+  return { ok: true, cost, count: members.length };
+}
+
+// Мерія, Розпорядник: повернути атрибути, які гравець вкладав сам
+function attrResetPrice(save) {
+  return attrResetCost(save.character.attrResets || 0);
+}
+function investedAttrs(save) {
+  const ch = save.character;
+  const base = getClass(ch.classHistory?.[0]?.classId || ch.classId).baseAttrs || {};
+  let sum = 0;
+  for (const k of Object.keys(RPG.ATTRS)) sum += Math.max(0, (ch.attrs[k] || 0) - (base[k] || 0));
+  return { base, sum };
+}
+function resetAttrs(save) {
+  const ch = save.character;
+  const { base, sum } = investedAttrs(save);
+  if (!sum) return { ok: false, reason: "Повертати нічого — очки ще не розподілені." };
+  const cost = attrResetPrice(save);
+  if (ch.gold < cost) return { ok: false, reason: `Потрібно ${cost} золота.` };
+  ch.gold -= cost;
+  for (const k of Object.keys(RPG.ATTRS)) {
+    if ((ch.attrs[k] || 0) > (base[k] || 0)) ch.attrs[k] = base[k] || 0;
+  }
+  ch.freePoints = (ch.freePoints || 0) + sum;
+  ch.attrResets = (ch.attrResets || 0) + 1;
+  clampHpMp(save);
+  return { ok: true, cost, points: sum };
+}
+
 function applyRegen(save, now = Date.now()) {
   const ch = save.character;
   if (!ch.regenAt || ch.regenAt > now) { ch.regenAt = now; return true; }
+  const graceChanged = applyGrace(save, now);
   const ticks = Math.floor((now - ch.regenAt) / REGEN_TICK_MS);
-  if (ticks <= 0) return false;
+  if (ticks <= 0) return graceChanged;
   ch.regenAt += ticks * REGEN_TICK_MS;
 
   const s = calcStats(save);
@@ -202,7 +285,7 @@ function applyRegen(save, now = Date.now()) {
     ch.hp = Math.min(s.hp, ch.hp + per.hp * ticks);
     ch.mp = Math.min(s.mp, ch.mp + per.mp * ticks);
   }
-  return ch.hp !== beforeHp || ch.mp !== beforeMp;
+  return graceChanged || ch.hp !== beforeHp || ch.mp !== beforeMp;
 }
 
 // Скільки мілісекунд до наступного відновлення
@@ -663,15 +746,19 @@ function currentShop(save) {
   return null;
 }
 
-function buyItem(save, id) {
+// qty — скільки штук купити за раз
+function buyItem(save, id, qty = 1) {
   const shop = currentShop(save);
   if (!shop) return { ok: false, reason: "Тут немає торговця." };
   if (!shop.includes(id) || ITEMS[id]?.noShop) return { ok: false, reason: "Торговець цього не продає." };
-  const price = RPG.shopSellPrice(id);
+  qty = Math.floor(Number(qty));
+  if (!(qty >= 1 && qty <= BUY_MAX)) return { ok: false, reason: `Вкажіть кількість від 1 до ${BUY_MAX}.` };
+  const unit = RPG.shopSellPrice(id);
+  const price = unit * qty;
   if (save.character.gold < price) return { ok: false, reason: `Не вистачає золота (потрібно ${price}).` };
   save.character.gold -= price;
-  addItem(save, id, 1);
-  return { ok: true, price };
+  addItem(save, id, qty);
+  return { ok: true, price, qty, unit };
 }
 
 // qty — скільки штук продати з цієї клітинки (за замовчуванням 1,
@@ -711,6 +798,7 @@ function applyReward(save, exp, loot) {
 }
 
 Object.assign(RPG, {
+  QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
   createNewSave, calcStats, clampHpMp, fullHeal,
   regenPerTick, applyRegen, msToNextRegen,

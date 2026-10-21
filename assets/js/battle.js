@@ -27,7 +27,7 @@
 //   Посох без заклинання в черзі б'є фізично.
 //   Крит — шкода × 1.5. Блок — половина шкоди. Ухилення — удар не влучає.
 //
-// Черга дій (save.battleQueue, до 10): "attack" — удар зброєю, "spell" — «Іскра»,
+// Черга дій (save.battleQueue, до 6 — RPG.QUEUE_SIZE): "attack" — удар зброєю, "spell" — «Іскра»,
 //   або ID навички (data/skills.js). Якщо навичка недоступна (не та зброя, бракує мани) —
 //   звичайний удар.
 // ============================================================
@@ -59,7 +59,7 @@
 
   // ---------- Учасники ----------
   function makeHero(ms) {
-    const queue = (ms.battleQueue || []).filter(Boolean).slice(0, 10);
+    const queue = (ms.battleQueue || []).filter(Boolean).slice(0, RPG.QUEUE_SIZE || 6);
     if (!queue.length) queue.push("attack");
     return {
       side: "hero", ms, name: ms.character.name, classId: ms.character.classId,

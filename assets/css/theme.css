@@ -1,0 +1,241 @@
+/* =====================================================================
+   ВАРІАНТ 1 — «ТЕМНЕ ФЕНТЕЗІ»
+   Обсидіан, шкіра і старе золото. Класична RPG-рамка, серифні заголовки.
+   ПК: три колонки. Планшет: герой і ворог поруч. Телефон: компактна «дуель».
+   ===================================================================== */
+
+@font-face { font-family: "Cormorant"; src: url("../fonts/cormorant.woff") format("woff"); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: "Alegreya Sans"; src: url("../fonts/alegreya-sans-400.woff") format("woff"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Alegreya Sans"; src: url("../fonts/alegreya-sans-700.woff") format("woff"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Ruslan Display"; src: url("../fonts/ruslan.woff") format("woff"); font-display: swap; }
+
+:root {
+  --bg: #0d0b09;
+  --bg-image:
+    radial-gradient(ellipse at 50% -10%, rgba(201, 150, 70, .16), transparent 60%),
+    radial-gradient(ellipse at 50% 120%, rgba(120, 30, 20, .22), transparent 60%),
+    linear-gradient(rgba(13, 11, 9, .93), rgba(13, 11, 9, .97)),
+    url("../images/map_world.webp");
+  --surface: linear-gradient(180deg, #1d1813, #15110d);
+  --surface-2: #211b15;
+  --surface-3: #2c241b;
+  --overlay: rgba(5, 4, 3, .78);
+
+  --text: #eadfc8;
+  --text-dim: #a8987a;
+  --heading: #e9c77b;
+  --accent: #c9a35a;
+  --gold: #e9c77b;
+
+  --btn-bg: linear-gradient(180deg, #d9b469, #a77d34 55%, #8a6326);
+  --btn-text: #1a120a;
+  --btn-border: #f0d491;
+  --btn-shadow: 0 2px 0 #4d3410, 0 4px 12px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .45);
+  --link-bg: linear-gradient(180deg, #2a221a, #1b1611);
+  --link-text: #e9c77b;
+  --link-border: rgba(201, 163, 90, .55);
+  --sec-bg: linear-gradient(180deg, #2c3a2c, #1d281e);
+  --sec-text: #d9e8c8;
+  --danger-bg: linear-gradient(180deg, #8a2a20, #5e1a13);
+
+  --nav-item-bg: transparent;
+  --nav-item-text: #c9b58c;
+  --nav-active-bg: linear-gradient(180deg, rgba(201, 163, 90, .25), rgba(201, 163, 90, .05));
+  --nav-active-text: #f3d892;
+
+  --border-color: rgba(201, 163, 90, .38);
+  --radius: 4px;
+  --radius-sm: 3px;
+  --shadow: 0 6px 18px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(0, 0, 0, .6), inset 0 0 0 3px rgba(201, 163, 90, .12);
+  --focus: #f3d892;
+
+  --font-body: "Alegreya Sans", system-ui, sans-serif;
+  --font-head: "Cormorant", Georgia, serif;
+  --fs-base: 1.05rem;
+
+  --slot-bg: radial-gradient(circle at 50% 40%, #2a2219, #15110d);
+  --slot-border: rgba(201, 163, 90, .3);
+  --slot-radius: 4px;
+  --select: #f3d892;
+
+  --bar-bg: #0a0806;
+  --bar-border: rgba(201, 163, 90, .45);
+  --bar-radius: 2px;
+  --c-hp: #c8382c; --c-hp-2: #6e130d;
+  --c-mp: #3d6fd6; --c-mp-2: #172f6e;
+  --c-exp: #d9a92b; --c-exp-2: #7a5a0c;
+  --c-lvl: #3d2b12;
+
+  --msg-bg: #23301f;
+  --msg-error-bg: #4a1712;
+
+  --pop-bg: linear-gradient(180deg, #221b14, #15110c);
+  --pop-border: rgba(201, 163, 90, .65);
+  --pop-radius: 6px;
+  --pop-shadow: 0 16px 40px rgba(0, 0, 0, .75), inset 0 0 0 3px rgba(0, 0, 0, .5), inset 0 0 0 4px rgba(201, 163, 90, .2);
+}
+
+body { font-variant-numeric: lining-nums; }
+h1, h2, h3 { font-weight: 700; letter-spacing: .02em; }
+.panel h2 {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 1.35rem;
+}
+.panel h2::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(201, 163, 90, .6), transparent); }
+.page-title { font-family: "Ruslan Display", var(--font-head); font-weight: 400; font-size: 2rem; color: var(--gold); text-shadow: 0 2px 0 #000; }
+
+.wf { font-weight: 700; letter-spacing: .02em; }
+.wf-button { text-shadow: 0 1px 0 rgba(255, 240, 200, .5); }
+.wf-link:hover { box-shadow: 0 0 12px rgba(201, 163, 90, .25); }
+.panel { position: relative; }
+.panel::before, .panel::after {               /* золоті кутики */
+  content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none;
+  border: 2px solid var(--accent);
+}
+.panel::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.panel::after  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+
+/* ---------- Навігація: стрічка з вкладками ---------- */
+header {
+  max-width: none;
+  background: linear-gradient(180deg, #1a140f, #0f0c09);
+  border-bottom: 1px solid rgba(201, 163, 90, .45);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .6);
+}
+header nav { max-width: var(--page-max); margin: 0 auto; gap: 2px; justify-content: center; }
+header nav a.wf { border: 0; border-bottom: 2px solid transparent; border-radius: 0; font-family: var(--font-head); font-size: 1.12rem; }
+header nav a.wf:hover { color: var(--gold); filter: none; }
+header nav a[aria-current="page"] { border-bottom-color: var(--accent); }
+
+/* ---------- Титульний екран ---------- */
+body[data-page="index"] { --bg-image: radial-gradient(ellipse at 50% 35%, rgba(201, 150, 70, .22), transparent 55%), linear-gradient(rgba(10, 8, 6, .72), rgba(10, 8, 6, .94)), url("../images/map_world.webp"); }
+.game-title {
+  font-family: "Ruslan Display", var(--font-head);
+  font-weight: 400;
+  background: linear-gradient(180deg, #fff1c4, #e2b55c 50%, #8a6326);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 3px 0 #000);
+}
+.game-subtitle { font-family: var(--font-head); font-size: 1.2rem; font-style: italic; color: #bfa77a; letter-spacing: .08em; }
+.menu .wf {
+  position: relative;
+  font-family: var(--font-head);
+  font-size: 1.45rem;
+  background: linear-gradient(180deg, rgba(42, 34, 26, .92), rgba(20, 16, 12, .92));
+  color: #f0d79a;
+  border: 1px solid rgba(201, 163, 90, .6);
+  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, .5), inset 0 0 0 4px rgba(201, 163, 90, .18), 0 6px 16px rgba(0, 0, 0, .6);
+}
+.menu .wf::before, .menu .wf::after { content: "◆"; position: absolute; top: 50%; transform: translateY(-50%); color: var(--accent); font-size: .7rem; }
+.menu .wf::before { left: 16px; }
+.menu .wf::after  { right: 16px; }
+.menu .wf:hover { color: #fff3cf; box-shadow: inset 0 0 0 3px rgba(0, 0, 0, .5), inset 0 0 0 4px rgba(201, 163, 90, .45), 0 0 22px rgba(201, 150, 70, .35); }
+
+/* ---------- Портрети: рамка з позолотою ---------- */
+.pic {
+  border: 2px solid #8a6326;
+  box-shadow: 0 0 0 1px #000, 0 0 0 3px rgba(201, 163, 90, .35), 0 10px 24px rgba(0, 0, 0, .65);
+  background: radial-gradient(ellipse at 50% 30%, #3a2e22, #120e0a 75%);
+}
+.pic figcaption { font-family: var(--font-head); font-size: 1.15rem; color: #f3d892; background: linear-gradient(0deg, rgba(10, 8, 6, .95), rgba(10, 8, 6, 0)); }
+.bar-lvl { border: 1px solid var(--accent); color: var(--gold); font-family: var(--font-head); }
+.bar-label { font-size: .8rem; letter-spacing: .03em; }
+
+/* ---------- Арена і хроніка бою ---------- */
+.location { background: linear-gradient(180deg, #2a2119, #18130e); border-color: rgba(201, 163, 90, .55); }
+.location strong { color: var(--gold); font-size: 1.35rem; }
+.arena {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(201, 150, 70, .18), transparent 70%),
+    linear-gradient(180deg, #1f1913, #120e0a);
+  border: 1px solid rgba(201, 163, 90, .5);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, .7);
+}
+.arena-title { font-size: 1.8rem; color: var(--gold); }
+.arena[data-state="fight"] .arena-title::after { content: " ⚔"; }
+.log {
+  height: 300px;
+  background: linear-gradient(180deg, #17120e, #0f0c09);
+  font-size: .98rem;
+}
+.log::before { counter-reset: none; }
+.log li { border-left: 2px solid transparent; border-radius: 0; padding-left: 8px; }
+.log li[data-who="hero"]  { border-left-color: #5a8fd6; color: #c6dcf7; }
+.log li[data-who="enemy"] { border-left-color: #c8382c; color: #f3c2b8; }
+.log li[data-who="info"]  { color: var(--gold); font-family: var(--font-head); font-size: 1.06rem; justify-content: center; border-left: 0; text-align: center; }
+.log li[data-who="info"] .log-mark { display: none; }
+.log-num { color: #fff; }
+.queue .queue-select { background: var(--slot-bg); border-color: var(--slot-border); }
+
+/* ---------- Спливаюче вікно ---------- */
+.popover .tip-name { font-size: 1.3rem; }
+.popover .tip-head { padding-bottom: 8px; border-bottom: 1px solid rgba(201, 163, 90, .35); }
+.tip-icon { border: 1px solid rgba(201, 163, 90, .5); background: var(--slot-bg); }
+.tip-stats li { background: rgba(201, 163, 90, .07); }
+.tip-desc { font-family: var(--font-head); font-size: 1.05rem; }
+
+/* ---------- Планшет і телефон: дуель з печаткою «VS» між портретами ---------- */
+@media (max-width: 1000px) {
+  header nav a.wf { font-size: .98rem; padding: 6px 10px; }
+  .battle:not(.no-enemy)::before {
+    content: "VS";
+    grid-row: 1; grid-column: 1 / -1;
+    justify-self: center; align-self: center;
+    z-index: 3;
+    width: 48px; height: 48px; display: grid; place-items: center;
+    font-family: "Ruslan Display", serif; font-size: 1.15rem; color: #1a120a;
+    background: radial-gradient(circle, #f3d892, #a77d34);
+    border: 2px solid #000; border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--accent), 0 6px 14px rgba(0, 0, 0, .7);
+  }
+}
+@media (max-width: 700px) {
+  header nav a.wf { font-size: .82rem; font-family: var(--font-body); }
+  .pic figcaption { font-size: .95rem; padding: 6px; }
+  .page-title { font-size: 1.5rem; }
+  .log { height: 240px; font-size: .9rem; }
+}
+
+/* ---------- Логотип і зображення (див. PROMPTS.txt) ---------- */
+:root {
+  --bg-image:
+    radial-gradient(ellipse at 50% -10%, rgba(201, 150, 70, .16), transparent 60%),
+    linear-gradient(rgba(13, 11, 9, .86), rgba(13, 11, 9, .94)),
+    url("../images/ui/page_bg.webp") center / cover,
+    url("../images/map_world.webp") center / cover;
+}
+body[data-page="index"] {
+  --bg-image:
+    radial-gradient(ellipse at 50% 32%, rgba(201, 150, 70, .25), transparent 55%),
+    linear-gradient(rgba(10, 8, 6, .45), rgba(10, 8, 6, .9)),
+    url("../images/ui/title_bg.webp") center / cover,
+    url("../images/map_world.webp") center / cover;
+}
+@media (orientation: portrait) {
+  body[data-page="index"] {
+    --bg-image:
+      radial-gradient(ellipse at 50% 28%, rgba(201, 150, 70, .25), transparent 55%),
+      linear-gradient(rgba(10, 8, 6, .4), rgba(10, 8, 6, .9)),
+      url("../images/ui/title_bg_mobile.webp") center / cover,
+      url("../images/map_world.webp") center / cover;
+  }
+}
+.title-screen { position: relative; }
+.title-screen::before {
+  content: ""; position: absolute; left: 50%; top: 0; z-index: -1;
+  width: 360px; height: 360px; margin-left: -180px; margin-top: -60px;
+  background: radial-gradient(circle, rgba(233, 199, 123, .32), transparent 65%);
+  pointer-events: none;
+}
+.game-logo {
+  width: clamp(170px, 36vw, 270px);
+  filter: drop-shadow(0 0 22px rgba(201, 150, 70, .45)) drop-shadow(0 12px 18px rgba(0, 0, 0, .85));
+}
+.pic {
+  background:
+    linear-gradient(180deg, rgba(13, 11, 9, .25), rgba(13, 11, 9, .7)),
+    var(--loc-img, none) center / cover no-repeat,
+    radial-gradient(ellipse at 50% 30%, #3a2e22, #120e0a 75%);
+}
+.info-tip { color: #bfa77a; }
+.info-tip:hover, .info-tip.has-popover { color: var(--gold); }
