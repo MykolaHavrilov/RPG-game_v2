@@ -516,12 +516,13 @@ body.buy-locked .popover .wf-button { pointer-events: none; opacity: .55; }
   gap: var(--gap, 16px);
   align-items: start;
 }
+.char-left { min-width: 0; }
 .char-pic { margin: 0; }
 .char-mid { min-width: 0; }
 .char-bottom { margin-top: var(--gap, 16px); }
 
 .quest-log-panel { min-height: 0; }
-.quest-log { display: grid; gap: 8px; max-height: 360px; overflow-y: auto; padding-right: 4px; }
+.quest-log { display: grid; gap: 8px; max-height: 520px; overflow-y: auto; padding-right: 4px; }
 .quest-entry {
   display: grid; gap: 2px;
   padding: 8px 10px;
@@ -573,6 +574,7 @@ body.buy-locked .popover .wf-button { pointer-events: none; opacity: .55; }
 @media (max-width: 700px) {
   .char-top { grid-template-columns: minmax(0, 1fr); }
   .char-pic { max-width: 300px; justify-self: center; width: 100%; }
+  .char-left .stats { width: 100%; }
   .quest-log { max-height: none; }
 }
 .carousel-view { transition: height .3s ease; }

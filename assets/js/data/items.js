@@ -589,8 +589,17 @@ function getItem(id) {
   return ITEMS[id] || null;
 }
 
-// Стиль іконки предмета зі спрайт-листа; null — іконки немає (буде заглушка)
+// Окремі іконки (assets/images/items/icon_<id>.webp, 256×256) — мають перевагу над спрайт-листом
+const ICON_FILES = new Set(["sword", "dagger", "axe", "bow", "staff", "shield", "quiver", "orb", "knife"]
+  .flatMap(w => [1, 2, 3].map(t => `${w}_t${t}`)));
+const ICON_FILE_BASE = RPG.asset("assets/images/items/icon_");
+
+// Стиль іконки предмета (окремий файл або клітинка спрайт-листа); null — іконки немає (буде заглушка)
 function itemIconStyle(id) {
+  if (ICON_FILES.has(id)) {
+    return { backgroundImage: `url("${ICON_FILE_BASE}${id}.webp")`, backgroundSize: "100% 100%",
+             backgroundPosition: "0 0", backgroundRepeat: "no-repeat" };
+  }
   const icon = ITEMS[id]?.icon;
   const sheet = icon && ICON_SHEETS[icon[0]];
   if (!sheet) return null;

@@ -126,18 +126,19 @@
   const HERO_BASE = { sheet: "assets/images/Heroes_start", cols: 3, rows: 2, size: 256, gap: 2, index: 0 };
   const HERO_HANDS = { main: [82, 130], off: [168, 131] };
   const HERO_FIST_R = 13;
-  const DOLL_MAIN = {                       // ключ — weaponType
-    sword:  { size: 96,  rot: 90,  grip: [0.22, 0.78], fist: true },
-    dagger: { size: 74,  rot: 90,  grip: [0.22, 0.78], fist: true },
-    axe:    { size: 96,  rot: 90,  grip: [0.22, 0.85], fist: true },
-    bow:    { size: 124, rot: -40, grip: [0.26, 0.66], fist: true },
-    staff:  { size: 150, rot: -32, grip: [0.30, 0.70], fist: true }
+  const DOLL_MAIN = {                       // ключ — weaponType (нові іконки: руків'я внизу зліва, вістря вгорі справа)
+    sword:  { size: 92,  rot: -90, grip: [0.20, 0.80], fist: true },
+    dagger: { size: 80,  rot: -90, grip: [0.22, 0.78], fist: true },
+    axe:    { size: 92,  rot: -90, grip: [0.18, 0.84], fist: true },
+    bow:    { size: 128, rot: -45, grip: [0.50, 0.50], fist: true },
+    staff:  { size: 150, rot: 45,  grip: [0.60, 0.60], fist: true }
   };
+
   const DOLL_OFF = {                        // ключ — offType
     shield: { size: 72, rot: 0,  grip: [0.5, 0.5],  off: [4, -8] },
     quiver: { size: 84, rot: 15, grip: [0.5, 0.5],  off: [-22, -62], behind: true },
     orb:    { size: 44, rot: 0,  grip: [0.5, 0.62], off: [0, -6] },
-    knife:  { size: 62, rot: 90, grip: [0.22, 0.78], fist: true }
+    knife:  { size: 66, rot: 0,  grip: [0.22, 0.78], fist: true }
   };
 
   const pct = v => `${(v / 256) * 100}%`;
@@ -228,15 +229,19 @@
   // у тій самій позі й масштабі, що й основа Heroes_start (кулаки — у точках HERO_HANDS).
   // Поки картинки немає — показується основа з Heroes_start.
   const HERO_SPRITE_OK = {};
+  // Для яких професій уже є картинка (додати ID, коли з'явиться новий файл)
+  const HERO_SPRITE_FILES = ["peasant"];
   function preloadHeroSprites() {
     if (typeof Image === "undefined") return;
-    for (const id of Object.keys(CLASSES)) {
+    for (const id of HERO_SPRITE_FILES) {
       const img = new Image();
       img.onload = () => { HERO_SPRITE_OK[id] = true; document.dispatchEvent(new CustomEvent("rpg:hero-sprite", { detail: id })); };
       img.src = RPG.asset(`assets/images/heroes/hero_${id}.webp`);
     }
   }
   function heroBaseStyle(classId) {
+    // Поки в професії немає свого вигляду — показуємо Селянина (той самий кадр і пози рук)
+    if (!HERO_SPRITE_OK[classId] && HERO_SPRITE_OK[DEFAULT_CLASS]) classId = DEFAULT_CLASS;
     if (HERO_SPRITE_OK[classId]) {
       return { backgroundImage: `url("${RPG.asset(`assets/images/heroes/hero_${classId}.webp`)}")`,
                backgroundSize: "100% 100%", backgroundPosition: "0 0", backgroundRepeat: "no-repeat" };

@@ -29,14 +29,13 @@
   <main>
     <!-- Герої групи: атрибути, характеристики й спорядження кожного окремо -->
     <div class="row member-tabs" id="member-tabs" hidden></div>
-    <!-- Верх: герой | смужки й журнал квестів | карусель «Атрибути / Характеристики / Розвиток» -->
+    <!-- Верх: герой і смужки під ним | журнал квестів | карусель «Атрибути / Характеристики / Розвиток» -->
     <div class="char-top">
-      <figure class="pic char-pic">
-        <span id="hero-img" class="hero-sprite" role="img" aria-label="Персонаж"></span>
-        <figcaption id="hero-name">Персонаж</figcaption>
-      </figure>
-
-      <div class="stack char-mid">
+      <div class="stack char-left">
+        <figure class="pic char-pic">
+          <span id="hero-img" class="hero-sprite" role="img" aria-label="Персонаж"></span>
+          <figcaption id="hero-name">Персонаж</figcaption>
+        </figure>
         <div class="stats">
           <div class="bar bar-hp" id="hero-hp" data-name="HP"><div class="bar-fill"></div><span class="bar-label">HP</span></div>
           <div class="bar bar-mp" id="hero-mp" data-name="MP"><div class="bar-fill"></div><span class="bar-label">MP</span></div>
@@ -45,10 +44,11 @@
             <div class="bar bar-lvl" id="hero-lvl">LVL 1</div>
           </div>
         </div>
-        <div class="panel stack quest-log-panel">
-          <h2>Квести</h2>
-          <div class="quest-log" id="quest-log"></div>
-        </div>
+      </div>
+
+      <div class="panel stack quest-log-panel char-mid">
+        <h2>Квести</h2>
+        <div class="quest-log" id="quest-log"></div>
       </div>
 
       <div class="panel char-carousel" id="char-carousel">
