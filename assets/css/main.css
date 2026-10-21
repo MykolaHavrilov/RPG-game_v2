@@ -83,6 +83,13 @@ nav a.wf { min-height: 40px; padding: 6px 16px; }
 nav a[aria-current="page"] { outline: 3px solid #fff; outline-offset: 2px; }
 
 /* ---------- Головне меню ---------- */
+.game-logo {
+  display: block;
+  width: clamp(140px, 30vw, 220px);
+  height: auto;
+  margin: 16px auto 0;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, .55));
+}
 .menu {
   flex-direction: column;
   max-width: 460px;

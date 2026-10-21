@@ -3,3 +3,5 @@ Thumbs.db
 desktop.ini
 *.zip
 _old/
+# вихідник логотипа (великий; у гру йдуть зменшені копії)
+assets/icons/Logo_game.png
