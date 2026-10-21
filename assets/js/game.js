@@ -1834,11 +1834,25 @@
       tip.innerHTML = "";
       tip.append(el("strong", null, d ? `${loc.name}: ${d.name}` : loc.name), el("div", `tip-status tip-${st.kind}`, st.text),
                  el("div", "tip-desc", shortText(d ? `${d.building}. ${d.description}` : (loc.locked ? "Закрито — відкриється згодом." : loc.description))));
-      const below = pos.y < 45;
+      let below = pos.y < 45;
       tip.style.left = Math.min(82, Math.max(18, pos.x)) + "%";
       tip.style.top = (below ? pos.y + pos.h / 2 : pos.y - pos.h / 2) + "%";
+      tip.style.transform = "";
       tip.classList.toggle("tip-below", below);
       tip.hidden = false;
+      // Маленька мапа (телефон): підказка не повинна вилазити за край — міряємо й зсуваємо
+      const mh = mapBox.clientHeight, th = tip.offsetHeight, gap = 6;
+      if (mh > 40 && th) {
+        const topPx = (pos.y - pos.h / 2) / 100 * mh, botPx = (pos.y + pos.h / 2) / 100 * mh;
+        const fitsAbove = topPx - th - gap >= 0, fitsBelow = botPx + gap + th <= mh;
+        if (below && !fitsBelow && fitsAbove) below = false;
+        else if (!below && !fitsAbove && fitsBelow) below = true;
+        const y = Math.max(0, Math.min(mh - th, below ? botPx + gap : topPx - th - gap));
+        tip.style.top = y + "px";
+        const mw = mapBox.clientWidth, tw = tip.offsetWidth;
+        tip.style.left = Math.max(tw / 2, Math.min(mw - tw / 2, pos.x / 100 * mw)) + "px";
+        tip.style.transform = "translateX(-50%)";
+      }
     }
 
     // Перехід: фігурка йде до нової локації, потім відкривається її сторінка

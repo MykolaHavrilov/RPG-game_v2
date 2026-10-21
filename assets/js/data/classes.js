@@ -42,7 +42,7 @@
       baseStats: { hp: 100, mp: 30, attack: 5, magic: 2, defense: 3, magicDefense: 1, speed: 5, crit: 5 },
       growth:    { hp: 12,  mp: 4,  attack: 2, magic: 1, defense: 1, magicDefense: 0.5, speed: 0.5, crit: 0.2 },
       baseAttrs: { str: 1, agi: 1, int: 1, vit: 1, spi: 1 },
-      levelAttrs: { str: 1, agi: 1, vit: 1 },   // +3 атрибути за рівень автоматично
+      levelAttrs: { str: 1, agi: 1, int: 1, vit: 1, spi: 1 },   // +1 до кожного з 5 атрибутів за рівень автоматично
       startItems: [
         { id: "sword_t1", equip: true },
         { id: "linen_chest", equip: true },
