@@ -182,7 +182,8 @@ window.RPG = window.RPG || {};
   //   data-label="…"         — підпис біля мітки, якщо її ставимо окремо
   //   data-anchor="heading"  — мітку поставити в заголовок батьківського блока
   //   клас .keep             — не ховати (показувати як є)
-  const COLLAPSE = ".note:not(.keep), .desc:not(.keep)";
+  // (у каруселі сторінки «Персонаж» підказки лишаються видимими — там є місце)
+  const COLLAPSE = ".note:not(.keep):not(.char-carousel .note), .desc:not(.keep):not(.char-carousel .desc)";
   const HEADINGS = /^(H1|H2|H3|H4|STRONG)$/;
 
   function infoContent(sources) {

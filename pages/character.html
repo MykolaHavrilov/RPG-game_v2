@@ -29,13 +29,14 @@
   <main>
     <!-- Герої групи: атрибути, характеристики й спорядження кожного окремо -->
     <div class="row member-tabs" id="member-tabs" hidden></div>
-    <div class="row">
+    <!-- Верх: герой | смужки й журнал квестів | карусель «Атрибути / Характеристики / Розвиток» -->
+    <div class="char-top">
+      <figure class="pic char-pic">
+        <span id="hero-img" class="hero-sprite" role="img" aria-label="Персонаж"></span>
+        <figcaption id="hero-name">Персонаж</figcaption>
+      </figure>
 
-      <section class="stack" style="flex:0 1 300px">
-        <figure class="pic">
-          <span id="hero-img" class="hero-sprite" role="img" aria-label="Персонаж"></span>
-          <figcaption id="hero-name">Персонаж</figcaption>
-        </figure>
+      <div class="stack char-mid">
         <div class="stats">
           <div class="bar bar-hp" id="hero-hp" data-name="HP"><div class="bar-fill"></div><span class="bar-label">HP</span></div>
           <div class="bar bar-mp" id="hero-mp" data-name="MP"><div class="bar-fill"></div><span class="bar-label">MP</span></div>
@@ -44,24 +45,34 @@
             <div class="bar bar-lvl" id="hero-lvl">LVL 1</div>
           </div>
         </div>
-      </section>
+        <div class="panel stack quest-log-panel">
+          <h2>Квести</h2>
+          <div class="quest-log" id="quest-log"></div>
+        </div>
+      </div>
 
-      <section class="stack" style="flex:2 1 400px">
-        <div class="row">
-          <div class="panel stack">
-            <h2>Атрибути</h2>
-            <div class="stat-list" id="attrs-list"></div>
-          </div>
-          <div class="panel stack">
-            <h2>Характеристики</h2>
-            <div class="stat-list" id="stats-list"></div>
-          </div>
-          <div class="panel stack">
-            <h2>Розвиток</h2>
-            <div class="stat-list" id="char-info"></div>
+      <div class="panel char-carousel" id="char-carousel">
+        <div class="carousel-head">
+          <button class="carousel-arrow" type="button" data-step="-1" aria-label="Попередня сторінка">‹</button>
+          <h2 class="carousel-title" id="carousel-title">Атрибути</h2>
+          <button class="carousel-arrow" type="button" data-step="1" aria-label="Наступна сторінка">›</button>
+        </div>
+        <div class="carousel-view">
+          <div class="carousel-track" id="carousel-track">
+            <div class="carousel-page stack" data-title="Атрибути"><div class="stat-list" id="attrs-list"></div></div>
+            <div class="carousel-page stack" data-title="Характеристики"><div class="stat-list" id="stats-list"></div></div>
+            <div class="carousel-page stack" data-title="Розвиток"><div class="stat-list" id="char-info"></div></div>
           </div>
         </div>
+        <div class="carousel-dots" role="tablist">
+          <button class="carousel-dot" type="button" data-page="0" role="tab">Атрибути</button>
+          <button class="carousel-dot" type="button" data-page="1" role="tab">Характеристики</button>
+          <button class="carousel-dot" type="button" data-page="2" role="tab">Розвиток</button>
+        </div>
+      </div>
+    </div>
 
+    <div class="stack char-bottom">
         <div class="panel stack">
           <h2>Спорядження</h2>
           <div class="equip-grid" id="equip-slots"></div>
@@ -74,7 +85,6 @@
         </div>
 
         <a class="wf wf-link" href="game.html">Назад до локації</a>
-      </section>
     </div>
   </main>
 

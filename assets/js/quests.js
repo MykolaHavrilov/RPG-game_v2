@@ -1,7 +1,9 @@
 // ============================================================
 // quests.js — ЗАВДАННЯ ГІЛЬДІЇ АВАНТЮРИСТІВ
 //
-// Адміністратор гільдії пропонує 3 завдання; взяти можна до 3 одночасно.
+// Адміністратор гільдії пропонує 3 завдання; взяти можна до 3 одночасно,
+// а з професією 2 рангу (після «Шлях професії») — до 10. Однакових завдань
+// (та сама ціль, кількість і нагорода) — не більше 3.
 //   kill  — убити N щурів / вовків (рахується після кожної перемоги)
 //   bring — принести N хвостів / шкурок / шкур / іклів (забираються при здачі)
 // Нагорода: досвід, золото, а за складніші — великі зілля здоров'я/мани.
@@ -23,8 +25,22 @@
 // ============================================================
 
 (function (RPG) {
-  const MAX_ACTIVE = 3;
+  const MAX_ACTIVE = 3;          // Селянин
+  const MAX_ACTIVE_PRO = 10;     // з професією (ранг 2+)
+  const MAX_SAME = 3;            // однакових завдань одночасно
   const MAX_OFFERS = 3;
+
+  function maxActive(save) {
+    return RPG.getClass(save.character.classId).tier > 1 ? MAX_ACTIVE_PRO : MAX_ACTIVE;
+  }
+  // Однакові завдання: та сама дія, ціль/предмет, кількість і нагорода
+  function questKey(quest) {
+    return JSON.stringify([quest.kind, quest.target, quest.item, quest.need, quest.reward]);
+  }
+  function sameCount(save, quest) {
+    const key = questKey(quest);
+    return state(save).active.filter(a => questKey(a) === key).length;
+  }
 
   // Групи ворогів для «вбити N»
   const TARGETS = {
@@ -109,9 +125,13 @@
 
   function acceptQuest(save, questId) {
     const q = state(save);
-    if (q.active.length >= MAX_ACTIVE) return { ok: false, reason: `Можна мати не більше ${MAX_ACTIVE} завдань.` };
+    const max = maxActive(save);
+    if (q.active.length >= max) return { ok: false, reason: `Можна мати не більше ${max} завдань.` };
     const i = q.offers.findIndex(o => o.id === questId);
     if (i < 0) return { ok: false, reason: "Завдання вже немає." };
+    if (sameCount(save, q.offers[i]) >= MAX_SAME) {
+      return { ok: false, reason: `Дубль квестів обмежений ${MAX_SAME} шт. — таких завдань у вас уже ${MAX_SAME}.` };
+    }
     const [quest] = q.offers.splice(i, 1);
     q.active.push(quest);
     fillOffers(save);
@@ -327,9 +347,31 @@
     return { ok: true, bounty: b, levelUps };
   }
 
+  // ---------- Журнал квестів (сторінка «Персонаж») ----------
+  // [{ title, lines: [рядки прогресу], where, ready }]
+  const GUILD_PLACE = "Адміністратор гільдії — Місто, Південний район";
+  function questLog(save) {
+    const out = [];
+    const ex = exploreInfo(save);
+    if (ex?.part) out.push({ title: `«${EXPLORE.name}» (${ex.index}/${ex.total}): ${ex.part.title}`, special: true,
+      lines: ex.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: GUILD_PLACE, ready: ex.complete });
+    const pr = professionInfo(save);
+    if (pr?.part) out.push({ title: `«${PROFESSION.name}» (${pr.index}/${pr.total}): ${pr.part.title}`, special: true,
+      lines: pr.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: GUILD_PLACE, ready: pr.complete });
+    for (const quest of state(save).active) {
+      const have = questProgress(save, quest);
+      out.push({ title: questTitle(quest), lines: [`Виконано: ${have}/${quest.need}`, `Нагорода: ${describeReward(quest.reward)}`],
+        where: GUILD_PLACE, ready: have >= quest.need });
+    }
+    for (const b of state(save).bounties) {
+      out.push({ title: `Нагорода за чемпіона: ${b.name}`, lines: [`${b.exp} EXP, ${b.gold} золота`], where: GUILD_PLACE, ready: true });
+    }
+    return out;
+  }
+
   Object.assign(RPG, {
-    addChampionBounty, claimBounty,
-    QUEST_MAX_ACTIVE: MAX_ACTIVE,
+    addChampionBounty, claimBounty, questLog,
+    QUEST_MAX_ACTIVE: MAX_ACTIVE, QUEST_MAX_ACTIVE_PRO: MAX_ACTIVE_PRO, QUEST_MAX_SAME: MAX_SAME, questMaxActive: maxActive, questSameCount: sameCount,
     questState: state, fillOffers, questTitle, questProgress, isQuestComplete: isComplete,
     describeReward, acceptQuest, abandonQuest, turnInQuest, questOnKill,
     EXPLORE, storyState, isCentralOpen, exploreInfo, describeExploreReward, startExplore, turnInExplore,

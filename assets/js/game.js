@@ -1031,7 +1031,7 @@
       renderExplore(box);
       renderProfession(box);
       box.append(el("p", "note",
-        `«Роботи вистачає — беріть до ${RPG.QUEST_MAX_ACTIVE} завдань одночасно.» Виконано завдань: ${qs.done}.`));
+        `«Роботи вистачає — беріть до ${RPG.questMaxActive(save)} завдань одночасно.» Виконано завдань: ${qs.done}.`));
 
       if (qs.bounties.length) {
         box.append(el("h3", null, "Нагороди за чемпіонів"));
@@ -1089,7 +1089,7 @@
           showMsg(msg, `Взято завдання: ${RPG.questTitle(quest)}.`);
           renderAll();
         });
-        take.disabled = qs.active.length >= RPG.QUEST_MAX_ACTIVE;
+        take.disabled = qs.active.length >= RPG.questMaxActive(save);
         r.append(info, take);
         box.append(r);
       }
@@ -1673,9 +1673,73 @@
     const DERIVED = ["hp", "mp", "attack", "magic", "defense", "magicDefense", "speed",
                      "crit", "dodge", "blockPhys", "blockMag", "hpRegen", "mpRegen", "attackSpeedPct"];
 
+    // ---------- Карусель «Атрибути / Характеристики / Розвиток» ----------
+    const CAROUSEL_KEY = "rpg.charPage";
+    let carouselPage = 0;
+    try { carouselPage = Number(localStorage.getItem(CAROUSEL_KEY)) || 0; } catch (e) { /* без сховища */ }
+    function showCarousel(i) {
+      const pages = document.querySelectorAll("#carousel-track .carousel-page");
+      if (!pages.length) return;
+      carouselPage = (i + pages.length) % pages.length;
+      $("carousel-track").style.transform = `translateX(-${carouselPage * 100}%)`;
+      pages.forEach((p, k) => { p.setAttribute("aria-hidden", k !== carouselPage ? "true" : "false"); p.inert = k !== carouselPage; });
+      $("carousel-title").textContent = pages[carouselPage].dataset.title;
+      document.querySelectorAll(".carousel-dot").forEach((d, k) => {
+        d.classList.toggle("is-active", k === carouselPage);
+        d.setAttribute("aria-selected", k === carouselPage ? "true" : "false");
+      });
+      try { localStorage.setItem(CAROUSEL_KEY, String(carouselPage)); } catch (e) { /* без сховища */ }
+      fitCarousel();
+    }
+    // Висота вікна — за поточною сторінкою (без порожнього місця під короткими)
+    function fitCarousel() {
+      const page = document.querySelectorAll("#carousel-track .carousel-page")[carouselPage];
+      const view = document.querySelector("#char-carousel .carousel-view");
+      if (page && view) view.style.height = page.offsetHeight + "px";
+    }
+    window.addEventListener("resize", () => fitCarousel());
+    (function setupCarousel() {
+      const box = $("char-carousel");
+      if (!box) return;
+      box.querySelectorAll(".carousel-arrow").forEach(b => b.addEventListener("click", () => showCarousel(carouselPage + Number(b.dataset.step))));
+      box.querySelectorAll(".carousel-dot").forEach(b => b.addEventListener("click", () => showCarousel(Number(b.dataset.page))));
+      // Гортання пальцем на телефоні/планшеті
+      let x0 = null, y0 = 0;
+      const view = box.querySelector(".carousel-view");
+      view.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+      view.addEventListener("touchend", e => {
+        if (x0 == null) return;
+        const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+        x0 = null;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) showCarousel(carouselPage + (dx < 0 ? 1 : -1));
+      });
+      showCarousel(carouselPage);
+    })();
+
+    // ---------- Журнал квестів (спільний для групи) ----------
+    function renderQuestLog() {
+      const box = $("quest-log");
+      if (!box) return;
+      box.innerHTML = "";
+      const log = RPG.questLog(save);
+      if (!log.length) {
+        box.append(el("p", "status keep", "Розпочатих квестів немає. Завдання дає Адміністратор гільдії — Місто, Південний район."));
+        return;
+      }
+      for (const q of log) {
+        const item = el("div", "quest-entry" + (q.ready ? " is-ready" : "") + (q.special ? " is-special" : ""));
+        item.append(el("strong", "quest-entry-title", q.title));
+        for (const line of q.lines) item.append(el("span", "quest-entry-line", line));
+        item.append(el("span", "quest-entry-where", (q.ready ? "✔ Готово — здати: " : "Здати: ") + q.where));
+        box.append(item);
+      }
+    }
+
     function render() {
       renderMemberTabs();
       renderHeroBars(ms);
+      renderQuestLog();
+      requestAnimationFrame(fitCarousel);
       const st = RPG.calcStats(ms);
       const ch = ms.character;
 
