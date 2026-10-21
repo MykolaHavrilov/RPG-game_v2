@@ -426,7 +426,7 @@
 
     box.append(el("div", "tip-price",
       `Ціна: ${fmtNum(item.price || 0)} зол. · продаж: ${fmtNum(RPG.refSellPrice(ref))} зол.` +
-      (item.noShop ? " · не продається" : "")));
+      (item.noShop ? (item.tier === 3 ? " · продає лише Торгова гільдія" : " · не продається") : "")));
     return box;
   }
 
@@ -765,7 +765,10 @@
       document.body.classList.add("buy-locked");
       setTimeout(() => document.body.classList.remove("buy-locked"), BUY_PAUSE_MS);
     }
-    function renderShop(box, shopIds) {
+    // opts: { priceOf(id), buy(save, id, qty), stock: true — продавати й речі з позначкою noShop }
+    function renderShop(box, shopIds, opts = {}) {
+      const priceOf = opts.priceOf || RPG.shopSellPrice;
+      const buyFn = opts.buy || RPG.buyItem;
       box.append(el("p", "status shop-gold", `Ваше золото: ${fmtNum(save.character.gold)}`));
 
       const cols = el("div", "row shop");
@@ -773,8 +776,8 @@
       buyBox.append(el("h3", null, "Купити"));
       for (const id of shopIds) {
         const item = RPG.ITEMS[id];
-        if (!item || item.noShop) continue;
-        const price = RPG.shopSellPrice(id);
+        if (!item || (item.noShop && !opts.stock)) continue;
+        const price = priceOf(id);
         const r = el("button", "shop-row shop-info");
         r.type = "button";
         r.append(smallIcon(id), el("span", "shop-name", item.name));
@@ -784,7 +787,7 @@
           if (Date.now() < buyLockUntil) return;          // пауза після покупки
           buyLockUntil = Date.now() + BUY_PAUSE_MS;
           lockBuyButtons();
-          const res = RPG.buyItem(save, id, qty);
+          const res = buyFn(save, id, qty);
           if (!res.ok) { showMsg(msg, res.reason, true); return; }
           await RPG.saveGame(save);
           showMsg(msg, `Куплено: ${item.name}${res.qty > 1 ? ` × ${res.qty}` : ""} за ${fmtNum(res.price)} золота.`);
@@ -894,7 +897,7 @@
 
     // ---------- Місто: райони та Гільдія авантюристів ----------
     // Центральний район відкривається після особливого завдання «Час дослідити»
-    const districtLocked = d => d.locked && !(d.id === "center" && RPG.isCentralOpen(save));
+    const districtLocked = d => !RPG.isDistrictOpen(save, d);
     const districtParam = new URLSearchParams(location.search).get("district");
     let cityDistrict = "south";     // обраний район (Південний відкритий)
     {
@@ -921,16 +924,23 @@
       if (d) {
         const box = el("div", "stack district");
         box.append(el("h3", null, `${d.name} — ${d.building}`), el("p", "note", d.description));
-        if (districtLocked(d)) box.append(el("p", "status", d.id === "center"
-          ? "Прохід закритий. Його відкриває Адміністратор гільдії авантюристів після особливого завдання «Час дослідити» (з 10 рівня)."
-          : "Закрито — відкриється згодом."));
+        if (districtLocked(d)) box.append(el("p", "status", RPG.districtLockText(d)));
         else if (d.id === "south") renderGuild(box);
+        else if (d.id === "trade") renderTradeGuild(box);
         else if (d.id === "center") renderTownHall(box);
         place.append(box);
       }
       const row = el("div", "row");
       row.append(link("До Домівки", "game.html?loc=home"), link("Мапа", "maps.html"));
       place.append(row);
+    }
+
+    // --- Торговий район: Торгова гільдія, управляючий Скрудж ---
+    function renderTradeGuild(box) {
+      renderNpc(box, "scrooge");
+      box.append(el("p", "note", `Скрудж продає речі 3 виду (з ${RPG.TRADE_MIN_LEVEL} рівня, для зброї — володіння 20) ` +
+        `за ${RPG.TRADE_PRICE_MULT}× від їхньої вартості, а купує будь-що за ${Math.round(RPG.SHOP_BUY_RATE * 100)}%.`));
+      renderShop(box, RPG.tradeStock(), { priceOf: RPG.tradePrice, buy: RPG.buyFromTrade, stock: true });
     }
 
     // --- Мерія: Дошка оголошень (найм у групу) ---
@@ -2141,7 +2151,7 @@
     let selDistrict = null;                // район міста (якщо обрано на мапі)
     let traveling = false;
     const districts = RPG.LOCATIONS.city?.districts || [];
-    const districtLocked = d => d.locked && !(d.id === "center" && RPG.isCentralOpen(save));
+    const districtLocked = d => !RPG.isDistrictOpen(save, d);
 
     // Стан локації для героя: here | open | closed
     function locState(id) {
@@ -2231,7 +2241,8 @@
       if (!pos || !loc) { tip.hidden = true; return; }
       let st = locState(id);
       if (d && st.kind !== "closed" && districtLocked(d)) {
-        st = { kind: "closed", text: d.id === "center" ? "Закрито — прохід відкриває Гільдія авантюристів («Час дослідити»)" : "Закрито — відкриється згодом" };
+        st = { kind: "closed", text: d.id === "center" ? "Закрито — прохід відкриває Гільдія авантюристів («Час дослідити»)"
+          : d.id === "trade" ? `Закрито — Торгова гільдія приймає з ${RPG.TRADE_MIN_LEVEL} рівня` : "Закрито — відкриється згодом" };
       }
       tip.innerHTML = "";
       tip.append(el("strong", null, d ? `${loc.name}: ${d.name}` : loc.name), el("div", `tip-status tip-${st.kind}`, st.text),

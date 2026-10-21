@@ -756,6 +756,43 @@ function currentShop(save) {
   return null;
 }
 
+// ---------- Торгова гільдія (Місто, Торговий район) ----------
+// Відкривається з 20 рівня головного героя. Управляючий — Скрудж:
+// продає речі 3 виду за потрійну ціну (price × 3).
+const TRADE_MIN_LEVEL = 20;
+const TRADE_PRICE_MULT = 3;
+function tradeStock() {
+  return Object.keys(ITEMS).filter(id => ITEMS[id].tier === 3);
+}
+function tradePrice(id) {
+  return Math.ceil((ITEMS[id]?.price || 0) * TRADE_PRICE_MULT);
+}
+function buyFromTrade(save, id, qty = 1) {
+  if (save.location.map !== "city") return { ok: false, reason: "Торгова гільдія — у Місті, в Торговому районі." };
+  if (save.character.level < TRADE_MIN_LEVEL) return { ok: false, reason: `Торгова гільдія приймає з ${TRADE_MIN_LEVEL} рівня.` };
+  if (!tradeStock().includes(id)) return { ok: false, reason: "Скрудж цього не продає." };
+  qty = Math.floor(Number(qty));
+  if (!(qty >= 1 && qty <= BUY_MAX)) return { ok: false, reason: `Вкажіть кількість від 1 до ${BUY_MAX}.` };
+  const unit = tradePrice(id), price = unit * qty;
+  if (save.character.gold < price) return { ok: false, reason: `Не вистачає золота (потрібно ${price}).` };
+  save.character.gold -= price;
+  addItem(save, id, qty);
+  return { ok: true, price, qty, unit };
+}
+
+// Чи відкритий район міста: Центральний — після «Час дослідити», Торговий — з 20 рівня
+function isDistrictOpen(save, d) {
+  if (!d.locked) return true;
+  if (d.id === "center") return RPG.isCentralOpen(save);
+  if (d.id === "trade") return save.character.level >= TRADE_MIN_LEVEL;
+  return false;
+}
+function districtLockText(d) {
+  if (d.id === "center") return "Прохід закритий. Його відкриває Адміністратор гільдії авантюристів після особливого завдання «Час дослідити» (з 10 рівня).";
+  if (d.id === "trade") return `Торгова гільдія приймає лише поважних гостей — з ${TRADE_MIN_LEVEL} рівня.`;
+  return "Закрито — відкриється згодом.";
+}
+
 // qty — скільки штук купити за раз
 function buyItem(save, id, qty = 1) {
   const shop = currentShop(save);
@@ -808,6 +845,7 @@ function applyReward(save, exp, loot) {
 }
 
 Object.assign(RPG, {
+  TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
   createNewSave, calcStats, clampHpMp, fullHeal,
