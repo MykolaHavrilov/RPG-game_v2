@@ -27,9 +27,12 @@ const GRACE = { durationMs: 10 * 60 * 1000, hpPct: 0.02, hpEveryMs: 5000, mpPct:
 function graceCost(n) {
   return n <= 1 ? 100 : 100 + (100 + 10 * n);
 }
-// Перерозподіл атрибутів у Мерії: n — скільки разів уже скидали
-function attrResetCost(n) {
-  return (500 * n) / 100 + 500;
+// Перерозподіл атрибутів у Мерії: 500 + 500 × pct%, де pct — накопичена надбавка.
+// Після кожного скидання надбавка зростає на випадкові 10–30%.
+const RESET_BASE = 500;
+const RESET_STEP_PCT = [10, 30];
+function attrResetCost(pct) {
+  return Math.round(RESET_BASE + RESET_BASE * (pct || 0) / 100);
 }
 
 // Скільки речей максимум можна втратити за одну смерть
@@ -244,8 +247,13 @@ function buyGrace(save, now = Date.now()) {
 }
 
 // Мерія, Розпорядник: повернути атрибути, які гравець вкладав сам
+function attrResetPct(ch) {
+  // старі збереження: лише лічильник скидань — рахуємо по 20% за кожне
+  if (typeof ch.attrResetPct !== "number") ch.attrResetPct = (ch.attrResets || 0) * 20;
+  return ch.attrResetPct;
+}
 function attrResetPrice(save) {
-  return attrResetCost(save.character.attrResets || 0);
+  return attrResetCost(attrResetPct(save.character));
 }
 function investedAttrs(save) {
   const ch = save.character;
@@ -266,6 +274,7 @@ function resetAttrs(save) {
   }
   ch.freePoints = (ch.freePoints || 0) + sum;
   ch.attrResets = (ch.attrResets || 0) + 1;
+  ch.attrResetPct = attrResetPct(ch) + RPG.randInt(RESET_STEP_PCT[0], RESET_STEP_PCT[1]);
   clampHpMp(save);
   return { ok: true, cost, points: sum };
 }
