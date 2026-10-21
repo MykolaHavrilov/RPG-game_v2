@@ -27,12 +27,13 @@ const GRACE = { durationMs: 10 * 60 * 1000, hpPct: 0.02, hpEveryMs: 5000, mpPct:
 function graceCost(n) {
   return n <= 1 ? 100 : 100 + (100 + 10 * n);
 }
-// Перерозподіл атрибутів у Мерії: 500 + 500 × pct%, де pct — накопичена надбавка.
-// Після кожного скидання надбавка зростає на випадкові 10–30%.
+// Перерозподіл атрибутів у Мерії: n × 500 + 500 × pct%,
+// де n — порядковий номер цього скидання (1, 2, 3…), pct — накопичена надбавка:
+// після кожного скидання вона зростає на випадкові 10–30%.
 const RESET_BASE = 500;
 const RESET_STEP_PCT = [10, 30];
-function attrResetCost(pct) {
-  return Math.round(RESET_BASE + RESET_BASE * (pct || 0) / 100);
+function attrResetCost(n, pct) {
+  return Math.round(n * RESET_BASE + RESET_BASE * (pct || 0) / 100);
 }
 
 // Скільки речей максимум можна втратити за одну смерть
@@ -253,7 +254,7 @@ function attrResetPct(ch) {
   return ch.attrResetPct;
 }
 function attrResetPrice(save) {
-  return attrResetCost(attrResetPct(save.character));
+  return attrResetCost((save.character.attrResets || 0) + 1, attrResetPct(save.character));
 }
 function investedAttrs(save) {
   const ch = save.character;
