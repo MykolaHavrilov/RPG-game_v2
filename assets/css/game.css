@@ -581,3 +581,55 @@ body.buy-locked .popover .wf-button { pointer-events: none; opacity: .55; }
 .carousel-track { align-items: flex-start; }
 .char-carousel { grid-template-rows: auto auto auto; align-self: start; }
 @media (prefers-reduced-motion: reduce) { .carousel-view { transition: none; } }
+
+/* ---------- Мапа Темного лісу: заглушка, поки немає картинки ---------- */
+.world-map.no-art {
+  aspect-ratio: 2048 / 1280;
+  background:
+    radial-gradient(ellipse at 50% 12%, rgba(120, 200, 110, .18), transparent 30%),
+    radial-gradient(ellipse at 15% 48%, rgba(90, 120, 140, .25), transparent 22%),
+    radial-gradient(ellipse at 50% 92%, rgba(150, 140, 120, .22), transparent 20%),
+    radial-gradient(ellipse at 50% 50%, #1d2a1f, #0b100c 80%);
+}
+.world-map.no-art .map-img { display: none; }
+.map-roads { display: none; position: absolute; inset: 0; pointer-events: none; }
+.world-map.no-art .map-roads { display: block; }
+.map-roads svg { width: 100%; height: 100%; }
+.map-roads line { stroke: rgba(201, 170, 110, .55); stroke-width: .6; stroke-dasharray: 1.4 1; vector-effect: non-scaling-stroke; stroke-width: 3px; }
+.world-map.no-art .map-spot {
+  border: 2px solid rgba(233, 199, 123, .55);
+  background: radial-gradient(closest-side, rgba(40, 60, 42, .95), rgba(14, 22, 16, .9));
+  box-shadow: 0 0 12px rgba(0, 0, 0, .6);
+}
+.world-map.no-art .map-spot.is-closed { border-color: rgba(200, 90, 80, .55); }
+.world-map.no-art .map-spot::after {
+  content: attr(data-name);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 92%; text-align: center; line-height: 1.15;
+  font-size: clamp(.55rem, 1.1vw, .8rem); font-weight: 700; color: #e9c77b;
+  text-shadow: 0 1px 2px #000; pointer-events: none;
+}
+
+/* ---------- Попередження про чемпіона ---------- */
+.champion-dialog {
+  max-width: 420px; width: calc(100% - 32px);
+  padding: 20px 22px; text-align: center;
+  color: var(--text); background: var(--pop-bg, #1b1712);
+  border: 2px solid var(--gold); border-radius: var(--radius);
+  box-shadow: 0 0 40px rgba(233, 199, 123, .35), 0 20px 60px rgba(0, 0, 0, .7);
+}
+.champion-dialog::backdrop { background: rgba(0, 0, 0, .65); }
+.champion-badge {
+  display: inline-block; margin-bottom: 10px; padding: 4px 14px;
+  font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: #1b1208; background: linear-gradient(180deg, #ffe9a8, #d9a441); border-radius: 999px;
+}
+.champion-face {
+  display: block; width: 140px; height: 140px; margin: 4px auto 8px;
+  border-radius: 50%; border: 2px solid var(--gold);
+  box-shadow: 0 0 20px rgba(233, 199, 123, .5);
+  background-color: rgba(0, 0, 0, .3);
+}
+.champion-dialog h3 { margin: 4px 0 6px; color: var(--gold); }
+.champion-dialog p { margin: 0 0 14px; line-height: 1.45; }
+.champion-dialog .dialog-actions { justify-content: center; gap: 10px; }

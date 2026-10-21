@@ -188,6 +188,53 @@
     }
   };
 
+  // ---------- Північний район: Центральна брама ----------
+  const gate = save => RPG.gateInfo(save);
+  NPCS.captain = {
+    name: "Капітан Северин Залізняк",
+    portrait: "npc_captain",
+    nodes: {
+      start: {
+        text: save => gate(save).done
+          ? "Капітан киває вам, як старому знайомому. «Брама для тебе відчинена. Тримай меч напоготові — у Темному лісі ночі довгі.»"
+          : "Кремезний капітан у кірасі з гербом міста загороджує дорогу. «Северин Залізняк, капітан варти Центральної брами. " +
+            "Далі — Темний ліс. Без мого дозволу туди не ходять.»",
+        replies: [
+          { text: "Що там, за брамою?", to: "about" },
+          { text: "Хочу пройти за браму.", to: "offer", show: save => gate(save).st.part === 0 },
+          { text: "Щодо вашого доручення…", to: "progress", show: save => !!gate(save).part },
+          { text: "Відчиніть браму — я йду в Темний ліс.", action: "gate_go", show: save => !!gate(save).done },
+          { text: "Бувай, капітане.", to: "bye" }
+        ]
+      },
+      about: {
+        text: "«Темний ліс. Болота, де топляться навіть коні, старе кладовище, вовкулаки, павуки завбільшки з корову… " +
+              "А в самому серці лісу, кажуть, сидить його Володар. Звичайним мисливцям там робити нічого.»",
+        replies: [{ text: "Зрозумів.", to: "start" }]
+      },
+      offer: {
+        text: save => `«Сміливий? Перевіримо. ${RPG.GATE.parts[0].text.replace(/^«|»$/g, "")} ` +
+              `А потім допоможеш варті з припасами. Впораєшся — брама відчиниться, ще й ${fmt(RPG.GATE.reward.exp)} досвіду отримаєш.»`,
+        replies: [
+          { text: "Згоден.", action: "gate_start" },
+          { text: "Пізніше.", to: "start" }
+        ]
+      },
+      progress: {
+        text: save => {
+          const g = gate(save);
+          if (!g.part) return "«Ну що, готовий до Темного лісу?»";
+          return `${g.part.text} Зараз: ${g.progress.map(p => `${p.label} ${p.have}/${p.need}`).join(", ")}.`;
+        },
+        replies: [
+          { text: "Готово — ось.", action: "gate_turn", show: save => !!gate(save).complete },
+          { text: "Повернуся пізніше.", to: "start" }
+        ]
+      },
+      bye
+    }
+  };
+
   const STEWARD_MIN_LEVEL = 11;
 
   Object.assign(RPG, { NPCS, STEWARD_MIN_LEVEL });

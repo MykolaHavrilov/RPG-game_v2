@@ -46,7 +46,8 @@
   const TARGETS = {
     rat:  { name: "щурів",  match: id => id.startsWith("rat"),  minLevel: 1 },
     wolf: { name: "вовків", match: id => id.startsWith("wolf"), minLevel: 3 },
-    slime: { name: "слаймів", match: id => id.startsWith("slime"), minLevel: 6 }
+    slime: { name: "слаймів", match: id => id.startsWith("slime"), minLevel: 6 },
+    slime_king: { name: "Королів слайм", match: id => id === "slime_king", minLevel: 99 }
   };
 
   // Шаблони: amounts — варіанти кількості; exp/gold — за 1 одиницю
@@ -178,6 +179,13 @@
     if (ppart?.kill && TARGETS[ppart.kill.target].match(enemyId) && ps.kills < ppart.kill.need) {
       ps.kills++;
       lines.push(`«${PROFESSION.name}»: ${TARGETS[ppart.kill.target].name} ${ps.kills}/${ppart.kill.need}`);
+    }
+    // Квест капітана варти: частина «убити»
+    const gs = gateState(save);
+    const gpart = GATE.parts[gs.part - 1];
+    if (gpart?.kill && TARGETS[gpart.kill.target].match(enemyId) && gs.kills < gpart.kill.need) {
+      gs.kills++;
+      lines.push(`«${GATE.name}»: ${TARGETS[gpart.kill.target].name} ${gs.kills}/${gpart.kill.need}`);
     }
     // Особливе завдання: частина «убити»
     const st = storyState(save);
@@ -328,6 +336,57 @@
     return { ok: true, finished: true, classId, change };
   }
 
+  // ---------- Квест капітана варти «Варта Центральної брами» ----------
+  // Видає Капітан Северин Залізняк (Місто, Північний район — відкритий після професії).
+  // Після здачі брама відчиняється: можна йти в Темний ліс.
+  const GATE = {
+    name: "Варта Центральної брами",
+    reward: { exp: 15000 },
+    parts: [
+      { title: "Довести силу",
+        text: "«За брамою — Темний ліс, і новачки звідти не вертаються. Доведи, що ти не з них: здолай трьох Королів слайм у Печері в лісі.»",
+        kill: { target: "slime_king", need: 3 } },
+      { title: "Припаси для варти",
+        text: "«Варта мерзне й голодує. Принеси 40 вовчих шкур і 40 желе слизу — і брама для тебе відчиниться.»",
+        bring: [{ id: "wolf_pelt", qty: 40 }, { id: "slime_gel", qty: 40 }] }
+    ]
+  };
+  function gateState(save) {
+    save.story ??= {};
+    save.story.gate ??= { part: 0, kills: 0 };
+    return save.story.gate;
+  }
+  function isGateOpen(save) {
+    return gateState(save).part > GATE.parts.length;
+  }
+  function gateInfo(save) {
+    const st = gateState(save);
+    const total = GATE.parts.length;
+    if (st.part > total) return { done: true, st, total };
+    if (st.part === 0) return { canStart: RPG.getClass(save.character.classId).tier > 1, st, total };
+    const part = GATE.parts[st.part - 1];
+    const progress = part.bring
+      ? part.bring.map(b => ({ label: RPG.ITEMS[b.id].name, have: Math.min(RPG.countItem(save, b.id), b.qty), need: b.qty }))
+      : [{ label: "Убито " + TARGETS[part.kill.target].name, have: Math.min(st.kills, part.kill.need), need: part.kill.need }];
+    return { st, total, part, index: st.part, progress, complete: progress.every(p => p.have >= p.need) };
+  }
+  function startGate(save) {
+    const info = gateInfo(save);
+    if (!info.canStart) return { ok: false, reason: "Капітан говорить лише з тими, хто вже має професію." };
+    info.st.part = 1; info.st.kills = 0;
+    return { ok: true };
+  }
+  function turnInGate(save) {
+    const info = gateInfo(save);
+    if (!info.part) return { ok: false, reason: "Немає активної частини квесту." };
+    if (!info.complete) return { ok: false, reason: "Частина квесту ще не виконана." };
+    for (const b of info.part.bring || []) RPG.removeItem(save, b.id, b.qty);
+    info.st.part++; info.st.kills = 0;
+    const finished = info.st.part > GATE.parts.length;
+    const levelUps = finished ? RPG.addExp(save, GATE.reward.exp) : [];
+    return { ok: true, finished, levelUps };
+  }
+
   // ---------- Нагороди за чемпіонів ----------
   function addChampionBounty(save, enemyId) {
     const q = state(save);
@@ -358,6 +417,9 @@
     const pr = professionInfo(save);
     if (pr?.part) out.push({ title: `«${PROFESSION.name}» (${pr.index}/${pr.total}): ${pr.part.title}`, special: true,
       lines: pr.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: GUILD_PLACE, ready: pr.complete });
+    const gt = gateInfo(save);
+    if (gt.part) out.push({ title: `«${GATE.name}» (${gt.index}/${gt.total}): ${gt.part.title}`, special: true,
+      lines: gt.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: "Капітан варти — Місто, Північний район (Центральна брама)", ready: gt.complete });
     for (const quest of state(save).active) {
       const have = questProgress(save, quest);
       out.push({ title: questTitle(quest), lines: [`Виконано: ${have}/${quest.need}`, `Нагорода: ${describeReward(quest.reward)}`],
@@ -375,6 +437,7 @@
     questState: state, fillOffers, questTitle, questProgress, isQuestComplete: isComplete,
     describeReward, acceptQuest, abandonQuest, turnInQuest, questOnKill,
     EXPLORE, storyState, isCentralOpen, exploreInfo, describeExploreReward, startExplore, turnInExplore,
-    PROFESSION, professionState, professionInfo, startProfession, turnInProfession
+    PROFESSION, professionState, professionInfo, startProfession, turnInProfession,
+    GATE, gateState, isGateOpen, gateInfo, startGate, turnInGate
   });
 })(window.RPG);

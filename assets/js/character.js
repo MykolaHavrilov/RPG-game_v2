@@ -785,11 +785,13 @@ function isDistrictOpen(save, d) {
   if (!d.locked) return true;
   if (d.id === "center") return RPG.isCentralOpen(save);
   if (d.id === "trade") return save.character.level >= TRADE_MIN_LEVEL;
+  if (d.id === "north") return getClass(save.character.classId).tier > 1;
   return false;
 }
 function districtLockText(d) {
   if (d.id === "center") return "Прохід закритий. Його відкриває Адміністратор гільдії авантюристів після особливого завдання «Час дослідити» (з 10 рівня).";
   if (d.id === "trade") return `Торгова гільдія приймає лише поважних гостей — з ${TRADE_MIN_LEVEL} рівня.`;
+  if (d.id === "north") return "Варта не пускає до брами простих селян. Повертайтеся, коли матимете професію (квест «Шлях професії», з 15 рівня).";
   return "Закрито — відкриється згодом.";
 }
 
