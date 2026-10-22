@@ -2131,16 +2131,17 @@
   // Основа мапи: assets/images/map/map_dark_forest.webp (2048×1280). Поки її немає — темна заглушка з підписами місць.
   const DARK_ORDER = ["dark_gate", "dk_edge", "dk_marsh", "dk_grave", "dk_webs", "dk_ravine", "dk_ruins", "dk_heart"];
   const DARK_MAP_BASE = "assets/images/map/map_dark_forest.webp";
-  const DARK_MAP = {
-    dark_gate: { x: 50.0, y: 85.9, w: 12.0, h: 14.0 },
-    dk_edge:   { x: 30.3, y: 70.3, w: 11.2, h: 14.8 },
-    dk_marsh:  { x: 14.2, y: 47.7, w: 11.2, h: 14.8 },
-    dk_grave:  { x: 36.1, y: 39.8, w: 11.2, h: 14.8 },
-    dk_webs:   { x: 60.1, y: 54.7, w: 11.2, h: 14.8 },
-    dk_ravine: { x: 82.0, y: 65.6, w: 11.2, h: 14.8 },
-    dk_ruins:  { x: 78.1, y: 29.7, w: 11.2, h: 14.8 },
-    dk_heart:  { x: 50.0, y: 13.3, w: 12.0, h: 15.0 }
+  const DARK_MAP = {                         // під картинку map_dark_forest.webp
+    dark_gate: { x: 48.5, y: 78.0, w: 14.0, h: 18.0 },
+    dk_edge:   { x: 24.0, y: 64.0, w: 12.0, h: 14.0 },
+    dk_marsh:  { x: 13.0, y: 43.0, w: 15.0, h: 15.0 },
+    dk_grave:  { x: 31.0, y: 25.0, w: 14.0, h: 16.0 },
+    dk_webs:   { x: 70.0, y: 40.0, w: 16.0, h: 16.0 },
+    dk_ravine: { x: 91.0, y: 67.0, w: 12.0, h: 16.0 },
+    dk_ruins:  { x: 91.0, y: 11.0, w: 9.0,  h: 16.0 },
+    dk_heart:  { x: 55.5, y: 9.5,  w: 14.0, h: 16.0 }
   };
+
 
   // Зони локацій на картинці мапи (assets/images/map_world.*), у відсотках:
   // x, y — центр зони; w, h — ширина й висота. Нову локацію достатньо дописати сюди.

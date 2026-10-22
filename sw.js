@@ -2,7 +2,7 @@
 // HTML / JS / CSS: спершу мережа (щоб оновлення гри підтягувались одразу),
 // а без інтернету — з кешу. Картинки: спершу кеш.
 // Після великих змін можна збільшити номер версії — старий кеш видалиться.
-const CACHE = "rpg-game-v35";
+const CACHE = "rpg-game-v36";
 const PRECACHE = [
   "./",
   "./assets/css/game.css",
@@ -48,6 +48,14 @@ const PRECACHE = [
   "./assets/images/items/icon_sword_t2.webp",
   "./assets/images/items/icon_sword_t3.webp",
   "./assets/images/locations/loc_city.webp",
+  "./assets/images/locations/loc_dark_gate.webp",
+  "./assets/images/locations/loc_dk_edge.webp",
+  "./assets/images/locations/loc_dk_grave.webp",
+  "./assets/images/locations/loc_dk_heart.webp",
+  "./assets/images/locations/loc_dk_marsh.webp",
+  "./assets/images/locations/loc_dk_ravine.webp",
+  "./assets/images/locations/loc_dk_ruins.webp",
+  "./assets/images/locations/loc_dk_webs.webp",
   "./assets/images/locations/loc_forest_cave.webp",
   "./assets/images/locations/loc_forest_path.webp",
   "./assets/images/locations/loc_home.webp",
@@ -61,8 +69,17 @@ const PRECACHE = [
   "./assets/images/map/bld_tavern.webp",
   "./assets/images/map/bld_temple.webp",
   "./assets/images/map/bld_village_start.webp",
+  "./assets/images/map/map_dark_forest.webp",
   "./assets/images/map/map_world_base.webp",
   "./assets/images/map_world.webp",
+  "./assets/images/npc/npc_captain.webp",
+  "./assets/images/npc/npc_guild_admin.webp",
+  "./assets/images/npc/npc_guild_trader.webp",
+  "./assets/images/npc/npc_nun.webp",
+  "./assets/images/npc/npc_ostap.webp",
+  "./assets/images/npc/npc_scrooge.webp",
+  "./assets/images/npc/npc_steward.webp",
+  "./assets/images/npc/npc_trainer.webp",
   "./assets/images/skills/axe_break.webp",
   "./assets/images/skills/axe_chop.webp",
   "./assets/images/skills/axe_rage.webp",
