@@ -33,19 +33,13 @@
 .location strong { font-family: var(--font-head); font-size: 1.1rem; }
 .loc-desc { font-size: .85rem; opacity: .85; }
 
-.arena {
-  position: relative;
-  min-height: 150px;
-  gap: 8px;
-  padding: 16px;
-  border-radius: var(--radius);
-}
-.arena-title { font-family: var(--font-head); font-size: 1.45rem; font-weight: 800; }
-.arena-line  { opacity: .92; }
-.arena .wf-link { margin-top: 8px; }
-.arena[data-state="win"] .arena-title  { color: #8fe08f; }
-.arena[data-state="lose"] .arena-title { color: #ff8a7a; }
-.arena[data-state="champion"] .arena-title { color: var(--gold); }
+/* Заголовки в журналі бою (колишнє поле «Готові до бою») */
+.log .log-title { margin-top: 6px; font-family: var(--font-head); font-size: 1.05rem; font-weight: 800; color: var(--gold); }
+.log .log-title:first-child { margin-top: 0; }
+.log .log-title.is-win  { color: #8fe08f; }
+.log .log-title.is-lose { color: #ff8a7a; }
+.log .log-title.is-fight { color: #e8d9b8; }
+.log .log-action { justify-content: center; padding-top: 8px; }
 
 /* ---------- Журнал бою ---------- */
 .log {
@@ -385,8 +379,6 @@ figure.is-champion figcaption { color: #ffd76a; }
   .exp-row .bar-lvl { font-size: .75rem; }
   .inv-head, .queue-head { font-size: .8rem; }
 
-  .arena { min-height: 110px; padding: 12px; }
-  .arena-title { font-size: 1.15rem; }
   .log { height: 220px; font-size: .86rem; }
 
   .queue { grid-template-columns: repeat(3, 1fr); }
@@ -658,3 +650,25 @@ body.buy-locked .popover .wf-button { pointer-events: none; opacity: .55; }
 a.travel-locked { opacity: .4; cursor: not-allowed; }
 .world-map.region-city { background: #181e16; }
 .world-map.region-city { max-width: 720px; margin-inline: auto; }
+
+/* ---------- Окремі повідомлення: здобич поля бою, повний інвентар ---------- */
+.notice-dialog {
+  position: fixed; max-width: min(440px, calc(100vw - 32px)); width: 100%;
+  padding: 18px 18px 14px; border-radius: var(--radius);
+  color: var(--pop-text); background: var(--pop-bg); border: 1px solid var(--pop-border); box-shadow: var(--pop-shadow);
+}
+.notice-dialog::backdrop { background: rgba(0, 0, 0, .6); }
+.notice-dialog h3 { margin: 0 32px 10px 0; color: var(--gold); font-family: var(--font-head); }
+.notice-dialog p { margin: 6px 0; }
+.notice-dialog.is-warn { border-color: #e8a33d; box-shadow: 0 0 0 2px rgba(232, 163, 61, .5), var(--pop-shadow); }
+.notice-dialog.is-warn h3 { color: #ffb04d; }
+.notice-list { margin: 4px 0 6px; padding-left: 20px; max-height: 40vh; overflow-y: auto; }
+.notice-close {
+  position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; padding: 0;
+  border: 1px solid var(--pop-border); border-radius: 50%; background: rgba(0, 0, 0, .25);
+  color: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer;
+}
+.notice-close:hover, .notice-close:focus-visible { color: var(--gold); border-color: var(--gold); }
+/* Телефон: кнопка локації над портретами (game.js переносить її перед .battle) */
+main > a.location { display: flex; margin-bottom: 10px; }
+#gold.is-full { color: #ffb04d; }

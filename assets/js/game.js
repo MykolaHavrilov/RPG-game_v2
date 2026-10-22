@@ -103,6 +103,55 @@
     }
   }
 
+  // ---------- Окреме повідомлення (вікно), що закривається лише хрестиком ----------
+  // Повертає Promise, який виконується після закриття.
+  function showNotice(title, lines, cls = "") {
+    return new Promise(resolve => {
+      const dlg = el("dialog", "notice-dialog " + cls);
+      const close = button("×", "notice-close", () => dlg.close());
+      close.setAttribute("aria-label", "Закрити");
+      dlg.append(close, el("h3", null, title));
+      for (const l of lines) dlg.append(typeof l === "string" ? el("p", null, l) : l);
+      dlg.addEventListener("cancel", ev => ev.preventDefault());     // Esc не закриває — лише хрестик
+      dlg.addEventListener("close", () => { dlg.remove(); resolve(); });
+      document.body.append(dlg);
+      dlg.showModal();
+    });
+  }
+
+  // ---------- Здобич на полі бою (save.fieldLoot) ----------
+  // Поки герой б'ється на одній локації, усе здобуте складається; при виході з неї
+  // (перед дорогою або після загибелі) показується окреме вікно з підсумком.
+  function fieldLootAdd(save, add) {
+    const locId = save.location.map;
+    let f = save.fieldLoot;
+    if (!f || f.loc !== locId) f = save.fieldLoot = { loc: locId, battles: 0, wins: 0, exp: 0, gold: 0, items: {}, lost: {} };
+    f.battles++;
+    if (add.win) f.wins++;
+    f.exp += add.exp || 0;
+    f.gold += add.gold || 0;
+    for (const [k, n] of Object.entries(add.items || {})) f.items[k] = (f.items[k] || 0) + n;
+    for (const [k, n] of Object.entries(add.lost || {})) f.lost[k] = (f.lost[k] || 0) + n;
+  }
+  // Показати підсумок і очистити. Повертає Promise (виконується після закриття вікна або одразу, якщо нічого немає)
+  async function showFieldLoot(save) {
+    const f = save.fieldLoot;
+    if (!f) return;
+    delete save.fieldLoot;
+    await RPG.saveGame(save).catch(e => console.error(e));
+    if (!f.battles) return;
+    const name = RPG.LOCATIONS[f.loc]?.name || f.loc;
+    const lines = [`Боїв: ${f.battles}, перемог: ${f.wins}.`, `Досвід: +${fmtNum(f.exp)} EXP · Золото: +${fmtNum(f.gold)}`];
+    const items = Object.entries(f.items);
+    const list = el("ul", "notice-list");
+    for (const [k, n] of items) list.append(el("li", null, n > 1 ? `${k} ×${n}` : k));
+    lines.push(items.length ? "Речі й ресурси:" : "Речей і ресурсів не здобуто.");
+    if (items.length) lines.push(list);
+    const lost = Object.entries(f.lost);
+    if (lost.length) lines.push(`Не вмістилось в інвентар і пропало: ${lost.map(([k, n]) => n > 1 ? `${k} ×${n}` : k).join(", ")}.`);
+    await showNotice(`Здобич: ${name}`, lines, "is-loot");
+  }
+
   // ---------- Дорога: блокування вкладок і банер з відліком ----------
   const TRAVEL_HREFS = ["character.html", "inventory.html", "maps.html"];
   function blockLink(ev) {
@@ -650,6 +699,7 @@
     if (save.location.map === "city" && distParam && distParam !== (save.location.district || "south")) target = distParam;
     else if (locParam && RPG.LOCATIONS[locParam] && save.location.map !== locParam && locParam !== "city") target = locParam;
     if (target) {
+      if (save.fieldLoot) await showFieldLoot(save);
       const r = RPG.startTravel(save, target);
       if (r.ok) {
         await RPG.saveGame(save);
@@ -659,6 +709,7 @@
       enterError = r.reason;
     }
     if (locParam || distParam) history.replaceState(null, "", "game.html");
+    if (save.fieldLoot && save.fieldLoot.loc !== save.location.map) setTimeout(() => showFieldLoot(save), 0);
     const locId = save.location.map;
     const locData = RPG.getLocation(locId);
     $("location-name").textContent = locData.name;
@@ -669,6 +720,15 @@
     document.body.dataset.loc = locId;
 
     const combat = RPG.isCombatLocation(locId);
+    // Телефон, бойова локація: кнопка локації (перехід на мапу) — над портретами героя й ворога
+    if (combat) {
+      const locLink = document.querySelector("a.location");
+      const home = locLink.parentElement, battleBox = document.querySelector(".battle");
+      const phone = window.matchMedia("(max-width: 700px)");
+      const place = () => { if (phone.matches) battleBox.before(locLink); else home.prepend(locLink); };
+      place();
+      phone.addEventListener("change", place);
+    }
     $("enemy-col").hidden = !combat;
     $("combat-ui").hidden = !combat;
     $("place-panel").hidden = combat;
@@ -1431,7 +1491,6 @@
     const rerollBtn = $("reroll-btn");
     const saveBtn = $("save-btn");
     const logBox = $("battle-log");
-    const arena = $("arena");
     let foes = [];              // вороги наступного бою: [{ id, champion }]
     let queueMember = 0;        // чию чергу дій налаштовуємо (0 — головний герой)
     const fighters = () => RPG.aliveMembers(save);
@@ -1569,10 +1628,13 @@
       else renderPlace();
     }
 
-    function setArena(title, lines) {
-      arena.innerHTML = "";
-      arena.append(el("div", "arena-title", title));
-      for (const line of lines || []) arena.append(el("div", "arena-line", line));
+    // Колишнє поле «Готові до бою»: заголовок і рядки тепер пишуться в журнал бою
+    function setArena(title, lines, state = "") {
+      const li = el("li", "log-title" + (state ? " is-" + state : ""));
+      li.append(el("span", "log-mark", state === "win" ? "★" : state === "lose" ? "✝" : "⚑"), el("span", "log-text", title));
+      logBox.append(li);
+      for (const line of lines || []) addLogLine({ who: "info", text: line });
+      logBox.scrollTop = logBox.scrollHeight;
     }
 
     const foesText = () => foes.map((f, i) => { const e = curEnemy(i); return `${e.name} (рівень ${e.level})`; }).join(", ");
@@ -1586,8 +1648,8 @@
       if (foes.some((f, i) => curEnemy(i).boss)) lines.push("Це БОС! Кожен третій свій хід він застосовує особливу навичку.");
       if (!fighters().length) lines.push("Усі герої групи полягли — помоліться за них у Храмі.");
       lines.push("Натисніть «Почати бій» або пошукайте іншого суперника.");
-      setArena(anyChampion() ? "Чемпіон!" : "Готові до бою", lines);
-      arena.dataset.state = anyChampion() ? "champion" : "ready";
+      logBox.innerHTML = "";
+      setArena(anyChampion() ? "Чемпіон!" : "Готові до бою", lines, anyChampion() ? "champion" : "ready");
     }
 
     // Рядок журналу: позначка «хто діє» + текст, числа виділені
@@ -1680,6 +1742,9 @@
       // уникнути поразки, просто закривши сторінку під час показу бою
       const summary = [];
       const levelLines = [];
+      const got = {}, lost = {};          // речі цього бою (для підсумку поля бою)
+      const freeBefore = RPG.invFree(save);
+      let battleGold = 0, battleExp = 0;
       result.heroes.forEach((h, k) => { team[k].character.hp = h.hp; team[k].character.mp = h.mp; });
       let deaths = null;
       if (result.win) {
@@ -1694,18 +1759,24 @@
           RPG.applyReward(save, 0, loot);                // золото й речі — у спільний інвентар
           gold += loot.gold || 0;
           for (const it of loot.items) {
-            if (it.refs) it.refs.forEach(ref => summary.push(RPG.itemFullName(ref)));
-            else summary.push(`${RPG.ITEMS[it.id].name} ×${it.qty}`);
+            if (it.refs) it.refs.forEach(ref => { const n = RPG.itemFullName(ref); summary.push(n); got[n] = (got[n] || 0) + 1; });
+            else if (it.got) { const n = RPG.ITEMS[it.id].name; summary.push(`${n} ×${it.got}`); got[n] = (got[n] || 0) + it.got; }
+            if (it.lost) { const n = RPG.ITEMS[it.id].name; lost[n] = (lost[n] || 0) + it.lost; }
           }
           save.character.kills = (save.character.kills || 0) + 1;
           summary.push(...RPG.questOnKill(save, e.id).map(s => "Завдання: " + s));
           if (e.champion) {
             // Трофей чемпіона: одна річ (легендарна 5% → епічна 25% → магічна 50%)
             const drop = RPG.rollChampionDrop(e.id);
-            if (drop) {
+            if (drop && !RPG.invFree(save)) {
+              const n = RPG.itemFullName(RPG.makeItem(drop.id, drop.r));
+              lost[n] = (lost[n] || 0) + 1;
+              summary.push(`Трофей чемпіона: ${n} — пропав, інвентар повний!`);
+            } else if (drop) {
               const ref = RPG.makeItem(drop.id, drop.r);
               save.inventory.push(ref);
               summary.push(`Трофей чемпіона: ${RPG.itemFullName(ref)}`);
+              got[RPG.itemFullName(ref)] = (got[RPG.itemFullName(ref)] || 0) + 1;
             } else {
               summary.push("Трофей чемпіона: цього разу нічого");
             }
@@ -1726,17 +1797,20 @@
           ? `+${expEach} EXP кожному, хто вижив (усього ${pool}, бонус групи +${(team.length - 1) * 10}%)`
           : `+${totalExp} EXP`);
         if (gold) summary.splice(1, 0, `+${gold} золота`);
+        if (Object.keys(lost).length) summary.push(`Не вмістилось в інвентар: ${Object.entries(lost).map(([k, n]) => `${k} ×${n}`).join(", ")}`);
+        battleGold = gold;
+        battleExp = group ? expEach : totalExp;
       } else if (!result.draw) {
         // Уся група загинула: штраф кожному, відродження в Храмі
         deaths = team.map(ms => ({ ms, d: RPG.applyDeath(ms, result.enemyIds) }));
         RPG.pray(save);   // ті, хто поліг раніше, теж прокидаються в Храмі
       }
+      if (!result.draw || result.win) fieldLootAdd(save, { win: result.win, exp: battleExp, gold: battleGold, items: got, lost });
       await RPG.saveGame(save).catch(e => console.error(e));
 
       // Показ бою
       const stepByStep = RPG.getSettings().battleView !== "result";
-      setArena(`${team.map(ms => ms.character.name).join(", ")} проти: ${foesText()}`, ["Бій триває…"]);
-      arena.dataset.state = "fight";
+      setArena(`${team.map(ms => ms.character.name).join(", ")} проти: ${foesText()}`, [], "fight");
       lastSnap = null;
       if (stepByStep) {
         for (const ev of result.events) {
@@ -1757,10 +1831,11 @@
           (d.levelDown ? `, рівень знижено до ${d.newLevel}${d.pointsLost ? ` (−${d.pointsLost} очок атрибутів)` : ""}` : "") +
           (d.lostItems.length ? `, втрачено: ${d.lostItems.map(ref => RPG.itemFullName(ref)).join(", ")}` : ""));
         lines.push(`${group ? "Уся група відродилася" : "Ви відродилися"} в Храмі з ${Math.round(RPG.RESPAWN_HP_PCT * 100)}% здоров'я і без мани.`);
-        setArena(group ? "Група загинула" : "Загибель", lines);
-        arena.dataset.state = "lose";
-        addLogLine({ who: "info", text: lines.join(" ") });
-        arena.append(link("Прокинутися в Храмі", "game.html"));
+        setArena(group ? "Група загинула" : "Загибель", lines, "lose");
+        const wake = el("li", "log-action");
+        wake.append(link("Прокинутися в Храмі", "game.html"));
+        logBox.append(wake);
+        logBox.scrollTop = logBox.scrollHeight;
         renderHeroBars(save);
         renderQuickSlots();
         document.body.classList.remove("is-fighting");
@@ -1774,23 +1849,28 @@
         const lines = [summary.join(" · ")];
         for (const l of levelLines) lines.push(l + " Здоров'я та мана відновлені, є нові вільні очки атрибутів (сторінка «Персонаж»).");
         lines.push(`Переможено ворогів: ${save.character.kills}`);
-        setArena("Перемога!", lines);
-        arena.dataset.state = "win";
-        addLogLine({ who: "info", text: "Нагорода: " + summary.join(", ") });
+        setArena("Перемога!", lines, "win");
       } else {
-        setArena(foes.length > 1 ? "Вороги втекли" : "Ворог утік", ["Нагороди немає."]);
-        arena.dataset.state = "draw";
+        setArena(foes.length > 1 ? "Вороги втекли" : "Ворог утік", ["Нагороди немає."], "draw");
       }
 
       // Наступні суперники
       nextEnemy();
-      arena.append(el("div", "arena-line", `Далі на вас чекає: ${foesText()}.` +
-        (anyChampion() ? " Серед них рідкісний ЧЕМПІОН!" : "")));
+      addLogLine({ who: "info", text: `Далі на вас чекає: ${foesText()}.` + (anyChampion() ? " Серед них рідкісний ЧЕМПІОН!" : "") });
       renderEnemy();
 
       renderAll();
       setFighting(false);
       if (!fighters().length) startBtn.disabled = true;
+      // Інвентар заповнився (або щось уже пропало) — окреме повідомлення, щоб не пропустити
+      if (result.win && (Object.keys(lost).length || (freeBefore > 0 && !RPG.invFree(save)))) {
+        showNotice("Інвентар заповнено!", [
+          `Усі ${RPG.INV_SIZE} клітинок інвентаря зайняті. Нові речі та ресурси, яким немає місця, пропадатимуть — ` +
+          "доповнюються лише неповні стопки.",
+          Object.keys(lost).length ? `Уже пропало: ${Object.entries(lost).map(([k, n]) => `${k} ×${n}`).join(", ")}.` : "",
+          "Продайте зайве торговцю або покладіть у скриню в Домівці."
+        ].filter(Boolean), "is-warn");
+      }
     }
 
     // Не даємо піти зі сторінки посеред показу бою без попередження
@@ -2098,7 +2178,8 @@
         : "Скриня стоїть у Домівці — тут її можна лише переглянути.";
       gridOf(ms.chest, 24, "chest", $("chest-grid"));
 
-      $("gold").textContent = `Золото: ${fmtNum(ms.character.gold)}`;
+      $("gold").textContent = `Клітинок: ${ms.inventory.length}/${RPG.INV_SIZE} · Золото: ${fmtNum(ms.character.gold)}`;
+      $("gold").classList.toggle("is-full", !RPG.invFree(ms));
       renderDesc();
     }
 
@@ -2431,6 +2512,8 @@
 
     async function go(id) {
       if (RPG.isTraveling(save)) return;
+      const can = RPG.canGo(save, region, id);
+      if (can.ok && RPG.route(region, here.spot, id) && save.fieldLoot) await showFieldLoot(save);   // здобич поля бою — перед дорогою
       const r = RPG.startTravel(save, id);
       if (!r.ok) { selected = id; render(); showMsg($("map-msg"), r.reason, true); return; }
       await RPG.saveGame(save);

@@ -587,6 +587,29 @@ function addRefToList(list, ref) {
 
 function countItem(save, id)          { return countInList(save.inventory, id); }
 function addItem(save, id, qty = 1)    { return addToList(save.inventory, id, qty); }
+
+// ---------- Місткість інвентаря ----------
+// 36 клітинок. Коли вільних немає — трофеї, яким нема місця, пропадають (стопки ще доповнюються),
+// а купити чи взяти зі скрині не вийде. Старі сейви з понад 36 речами нічого не втрачають.
+const INV_SIZE = 36;
+function invFree(save) {
+  return Math.max(0, INV_SIZE - save.inventory.length);
+}
+// Скільки штук id ще влізе в інвентар
+function fitQty(save, id, qty) {
+  const item = ITEMS[id];
+  if (!item || qty <= 0) return 0;
+  const free = invFree(save);
+  if (RPG.hasRarity(id) || !item.stackable) return Math.min(qty, free);
+  const max = item.maxStack || 99;
+  let room = free * max;
+  for (const e of save.inventory) if (e.id === id && !e.r && e.qty < max) room += max - e.qty;
+  return Math.min(qty, room);
+}
+function fullText(save, id, qty) {
+  const n = fitQty(save, id, qty);
+  return n ? `Інвентар майже повний: влізе лише ${n} шт.` : "Інвентар повний — звільніть місце (продайте речі або покладіть у скриню вдома).";
+}
 function removeItem(save, id, qty = 1) { return removeFromList(save.inventory, id, qty); }
 
 // ---------- Скриня (лише в Домівці) ----------
@@ -609,6 +632,7 @@ function takeFromChest(save, chestIndex) {
   if (!isAtHome(save)) return { ok: false, reason: "Скриня стоїть у Домівці." };
   const entry = save.chest[chestIndex];
   if (!entry) return { ok: false, reason: "Порожня клітинка." };
+  if (entry.r ? !invFree(save) : fitQty(save, entry.id, entry.qty) < entry.qty) return { ok: false, reason: "Інвентар повний — звільніть місце." };
   save.chest.splice(chestIndex, 1);
   addRefToList(save.inventory, entry);
   return { ok: true, id: entry.id, qty: entry.qty };
@@ -776,6 +800,7 @@ function buyFromTrade(save, id, qty = 1) {
   if (!(qty >= 1 && qty <= BUY_MAX)) return { ok: false, reason: `Вкажіть кількість від 1 до ${BUY_MAX}.` };
   const unit = tradePrice(id), price = unit * qty;
   if (save.character.gold < price) return { ok: false, reason: `Не вистачає золота (потрібно ${price}).` };
+  if (fitQty(save, id, qty) < qty) return { ok: false, reason: fullText(save, id, qty) };
   save.character.gold -= price;
   addItem(save, id, qty);
   return { ok: true, price, qty, unit };
@@ -806,6 +831,7 @@ function buyItem(save, id, qty = 1) {
   const unit = RPG.shopSellPrice(id);
   const price = unit * qty;
   if (save.character.gold < price) return { ok: false, reason: `Не вистачає золота (потрібно ${price}).` };
+  if (fitQty(save, id, qty) < qty) return { ok: false, reason: fullText(save, id, qty) };
   save.character.gold -= price;
   addItem(save, id, qty);
   return { ok: true, price, qty, unit };
@@ -829,25 +855,30 @@ function sellItem(save, invIndex, qty = 1) {
 
 // ---------- Нагорода за бій ----------
 
+// Для кожної речі луту: it.got — скільки підібрано, it.lost — скільки пропало (не було місця)
 function applyReward(save, exp, loot) {
   save.character.gold += loot?.gold || 0;
   for (const it of loot?.items || []) {
+    const got = fitQty(save, it.id, it.qty);
+    it.got = got;
+    it.lost = it.qty - got;
     if (RPG.hasRarity(it.id)) {
       // зброя/броня: рідкість кожної речі визначається окремо (з лічильником удачі)
       it.refs = [];
-      for (let i = 0; i < it.qty; i++) {
+      for (let i = 0; i < got; i++) {
         const ref = RPG.makeItem(it.id, RPG.rollRarity(save));
         save.inventory.push(ref);
         it.refs.push(ref);
       }
-    } else {
-      addItem(save, it.id, it.qty);
+    } else if (got) {
+      addItem(save, it.id, got);
     }
   }
   return addExp(save, exp);   // масив нових рівнів
 }
 
 Object.assign(RPG, {
+  INV_SIZE, invFree, fitQty,
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,

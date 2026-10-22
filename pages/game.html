@@ -69,9 +69,8 @@
 
         <!-- Бойові локації -->
         <div class="stack" id="combat-ui" hidden>
-          <div class="wf wf-text arena" id="arena" aria-live="polite"></div>
-
-          <ol class="log" id="battle-log" aria-label="Журнал бою"></ol>
+          <!-- Журнал бою: тут і готовність до бою, і хід бою, і нагорода (game.js → setArena / addLogLine) -->
+          <ol class="log" id="battle-log" aria-label="Журнал бою" aria-live="polite"></ol>
 
           <!-- Чию чергу дій налаштовуємо (якщо в групі кілька героїв) -->
           <div class="row member-tabs" id="queue-member" hidden></div>
