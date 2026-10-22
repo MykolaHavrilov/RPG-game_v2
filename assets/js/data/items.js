@@ -559,7 +559,7 @@ const ITEMS = {
 
   // ---------- Квестові предмети: ключі від данжів (data/enemies.js → DUNGEONS) ----------
   // quest: true — не продається торговцю. pocket: "keys" — лежить не в інвентарі,
-  // а в окремій кишені ключів (dungeon.js, до 1000 кожного виду). Картинки немає.
+  // а в окремій кишені для ключів (dungeon.js, до 1000 кожного виду). Картинки немає.
   key_cave_secret: {
     name: "Ключ «Таємниця печери»",
     type: "quest", quest: true, pocket: "keys", price: 0, noShop: true,
