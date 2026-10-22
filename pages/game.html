@@ -69,6 +69,9 @@
 
         <!-- Бойові локації -->
         <div class="stack" id="combat-ui" hidden>
+          <!-- Локація з данжем: «Обстеження» / данж (game.js → renderMode, dungeon.js) -->
+          <div class="row mode-tabs" id="mode-tabs" hidden></div>
+          <div class="panel stack dungeon-panel" id="dungeon-panel" hidden></div>
           <!-- Журнал бою: тут і готовність до бою, і хід бою, і нагорода (game.js → setArena / addLogLine) -->
           <ol class="log" id="battle-log" aria-label="Журнал бою" aria-live="polite"></ol>
 
@@ -84,6 +87,7 @@
           <div class="row actions">
             <button class="wf wf-button" id="start-btn" type="button">Почати бій</button>
             <button class="wf wf-link" id="reroll-btn" type="button">Шукати іншого ворога</button>
+            <button class="wf wf-link" id="leave-btn" type="button" hidden>Покинути данж</button>
           </div>
         </div>
 
@@ -120,6 +124,7 @@
   <script src="../assets/js/rarity.js" defer></script>
   <script src="../assets/js/gearscore.js" defer></script>
   <script src="../assets/js/monstergear.js" defer></script>
+  <script src="../assets/js/dungeon.js" defer></script>
   <script src="../assets/js/save.js" defer></script>
   <script src="../assets/js/character.js" defer></script>
   <script src="../assets/js/party.js" defer></script>

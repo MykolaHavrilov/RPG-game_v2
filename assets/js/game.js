@@ -492,7 +492,7 @@
   // ---------- Опис предмета для спливаючого вікна та інвентаря ----------
   const TYPE_NAMES = {
     weapon: "Зброя", armor: "Броня", accessory: "Прикраса", consumable: "Зілля",
-    material: "Матеріал", offhand: "Ліва рука", shield: "Щит"
+    material: "Матеріал", offhand: "Ліва рука", shield: "Щит", quest: "Квестовий предмет"
   };
   const RARITY_NAMES = {
     broken: "зламана", common: "звичайна", magic: "магічна", epic: "епічна", legendary: "легендарна"
@@ -761,6 +761,10 @@
     document.querySelector(".battle").classList.toggle("no-enemy", !combat);
 
     let fighting = false;
+    // Данж локації (dungeon.js): режим «explore» — звичайні бої, «dungeon» — данж
+    const dungeonInfo = combat ? RPG.locationDungeon(locId) : null;
+    let mode = dungeonInfo && RPG.activeDungeon(save) ? "dungeon" : "explore";
+    const dungeonOn = () => mode === "dungeon" && !!RPG.activeDungeon(save);
     if (enterError) setTimeout(() => showMsg(msg, enterError + " Ви залишились тут.", true), 0);
 
     function renderQuickSlots() {
@@ -1530,8 +1534,71 @@
     // Від 1 до межі за середнім рівнем групи — випадково (RPG.enemyGroupCap)
     let champWarn = false;      // показати вікно-попередження про чемпіона
     function nextEnemy() {
+      if (mode === "dungeon") {
+        // У данжі вороги задані наперед; поки ворота зачинені — показуємо боса
+        foes = dungeonOn() ? RPG.dungeonSpecs(save) : [{ id: dungeonInfo.boss, champion: false }];
+        RPG.equipFoes(foes, fighters());
+        champWarn = false;
+        return;
+      }
       foes = RPG.rollEnemyGroup(locId, save.character.level, RPG.enemyGroupCap(fighters()), fighters());
       champWarn = foes.some(f => f.champion);
+    }
+
+    // Перемикач «Обстеження / Данж» і панель воріт данжу
+    const leaveBtn = $("leave-btn");
+    function renderMode() {
+      const tabs = $("mode-tabs"), panel = $("dungeon-panel");
+      if (!dungeonInfo) { tabs.hidden = panel.hidden = true; return; }
+      const active = RPG.activeDungeon(save);
+      tabs.hidden = false;
+      tabs.innerHTML = "";
+      const keys = RPG.keyCount(save, dungeonInfo.id);
+      [["explore", dungeonInfo.explore], ["dungeon", `${dungeonInfo.name} · ключів: ${keys}`]].forEach(([m, text]) => {
+        const b = button(text, "wf member-tab " + (m === mode ? "wf-button" : "wf-link"), () => {
+          if (fighting || m === mode) return;
+          if (active && m === "explore") { showMsg(msg, "Спершу пройдіть або покиньте данж.", true); return; }
+          mode = m;
+          nextEnemy();
+          renderMode();
+          renderEnemy();
+          showReady();
+        });
+        if (m === mode) b.setAttribute("aria-pressed", "true");
+        tabs.append(b);
+      });
+
+      const inGate = mode === "dungeon" && !active;
+      panel.hidden = !inGate;
+      rerollBtn.hidden = mode === "dungeon";
+      startBtn.hidden = inGate;
+      leaveBtn.hidden = !(mode === "dungeon" && active);
+      startBtn.textContent = active && mode === "dungeon" ? `Почати бій ${active.stage} з ${active.stages}` : "Почати бій";
+      if (!inGate) return;
+      panel.innerHTML = "";
+      panel.append(el("h3", null, `Данж «${dungeonInfo.name}»`), el("p", "note", dungeonInfo.description));
+      panel.append(el("p", "note",
+        `3 бої поспіль: 1) ${RPG.DUNGEON_POOL_TEXT(dungeonInfo, 1)}; 2) ${RPG.DUNGEON_POOL_TEXT(dungeonInfo, 2)}; ` +
+        `3) бос «${RPG.ENEMIES[dungeonInfo.boss].name}». Між боями й під час них зілля не діють — ` +
+        "лише навички лікування та відновлення. Досвід і здобич — тільки за перемогу над босом."));
+      panel.append(el("p", "note" + (keys ? "" : " is-neg"),
+        `${RPG.ITEMS[dungeonInfo.key].name}: ${keys}. Одна спроба — один ключ (зникає при вході). ` +
+        `Ключ можна знайти під час «${dungeonInfo.explore}» — шанс ${Math.round(dungeonInfo.keyChance * 100)}% з кожного ворога.`));
+      const open = button("Відчинити ворота (−1 ключ)", "wf wf-button", async () => {
+        if (fighting) return;
+        if (!confirm(`Відчинити ворота? ${RPG.ITEMS[dungeonInfo.key].name} зникне, навіть якщо данж не вдасться пройти.`)) return;
+        const r = RPG.openDungeon(save, dungeonInfo.id);
+        if (!r.ok) { showMsg(msg, r.reason, true); return; }
+        await RPG.saveGame(save);
+        showMsg(msg, "Ворота відчинено. Бій 1 з 3 — зілля тут не діють.");
+        nextEnemy();
+        renderMode();
+        renderEnemy();
+        showReady();
+        renderQuickSlots();
+      });
+      open.disabled = !keys || !fighters().length;
+      panel.append(open);
     }
     // Вікно «Увага, чемпіон!» — з'являється, коли серед ворогів є чемпіон
     function showChampionWarning() {
@@ -1674,6 +1741,22 @@
     const foesText = () => foes.map((f, i) => { const e = curEnemy(i); return `${e.name} (рівень ${e.level})`; }).join(", ");
 
     function showReady() {
+      if (mode === "dungeon") {
+        const a = RPG.activeDungeon(save);
+        logBox.innerHTML = "";
+        if (!a) {
+          setArena(`Данж «${dungeonInfo.name}»`, [`Ворота зачинені. Попереду чекає бос: ${foesText()}.`,
+            "Відчиніть ворота ключем (панель вище)."], "ready");
+          return;
+        }
+        const lines = [`Бій ${a.stage} з ${a.stages}: ${foesText()}.`,
+          "Зілля в данжі не діють — лікують лише навички та відновлення."];
+        if (a.stage < a.stages) lines.push("За цей бій нагороди немає — досвід і здобич дає лише бос.");
+        else lines.push("Це БОС! Кожен третій свій хід він застосовує особливу навичку. Перемога — нагорода за весь данж.");
+        if (!fighters().length) lines.push("Усі герої групи полягли.");
+        setArena(a.stage < a.stages ? `Данж: бій ${a.stage} з ${a.stages}` : "Данж: бос!", lines, "ready");
+        return;
+      }
       const lvl = save.character.level;
       const strong = foes.some((f, i) => curEnemy(i).level >= lvl + 2);
       const lines = [`Попереду: ${foesText()}.${strong ? " Обережно: серед них є значно сильніші!" : ""}`];
@@ -1764,6 +1847,9 @@
       if (fighting) return;
       const team = fighters();
       if (!team.length) { showMsg(msg, "Усі герої групи полягли — помоліться за них у Храмі.", true); return; }
+      if (mode === "dungeon" && !dungeonOn()) { showMsg(msg, "Спершу відчиніть ворота данжу ключем.", true); return; }
+      const dun = dungeonOn() ? RPG.activeDungeon(save) : null;   // бій у данжі: { stage, stages, ... }
+      const rewarded = !dun || dun.stage === dun.stages;          // нагорода — лише за боса данжу
       setFighting(true);
       renderEnemy();
       logBox.innerHTML = "";
@@ -1783,7 +1869,11 @@
       let battleGold = 0, battleExp = 0;
       result.heroes.forEach((h, k) => { team[k].character.hp = h.hp; team[k].character.mp = h.mp; });
       let deaths = null;
-      if (result.win) {
+      if (result.win && !rewarded) {
+        result.heroes.forEach((h, k) => {
+          if (h.dead) { RPG.markFallen(team[k]); summary.push(`${team[k].character.name} полягає (відродіть у Храмі)`); }
+        });
+      } else if (result.win) {
         // Полеглі в переможному бою лишаються мертвими до молитви в Храмі
         result.heroes.forEach((h, k) => {
           if (h.dead) { RPG.markFallen(team[k]); summary.push(`${team[k].character.name} полягає (відродіть у Храмі)`); }
@@ -1836,10 +1926,20 @@
         if (Object.keys(lost).length) summary.push(`Не вмістилось в інвентар: ${Object.entries(lost).map(([k, n]) => `${k} ×${n}`).join(", ")}`);
         battleGold = gold;
         battleExp = group ? expEach : totalExp;
+        // «Обстеження» локації з данжем: шанс знайти ключ з кожного переможеного ворога
+        const keys = RPG.rollKeyDrops(save, locId, result.enemyIds);
+        if (keys.got) { summary.push(`${keys.name} ×${keys.got}!`); got[keys.name] = (got[keys.name] || 0) + keys.got; }
+        if (keys.lost) { summary.push(`${keys.name} — пропав, інвентар повний!`); lost[keys.name] = (lost[keys.name] || 0) + keys.lost; }
       } else if (!result.draw) {
         // Уся група загинула: штраф кожному, відродження в Храмі
         deaths = team.map(ms => ({ ms, d: RPG.applyDeath(ms, result.enemyIds) }));
         RPG.pray(save);   // ті, хто поліг раніше, теж прокидаються в Храмі
+      }
+      // Данж: перемога — наступний бій (або кінець), поразка чи втеча ворогів — данж провалено
+      let dunNext = null;
+      if (dun) {
+        if (result.win) dunNext = RPG.advanceDungeon(save);
+        else RPG.leaveDungeon(save);
       }
       if (!result.draw || result.win) fieldLootAdd(save, { win: result.win, exp: battleExp, gold: battleGold, items: got, lost });
       await RPG.saveGame(save).catch(e => console.error(e));
@@ -1881,18 +1981,31 @@
         return;
       }
 
-      if (result.win) {
+      if (dun && result.win && !dunNext.done) {
+        const lines = [`Бій ${dun.stage} з ${dun.stages} виграно. Нагороди за нього немає — лише за боса.`];
+        if (summary.length) lines.push(summary.join(" · "));
+        lines.push("Зілля не діють: відновлюйтесь навичками або дочекайтеся регенерації перед наступним боєм.");
+        setArena(`Данж: бій ${dun.stage} з ${dun.stages} — перемога`, lines, "win");
+      } else if (result.win) {
         const lines = [summary.join(" · ")];
         for (const l of levelLines) lines.push(l + " Здоров'я та мана відновлені, є нові вільні очки атрибутів (сторінка «Персонаж»).");
         lines.push(`Переможено ворогів: ${save.character.kills}`);
-        setArena("Перемога!", lines, "win");
+        setArena(dun ? `Данж «${dun.name}» пройдено!` : "Перемога!", lines, "win");
+      } else if (dun) {
+        setArena(foes.length > 1 ? "Вороги втекли — данж провалено" : "Ворог утік — данж провалено",
+          ["Ворота зачинилися. Нагороди немає, ключ використано."], "draw");
       } else {
         setArena(foes.length > 1 ? "Вороги втекли" : "Ворог утік", ["Нагороди немає."], "draw");
       }
 
       // Наступні суперники
       nextEnemy();
-      addLogLine({ who: "info", text: `Далі на вас чекає: ${foesText()}.` + (anyChampion() ? " Серед них рідкісний ЧЕМПІОН!" : "") });
+      renderMode();
+      const nextDun = dungeonOn() ? RPG.activeDungeon(save) : null;
+      addLogLine({ who: "info", text: nextDun
+        ? `Далі — бій ${nextDun.stage} з ${nextDun.stages}: ${foesText()}.`
+        : mode === "dungeon" ? `Щоб повторити данж, потрібен новий ключ. Бос: ${foesText()}.`
+        : `Далі на вас чекає: ${foesText()}.` + (anyChampion() ? " Серед них рідкісний ЧЕМПІОН!" : "") });
       renderEnemy();
 
       renderAll();
@@ -1912,7 +2025,10 @@
     // Не даємо піти зі сторінки посеред показу бою без попередження
     document.querySelectorAll("nav a, a.wf").forEach(a => {
       a.addEventListener("click", ev => {
-        if (fighting && !confirm("Бій ще показується. Результат уже збережено. Вийти?")) ev.preventDefault();
+        if (fighting && !confirm("Бій ще показується. Результат уже збережено. Вийти?")) { ev.preventDefault(); return; }
+        // Вихід із локації посеред данжу — данж втрачено (dungeon.js скасує його на іншій локації)
+        if (!fighting && RPG.activeDungeon(save) && a.getAttribute("href") === "maps.html" &&
+            !confirm("Ви в данжі. Якщо підете з локації — данж буде втрачено разом із ключем. Піти?")) ev.preventDefault();
       });
     });
 
@@ -1928,11 +2044,23 @@
     if (combat) {
       startBtn.addEventListener("click", startBattle);
       rerollBtn.addEventListener("click", () => {
-        if (fighting) return;
+        if (fighting || mode === "dungeon") return;
         nextEnemy();
         renderEnemy();
         showReady();
       });
+      leaveBtn.addEventListener("click", async () => {
+        if (fighting || !RPG.activeDungeon(save)) return;
+        if (!confirm("Покинути данж? Ключ уже використано, прогрес буде втрачено.")) return;
+        RPG.leaveDungeon(save);
+        await RPG.saveGame(save);
+        nextEnemy();
+        renderMode();
+        renderEnemy();
+        showReady();
+        showMsg(msg, "Ви покинули данж.");
+      });
+      renderMode();
       renderEnemy();
       showReady();
       if (!fighters().length) startBtn.disabled = true;
@@ -2601,7 +2729,8 @@
       details.append(banner);
       details.append(el("p", "note", p.desc));
       if (p.loc && p.loc.type === "combat") {
-        const enemies = (p.loc.enemies || []).map(e => `${RPG.getEnemy(e).name} (рів. ${RPG.getEnemy(e).level})`).join(", ");
+        const enemies = (p.loc.enemies || []).map(e => `${RPG.getEnemy(e).name} (рів. ${RPG.getEnemy(e).level})` +
+          (p.loc.dungeon && RPG.ENEMIES[e]?.boss ? ` — лише в данжі «${RPG.DUNGEONS[p.loc.dungeon].name}»` : "")).join(", ");
         details.append(el("p", "note", "Вороги: " + enemies));
       }
       const tr = RPG.travelState(save);

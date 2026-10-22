@@ -170,10 +170,15 @@
     return { who: "hero", text: `${H.name} — «${sk.name}» (−${sk.mp} MP): ${RPG.describeSkill(id, lvl).split(" · ")[0]}`, crit: false };
   }
 
-  function castHeal(H, sk, lvl) {
-    const before = H.hp;
-    H.hp = Math.min(H.base.hp, H.hp + Math.round(H.base.hp * RPG.skillValue(sk.healPct, lvl) / 100));
-    return { who: "hero", text: `${H.name} — «${sk.name}» (−${sk.mp} MP): +${H.hp - before} HP`, crit: false, heal: true };
+  // Лікування: targets — кого лікувати (за замовчуванням себе). Кожен отримує % від СВОГО макс. HP
+  function castHeal(H, sk, lvl, targets = [H]) {
+    const pct = RPG.skillValue(sk.healPct, lvl) / 100;
+    const parts = targets.map(T => {
+      const before = T.hp;
+      T.hp = Math.min(T.base.hp, T.hp + Math.round(T.base.hp * pct));
+      return targets.length === 1 && T === H ? `+${T.hp - before} HP` : `${T.name} +${T.hp - before} HP`;
+    });
+    return { who: "hero", text: `${H.name} — «${sk.name}» (−${sk.mp} MP): ${parts.join(", ")}`, crit: false, heal: true };
   }
 
   function basicAttack(H, E) {
@@ -290,6 +295,48 @@
     const foeNames = foes.map(f => `«${f.enemy.name}» (рівень ${f.enemy.level})${f.enemy.boss ? " — БОС" : ""}`).join(", ");
     push({ who: "info", text: `Бій починається: ${heroNames} проти ${foeNames}. Відстань — ${START_DISTANCE}.` });
 
+    // Хто вже походив у поточному раунді (для «Молитви зцілення» жерця)
+    let roundActed = new Set();
+    const hurt = h => h.hp > 0 && h.hp < h.base.hp;
+    const mostWounded = () => aliveH().filter(hurt).sort((a, b) => a.hp / a.base.hp - b.hp / b.base.hp)[0] || null;
+
+    // Лікувальна навичка героя. Повертає false, якщо жрець вирішив чекати
+    function heroHeal(H, act) {
+      const area = act.sk.area || "self";
+      let targets = [H];
+      if (area === "near") targets = aliveH().filter(a => Math.abs(a.pos - H.pos) <= 1);
+      else if (area === "group") targets = aliveH();
+      else if (area === "wounded") {
+        const w = mostWounded();
+        if (w) targets = [w];
+        else if (aliveE().some(E => !roundActed.has(E))) {
+          // Усі здорові, а вороги ще не ходили — чекаємо першого удару
+          H.healWait = act;
+          push({ who: "hero", move: true, text: `${H.name} готує «${act.sk.name}» і чекає удару ворога`, crit: false });
+          return false;
+        }
+      }
+      H.mp -= act.sk.mp;
+      H.qi++;
+      push(castHeal(H, act.sk, act.lvl, targets));
+      return true;
+    }
+
+    // Після удару ворога: жрець, що чекав, одразу лікує пораненого
+    function answerWaitingHealers() {
+      for (const H of aliveH()) {
+        const act = H.healWait;
+        if (!act) continue;
+        const w = mostWounded();
+        if (!w) continue;
+        delete H.healWait;
+        if (H.mp < act.sk.mp || H.stun > 0) continue;
+        H.mp -= act.sk.mp;
+        H.qi++;
+        push(castHeal(H, act.sk, act.lvl, [w]));
+      }
+    }
+
     // --- Хід героя ---
     function heroTurn(H) {
       if (H.stun > 0) {
@@ -298,10 +345,11 @@
         return;
       }
       const act = resolveAction(H);
-      if (act.type === "skill" && (act.sk.kind === "buff" || act.sk.kind === "heal")) {
+      if (act.type === "skill" && act.sk.kind === "heal") { heroHeal(H, act); return; }
+      if (act.type === "skill" && act.sk.kind === "buff") {
         H.mp -= act.sk.mp;
         H.qi++;
-        push(act.sk.kind === "buff" ? castBuff(H, act.id, act.sk, act.lvl) : castHeal(H, act.sk, act.lvl));
+        push(castBuff(H, act.id, act.sk, act.lvl));
         return;
       }
       const reach = rangeOf(act, H);
@@ -337,6 +385,7 @@
       const hit = (H, ev) => {
         push(ev);
         if (H.hp <= 0 && multi && aliveH().length) push({ who: "info", text: `${H.name} падає без сил…` });
+        answerWaitingHealers();
       };
 
       // Навички боса: кожен 3-й власний хід, по черзі
@@ -383,6 +432,7 @@
       round++;
       push({ who: "round", text: `Раунд ${round} · відстань ${minDist()}` });
       const acted = new Set();
+      roundActed = acted;
       for (const slot of roundSchedule([...aliveH(), ...aliveE()])) {
         if (!going()) break;
         const u = slot.u;
@@ -391,8 +441,9 @@
         else enemyTurn(u, !acted.has(u));
         acted.add(u);
       }
-      // Кінець раунду — бафи й послаблення слабшають
+      // Кінець раунду — бафи й послаблення слабшають; жрець, що так і не дочекався удару, перестає чекати
       for (const h of heroes) {
+        delete h.healWait;
         for (const [id, b] of Object.entries(h.buffs)) {
           if (--b.turns <= 0) {
             delete h.buffs[id];

@@ -1013,7 +1013,8 @@
       type: "combat",
       minLevel: 6,
       description: "Волога темна печера, де стіни блищать від слизу. Тут живуть зелені, сині й фіолетові слайми, а в глибині, кажуть, сидить сам Король слайм.",
-      enemies: ["slime", "slime2", "slime3", "slime_king"]
+      enemies: ["slime", "slime2", "slime3", "slime_king"],
+      dungeon: "cave_secret"
     },
 
     // ---------- ТЕМНИЙ ЛІС (region: "dark") — за Центральною брамою міста ----------
@@ -1041,7 +1042,8 @@
     dk_webs: {
       name: "Павутинна гущавина", type: "combat", region: "dark", minLevel: 10,
       description: "Велетенські дерева, обплетені павутинням, і кокони на гілках. Десь у глибині — гніздо Королеви павуків.",
-      enemies: ["web_hunter", "web_weaver", "spider_queen"]
+      enemies: ["web_hunter", "web_weaver", "spider_queen"],
+      dungeon: "web_nest"
     },
     dk_ravine: {
       name: "Вовкулачий яр", type: "combat", region: "dark", minLevel: 10,
@@ -1056,10 +1058,37 @@
     dk_heart: {
       name: "Серце Темного лісу", type: "combat", region: "dark", minLevel: 10,
       description: "Коло замшілих каменів і велетенське мертве дерево, що світиться зсередини. Тут править Володар Темного лісу.",
-      enemies: ["ancient_treant", "black_rider", "forest_lord"]
+      enemies: ["ancient_treant", "black_rider", "forest_lord"],
+      dungeon: "dark_throne"
     }
   };
   const DEFAULT_LOCATION = "home";
+
+  // ---------- ДАНЖІ (логіка — dungeon.js) ----------
+  // Локація з полем dungeon має два режими:
+  //   explore — «Обстеження»: звичайні бої без боса; з кожного переможеного ворога з pool
+  //             з шансом keyChance випадає ключ key;
+  //   dungeon — данж: вхід лише з ключем (1 спроба = 1 ключ), 3 бої поспіль без зілля:
+  //             1) випадковий ворог з pool, 2) три вороги — усі види з pool (решта — випадкові),
+  //             3) бос. Вороги боїв 1–2 мають речі з GS, рівним GS групи героїв.
+  //             Досвід і здобич — лише за перемогу в 3-му бою (з боса).
+  const DUNGEONS = {
+    cave_secret: {
+      name: "Таємниці печери", explore: "Обстеження печери", location: "forest_cave",
+      key: "key_cave_secret", keyChance: 0.01, boss: "slime_king", pool: ["slime", "slime2", "slime3"],
+      description: "Важкі кам'яні ворота в глибині печери. За ними — три зали, повні слизу, і трон Короля слайма. Зілля там не допоможуть: лише навички й відновлення."
+    },
+    web_nest: {
+      name: "Гніздо Королеви", explore: "Обстеження гущавини", location: "dk_webs",
+      key: "key_web_nest", keyChance: 0.01, boss: "spider_queen", pool: ["web_hunter", "web_weaver"],
+      description: "Прохід у кокон завбільшки з будинок. Усередині — мисливці й ткачі, а в самому серці гнізда — Королева павуків."
+    },
+    dark_throne: {
+      name: "Трон Володаря", explore: "Обстеження Серця лісу", location: "dk_heart",
+      key: "key_dark_throne", keyChance: 0.01, boss: "forest_lord", pool: ["ancient_treant", "black_rider"],
+      description: "Коло каменів розступається, відкриваючи стежку до мертвого дерева. Його вартують лісовики й вершники, а на троні з коріння чекає Володар Темного лісу."
+    }
+  };
 
   // Торговець Гільдії авантюристів (місто): зброя 1–2 виду, малі й середні зілля
   const GUILD_SHOP = [
@@ -1190,8 +1219,10 @@
     return 1;
   }
 
+  // У локації з данжем боса немає серед звичайних боїв — він чекає в данжі
   function pickEnemy(locationId, heroLevel = 1) {
-    const list = getLocation(locationId).enemies || [];
+    const loc = getLocation(locationId);
+    const list = (loc.enemies || []).filter(id => !(loc.dungeon && ENEMIES[id]?.boss));
     if (!list.length) return null;
     const weights = list.map(id => enemyWeight(ENEMIES[id].level, heroLevel) * (ENEMIES[id].spawnWeight ?? 1));
     let r = Math.random() * weights.reduce((a, b) => a + b, 0);
@@ -1217,7 +1248,7 @@
 
   Object.assign(RPG, {
     MONSTER_MOVES, RANGE_NAMES, enemyRange, enemyMove,
-    ENEMIES, LOCATIONS, DEFAULT_LOCATION, RESPAWN_LOCATION, GUILD_SHOP,
+    ENEMIES, LOCATIONS, DUNGEONS, DEFAULT_LOCATION, RESPAWN_LOCATION, GUILD_SHOP,
     CHAMPION, rollChampion, rollChampionDrop, championBounty,
     getEnemy, enemySpriteStyle, getLocation, isCombatLocation, canEnterLocation, pickEnemy, rollLoot
   });

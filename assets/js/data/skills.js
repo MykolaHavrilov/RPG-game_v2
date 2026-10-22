@@ -16,7 +16,11 @@
 // Навички професій (cls — ID професії, data/classes.js): вивчаються лише в цій професії.
 // Школи магії (school): fire — вогонь, water — вода, wind — вітер, earth — земля
 //   (для магів відповідної школи; потрібен посох).
-// kind: "attack" — удар/заклинання, "buff" — посилення, "heal" — лікування себе (healPct, % від макс. HP),
+// kind: "attack" — удар/заклинання, "buff" — посилення, "heal" — лікування (healPct, % від макс. HP цілі),
+//       area (для heal): "self" (за замовчуванням) — себе; "near" — себе й союзників на відстані ≤ 1 клітини;
+//       "group" — усю групу, будь-яка відстань; "wounded" — найпораненішого героя групи
+//       (якщо всі здорові: чекає першого удару ворога в цьому раунді й одразу лікує;
+//        якщо всі вороги вже походили — лікує себе). Див. battle.js → heroHeal.
 //       "passive" — постійний бонус, поки навичку вивчено (effects у %, crit/dodge — у пунктах).
 // weapon — тип зброї або масив типів; для пасивних — null.
 //
@@ -226,21 +230,21 @@
     paladin_smite: { cls: "paladin", weapon: "sword", kind: "attack", magic: true, name: "Святий удар", mp: 7, req: 1,
                      mult: [1.5, 0.06], desc: "Меч, сповнений світла (сила магії, ближній бій)." },
     paladin_bless: { cls: "paladin", weapon: "sword", kind: "heal", name: "Благословення", mp: 9, req: 3,
-                     healPct: [15, 2], desc: "Світло лікує рани." },
+                     healPct: [15, 2], area: "near", desc: "Світло лікує паладина й союзників поруч (до 1 клітини)." },
     paladin_faith: { cls: "paladin", weapon: null, kind: "passive", name: "Віра", req: 0,
                      effects: { magicDefensePct: [6, 1.5] }, desc: "Магічний захист назавжди." },
     // Жрець
     priest_light:  { cls: "priest", weapon: "staff", kind: "attack", magic: true, name: "Промінь світла", mp: 7, req: 1,
                      mult: [1.5, 0.06], desc: "Сліпучий промінь." },
     priest_prayer: { cls: "priest", weapon: "staff", kind: "heal", name: "Молитва зцілення", mp: 12, req: 3,
-                     healPct: [25, 3], desc: "Сильне лікування." },
+                     healPct: [25, 3], area: "wounded", desc: "Сильне лікування найпораненішого героя групи. Якщо всі здорові — жрець чекає першого удару ворога і одразу лікує." },
     priest_grace:  { cls: "priest", weapon: null, kind: "passive", name: "Благодать", req: 0,
                      effects: { mpPct: [5, 1.2], magicPct: [2, 0.6] }, desc: "Мана й сила магії назавжди." },
     // Монах
     monk_strikes:  { cls: "monk", weapon: "staff", kind: "attack", name: "Удари посохом", mp: 6, req: 1,
                      hits: 2, mult: [0.9, 0.04], desc: "Два стрімкі удари посохом (фізичні, ближній бій)." },
     monk_meditate: { cls: "monk", weapon: "staff", kind: "heal", name: "Медитація", mp: 8, req: 3,
-                     healPct: [12, 2], desc: "Спокій відновлює сили." },
+                     healPct: [12, 2], area: "group", desc: "Спокій відновлює сили всієї групи, незалежно від відстані." },
     monk_inner:    { cls: "monk", weapon: null, kind: "passive", name: "Внутрішня сила", req: 0,
                      effects: { attackPct: [3, 1], dodge: [1.5, 0.4] }, desc: "Атака й ухилення назавжди." }
   };
@@ -370,7 +374,8 @@
       if (sk.debuff?.defensePct) parts.push(`захист ворога −${skillValue(sk.debuff.defensePct, s)}%`);
       if (sk.debuff?.attackPct) parts.push(`атака ворога −${skillValue(sk.debuff.attackPct, s)}% на ${skillTurns(s)} ходи`);
     } else if (sk.kind === "heal") {
-      parts.push(`лікує ${skillValue(sk.healPct, s)}% здоров'я`);
+      const who = { near: " (собі й союзникам поруч)", group: " (усій групі)", wounded: " (найпоранішому)" }[sk.area] || "";
+      parts.push(`лікує ${skillValue(sk.healPct, s)}% здоров'я${who}`);
     } else {
       for (const [k, pair] of Object.entries(sk.effects)) {
         const v = skillValue(pair, s);

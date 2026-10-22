@@ -555,6 +555,24 @@ const ITEMS = {
     name: "Слиз", icon: ["material", 5],
     type: "material", price: 2, stackable: true, maxStack: 200,
     description: "Липкий і трохи світиться."
+  },
+
+  // ---------- Квестові предмети: ключі від данжів (data/enemies.js → DUNGEONS) ----------
+  // quest: true — не продається торговцю. Картинки немає — показується назва.
+  key_cave_secret: {
+    name: "Ключ «Таємниця печери»",
+    type: "quest", quest: true, price: 0, stackable: true, maxStack: 99, noShop: true,
+    description: "Слизький кам'яний ключ. Відчиняє ворота данжу «Таємниці печери» (Печера в лісі). Одна спроба — один ключ."
+  },
+  key_web_nest: {
+    name: "Ключ «Гніздо павуків»",
+    type: "quest", quest: true, price: 0, stackable: true, maxStack: 99, noShop: true,
+    description: "Ключ, обплетений павутинням. Відчиняє данж «Гніздо Королеви» (Павутинна гущавина). Одна спроба — один ключ."
+  },
+  key_dark_throne: {
+    name: "Ключ «Трон Володаря»",
+    type: "quest", quest: true, price: 0, stackable: true, maxStack: 99, noShop: true,
+    description: "Ключ із темного кореня. Відчиняє данж «Трон Володаря» (Серце Темного лісу). Одна спроба — один ключ."
   }
 };
 

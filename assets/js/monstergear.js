@@ -25,7 +25,8 @@
 //   Новий бос без рядка в таблиці отримує множник 1 — для нього треба підібрати свій.
 //   Боси-гуманоїди отримують таке спорядження, а боси-звірі (напр. Король слайм)
 //   — так само 6 прихованих «частин сили» (природна броня, ікла, слиз…).
-// Звичайні звірі спорядження не мають (GS 0).
+// Звичайні звірі спорядження не мають (GS 0) — окрім боїв 1–2 у данжі (dungeon.js):
+//   там будь-який ворог отримує речі з GS, рівним GS групи героїв.
 //
 // Речі монстрів існують лише всередині бою: без картинок, без назв,
 // ніколи не потрапляють у здобич і не зберігаються в сейві.
@@ -123,10 +124,12 @@
     return n ? Math.pow(sum / n, 1 / pw) : table[1].broken;
   }
 
-  // Цільовий середній GS речей ворога (0 — без спорядження)
-  function targetGs(enemyId, pGs, lGs) {
+  // Цільовий середній GS речей ворога (0 — без спорядження).
+  // forced — вороги боїв 1–2 данжу (dungeon.js): GS речей = GS групи, навіть у звірів
+  function targetGs(enemyId, pGs, lGs, forced = false) {
     const e = RPG.ENEMIES[enemyId];
     if (!e) return 0;
+    if (forced && !e.boss) return pGs;
     if (e.boss) return Math.round(lGs / BOSS_GS_DIV);
     return e.humanoid ? pGs : 0;
   }
@@ -159,10 +162,10 @@
 
   // Спорядження для одного ворога: { gs, pieces, stats } або null.
   // Середній GS речей рівно дорівнює цілі; окремі речі — ±10% навколо неї.
-  function rollMonsterGear(enemyId, pGs, lGs = pGs, power = 1) {
+  function rollMonsterGear(enemyId, pGs, lGs = pGs, power = 1, forced = false) {
     const e = RPG.ENEMIES[enemyId];
     if (!e) return null;
-    const target = targetGs(enemyId, pGs, lGs);
+    const target = targetGs(enemyId, pGs, lGs, forced);
     if (target <= 0) return e.boss ? { gs: 0, partyGs: pGs, leaderGs: lGs, power, pieces: [], stats: {} } : null;
     const caster = (e.stats.magic || 0) > (e.stats.attack || 0);
     const withMp = (e.stats.mp || 0) > 0;
@@ -184,7 +187,7 @@
       const power = RPG.ENEMIES[spec.id]?.boss ? bossPower(members, spec.id) : 1;
       const key = pGs + "/" + lGs + "/" + power.toFixed(4);
       if (spec.gear !== undefined && spec.gearFor === key) continue;
-      spec.gear = rollMonsterGear(spec.id, pGs, lGs, power);
+      spec.gear = rollMonsterGear(spec.id, pGs, lGs, power, !!spec.dungeonGs);
       spec.gearFor = key;
     }
     return specs;

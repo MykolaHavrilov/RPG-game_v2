@@ -824,6 +824,8 @@ function previewEquip(save, what) {
 function useItem(save, id) {
   const item = ITEMS[id];
   if (item?.type !== "consumable") return { ok: false, reason: "Цей предмет не можна використати." };
+  // У данжі (dungeon.js) зілля не діють — лікування лише навичками й відновленням
+  if (save.dungeon) return { ok: false, reason: "У данжі не можна пити зілля — лише навички лікування та відновлення." };
   const s = calcStats(save);
   const ch = save.character;
   if (ch.hp <= 0) return { ok: false, reason: "Загиблий не може пити зілля." };
@@ -921,6 +923,7 @@ function sellItem(save, invIndex, qty = 1) {
   if (!currentShop(save)) return { ok: false, reason: "Тут немає торговця." };
   const entry = save.inventory[invIndex];
   if (!entry) return { ok: false, reason: "Порожня клітинка." };
+  if (ITEMS[entry.id]?.quest) return { ok: false, reason: "Квестові предмети торговець не купує." };
   qty = Math.floor(Number(qty));
   if (!(qty >= 1)) return { ok: false, reason: "Вкажіть кількість від 1." };
   qty = Math.min(qty, entry.qty);

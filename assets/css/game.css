@@ -672,3 +672,8 @@ a.travel-locked { opacity: .4; cursor: not-allowed; }
 /* Телефон: кнопка локації над портретами (game.js переносить її перед .battle) */
 main > a.location { display: flex; margin-bottom: 10px; }
 #gold.is-full, #chest-note.is-full { color: #ffb04d; }
+
+/* ---------- Данж (game.js → renderMode) ---------- */
+.mode-tabs { flex-wrap: wrap; }
+.dungeon-panel h3 { margin: 0; }
+.dungeon-panel .is-neg { color: #ffb04d; }
