@@ -190,6 +190,8 @@
     delete save.chest;
     save.chests.main ??= [];
     for (const sid in save.chests) if (!Array.isArray(save.chests[sid])) save.chests[sid] = [];
+    // Кишеня ключів від данжів (dungeon.js): ключі з інвентаря/скринь переїжджають туди
+    if (RPG.migrateKeys) RPG.migrateKeys(save); else save.keys ??= {};
     save.location ??= { map: RPG.DEFAULT_LOCATION, page: "game" };
     const loc = RPG.LOCATIONS[save.location.map];
     if (!loc || loc.locked) save.location.map = RPG.DEFAULT_LOCATION;

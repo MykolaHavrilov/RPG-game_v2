@@ -103,6 +103,24 @@
     }
   }
 
+  // ---------- Кишеня ключів (dungeon.js): вікно зі списком ключів, без картинок ----------
+  function showKeyPocket(save) {
+    const list = el("ul", "key-pocket");
+    for (const k of RPG.keyPocket(save)) {
+      const li = el("li", "key-row" + (k.count ? "" : " is-empty") + (k.count >= RPG.KEY_MAX ? " is-full" : ""));
+      const info = el("div", "key-info");
+      info.append(el("strong", null, k.name),
+        el("small", null, `Данж «${k.dungeon}» · ${k.location} · знайти: «${k.explore}», 1% з ворога`));
+      li.append(info, el("b", "key-count", `${fmtNum(k.count)} / ${fmtNum(RPG.KEY_MAX)}`));
+      list.append(li);
+    }
+    return showNotice("Кишеня ключів · Квестові речі", [
+      list,
+      el("p", "note", `Ключі не займають місця в інвентарі. Кожного виду — до ${fmtNum(RPG.KEY_MAX)}; ` +
+        "коли кишеня повна, цей ключ перестає випадати, доки не використаєте хоча б один. Одна спроба данжу — один ключ.")
+    ], "is-keys");
+  }
+
   // ---------- Окреме повідомлення (вікно), що закривається лише хрестиком ----------
   // Повертає Promise, який виконується після закриття.
   function showNotice(title, lines, cls = "") {
@@ -1582,7 +1600,7 @@
         `3) бос «${RPG.ENEMIES[dungeonInfo.boss].name}». Зілля й відновлення HP/MP у данжі не діють — ` +
         "лікують лише навички. Досвід і здобич — тільки за перемогу над босом."));
       panel.append(el("p", "note" + (keys ? "" : " is-neg"),
-        `${RPG.ITEMS[dungeonInfo.key].name}: ${keys}. Одна спроба — один ключ (зникає при вході). ` +
+        `${RPG.ITEMS[dungeonInfo.key].name} у кишені ключів: ${keys}. Одна спроба — один ключ (зникає при вході). ` +
         `Ключ можна знайти під час «${dungeonInfo.explore}» — шанс ${Math.round(dungeonInfo.keyChance * 100)}% з кожного ворога.`));
       const open = button("Відчинити ворота (−1 ключ)", "wf wf-button", async () => {
         if (fighting) return;
@@ -1928,8 +1946,8 @@
         battleExp = group ? expEach : totalExp;
         // «Обстеження» локації з данжем: шанс знайти ключ з кожного переможеного ворога
         const keys = RPG.rollKeyDrops(save, locId, result.enemyIds);
-        if (keys.got) { summary.push(`${keys.name} ×${keys.got}!`); got[keys.name] = (got[keys.name] || 0) + keys.got; }
-        if (keys.lost) { summary.push(`${keys.name} — пропав, інвентар повний!`); lost[keys.name] = (lost[keys.name] || 0) + keys.lost; }
+        if (keys.got) { summary.push(`${keys.name} ×${keys.got} — у кишеню ключів!`); got[keys.name] = (got[keys.name] || 0) + keys.got; }
+        if (keys.full) summary.push(`Кишеня: ${keys.name} — уже ${fmtNum(RPG.KEY_MAX)}, нові не випадають, поки не використаєте хоча б один.`);
       } else if (!result.draw) {
         // Уся група загинула: штраф кожному, відродження в Храмі
         deaths = team.map(ms => ({ ms, d: RPG.applyDeath(ms, result.enemyIds) }));
@@ -2351,6 +2369,12 @@
       gridOf(chest, conf.size, "chest", $("chest-grid"));
 
       $("gold").textContent = `Клітинок: ${ms.inventory.length}/${RPG.INV_SIZE} · Золото: ${fmtNum(ms.character.gold)}`;
+      const pocketBtn = $("key-pocket-btn");
+      if (pocketBtn) {
+        const total = RPG.keyPocket(save).reduce((s, k) => s + k.count, 0);
+        pocketBtn.textContent = `Кишеня ключів (${fmtNum(total)})`;
+        pocketBtn.onclick = () => showKeyPocket(save);
+      }
       $("gold").classList.toggle("is-full", !RPG.invFree(ms));
       renderDesc();
     }

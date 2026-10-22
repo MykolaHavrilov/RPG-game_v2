@@ -677,3 +677,14 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .mode-tabs { flex-wrap: wrap; }
 .dungeon-panel h3 { margin: 0; }
 .dungeon-panel .is-neg { color: #ffb04d; }
+
+/* ---------- Кишеня ключів (game.js → showKeyPocket) ---------- */
+.key-pocket-btn { align-self: flex-start; }
+.key-pocket { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; min-width: min(420px, 80vw); }
+.key-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 10px; border: 1px solid rgba(201, 163, 90, .35); border-radius: 6px; }
+.key-info { display: grid; gap: 2px; }
+.key-info small { color: var(--text-dim); }
+.key-count { white-space: nowrap; color: var(--gold); }
+.key-row.is-empty { opacity: .6; }
+.key-row.is-full .key-count { color: #ffb04d; }

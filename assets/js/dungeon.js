@@ -8,11 +8,17 @@
 //   а сторінка локації показує данж замість звичайних боїв.
 // Вихід із локації, загибель, втеча ворогів або перемога в 3-му бою — данж закінчується.
 //
+// КИШЕНЯ КЛЮЧІВ: ключі не займають клітинок інвентаря, а лежать окремо:
+//   save.keys = { key_cave_secret: 12, ... } — до KEY_MAX (1000) кожного виду.
+//   Коли ключів 1000, нові не випадають, поки їх не стане 999 або менше.
+//   Показ — вікно «Кишеня ключів» на сторінці інвентаря (game.js → showKeyPocket).
+//
 // Підключається ПІСЛЯ data/enemies.js і character.js, ДО game.js.
 // ============================================================
 
 (function (RPG) {
   const STAGES = 3;
+  const KEY_MAX = 1000;            // найбільше ключів одного виду в кишені
 
   const pick = arr => arr[Math.floor(Math.random() * arr.length)];
   function shuffle(arr) {
@@ -29,9 +35,49 @@
     return id ? getDungeon(id) : null;
   }
 
+  // ---------- Кишеня ключів ----------
+  function keyAmount(save, keyId) { return Math.max(0, Math.floor((save.keys || {})[keyId] || 0)); }
+
   function keyCount(save, dungeonId) {
     const d = RPG.DUNGEONS[dungeonId];
-    return d ? RPG.countItem(save, d.key) : 0;
+    return d ? keyAmount(save, d.key) : 0;
+  }
+
+  // Додати ключі (не більше KEY_MAX). Повертає, скільки реально додано
+  function addKeys(save, keyId, n = 1) {
+    const keys = save.keys || (save.keys = {});
+    const have = keyAmount(save, keyId);
+    const add = Math.max(0, Math.min(n, KEY_MAX - have));
+    if (add) keys[keyId] = have + add;
+    return add;
+  }
+
+  function useKey(save, keyId) {
+    const have = keyAmount(save, keyId);
+    if (have < 1) return false;
+    save.keys[keyId] = have - 1;
+    return true;
+  }
+
+  // Усі ключі для вікна кишені: [{ id, name, count, dungeon, location }]
+  function keyPocket(save) {
+    return Object.entries(RPG.DUNGEONS).map(([dId, d]) => ({
+      id: d.key, name: RPG.ITEMS[d.key]?.name || d.key, count: keyAmount(save, d.key),
+      dungeon: d.name, location: RPG.LOCATIONS[d.location]?.name || d.location, explore: d.explore
+    }));
+  }
+
+  // Старі сейви: ключі з інвентаря й скринь переїжджають у кишеню
+  function migrateKeys(save) {
+    save.keys = (save.keys && typeof save.keys === "object") ? save.keys : {};
+    const isKey = e => e && RPG.ITEMS[e.id]?.pocket === "keys";
+    const move = list => {
+      if (!Array.isArray(list)) return list;
+      for (const e of list) if (isKey(e)) addKeys(save, e.id, e.qty || 1);
+      return list.filter(e => !isKey(e));
+    };
+    save.inventory = move(save.inventory);
+    for (const sid in save.chests || {}) save.chests[sid] = move(save.chests[sid]);
   }
 
   // ID ворогів для бою stage
@@ -65,7 +111,7 @@
     if (save.location?.map !== d.location) return { ok: false, reason: "Ворота данжу — в іншій локації." };
     if (save.dungeon) return { ok: false, reason: "Ви вже в данжі." };
     if (!RPG.aliveMembers(save).length) return { ok: false, reason: "Усі герої групи полягли — помоліться за них у Храмі." };
-    if (!RPG.removeItem(save, d.key, 1)) {
+    if (!useKey(save, d.key)) {
       return { ok: false, reason: `Потрібен ${RPG.ITEMS[d.key].name}. Його можна знайти під час «${d.explore}» (шанс ${Math.round(d.keyChance * 100)}% з кожного ворога).` };
     }
     save.dungeon = { id: d.id, stage: 1, foes: stageFoes(d, 1) };
@@ -117,22 +163,22 @@
     return a.foes.map(id => ({ id, champion: false, dungeonGs: !RPG.ENEMIES[id]?.boss, dungeon: a.id }));
   }
 
-  // Ключі зі «Обстеження»: шанс keyChance з кожного переможеного ворога з pool.
-  // Повертає { got, lost } — скільки ключів отримано і скільки не вмістилося.
+  // Ключі зі «Обстеження»: шанс keyChance з кожного переможеного ворога з pool — у кишеню.
+  // Якщо ключів уже KEY_MAX — не випадають (full: true). Повертає { got, full, name }
   function rollKeyDrops(save, locId, enemyIds) {
     const d = locationDungeon(locId);
-    const out = { got: 0, lost: 0, name: d ? RPG.ITEMS[d.key].name : "" };
+    const out = { got: 0, full: false, name: d ? RPG.ITEMS[d.key].name : "" };
     if (!d || save.dungeon) return out;
     for (const id of enemyIds || []) {
+      if (keyAmount(save, d.key) >= KEY_MAX) { out.full = true; break; }
       if (!d.pool.includes(id) || Math.random() >= d.keyChance) continue;
-      if (RPG.fitQty(save, d.key, 1) >= 1) { RPG.addItem(save, d.key, 1); out.got++; }
-      else out.lost++;                                   // інвентар повний — ключ пропав
+      out.got += addKeys(save, d.key, 1);
     }
     return out;
   }
 
   Object.assign(RPG, {
-    DUNGEON_STAGES: STAGES, DUNGEON_GROUP_POWER: GROUP_POWER, dungeonGroupPower: groupPower, DUNGEON_POOL_TEXT: dungeonStageText, getDungeon, locationDungeon, keyCount, activeDungeon, openDungeon,
+    DUNGEON_STAGES: STAGES, KEY_MAX, keyAmount, addKeys, useKey, keyPocket, migrateKeys, DUNGEON_GROUP_POWER: GROUP_POWER, dungeonGroupPower: groupPower, DUNGEON_POOL_TEXT: dungeonStageText, getDungeon, locationDungeon, keyCount, activeDungeon, openDungeon,
     advanceDungeon, leaveDungeon, dungeonSpecs, rollKeyDrops
   });
 })(window.RPG);
