@@ -1046,15 +1046,27 @@
 
     function renderGuild(box) {
       const tabs = el("div", "row npc-tabs");
-      for (const [id, name] of [["admin", "Адміністратор гільдії"], ["trader", "Торговець"], ["trainer", "Тренер"]]) {
+      for (const [id, name] of [["admin", "Адміністратор Артеміда"], ["trader", "Торговець Тадеуш"], ["trainer", "Тренер Брут"]]) {
         tabs.append(button(name, "wf " + (guildNpc === id ? "wf-button" : "wf-link"), () => { guildNpc = id; renderPlace(); }));
       }
       box.append(tabs);
       const npc = el("div", "stack npc-panel");
+      // Шапка з портретом (assets/images/npc/<файл>.webp; поки картинки немає — лише ім'я)
+      const GUILD_NPC = { admin: ["npc_guild_admin", "Артеміда, адміністратор гільдії"],
+                          trader: ["npc_guild_trader", "Тадеуш, торговець гільдії"],
+                          trainer: ["npc_trainer", "Брут, тренер гільдії"] };
+      const [pic, who] = GUILD_NPC[guildNpc];
+      const head = el("div", "npc-head");
+      const img = new Image();
+      img.className = "npc-portrait"; img.alt = "";
+      img.addEventListener("error", () => img.remove());
+      img.src = RPG.asset(`assets/images/npc/${pic}.webp`);
+      head.append(img, el("strong", "npc-name", who));
+      npc.append(head);
       if (guildNpc === "admin") renderQuestBoard(npc);
       else if (guildNpc === "trader") {
         npc.append(el("p", "note",
-          `Торговець гільдії продає зброю 1–2 виду, малі й середні зілля (за ${Math.round(RPG.SHOP_SELL_RATE * 100)}% вартості), ` +
+          `Тадеуш, торговець гільдії, продає зброю 1–2 виду, малі й середні зілля (за ${Math.round(RPG.SHOP_SELL_RATE * 100)}% вартості), ` +
           `а купує будь-що за ${Math.round(RPG.SHOP_BUY_RATE * 100)}%.`));
         renderShop(npc, RPG.GUILD_SHOP || []);
       } else renderTrainer(npc);
@@ -1139,7 +1151,7 @@
       const info = RPG.exploreInfo(save);
       const E = RPG.EXPLORE;
       if (!info) {
-        box.append(el("p", "note", `Особливе завдання «${E.name}» Адміністратор доручає героям від ${E.minLevel} рівня.`));
+        box.append(el("p", "note", `Особливе завдання «${E.name}» Артеміда доручає героям від ${E.minLevel} рівня.`));
         return;
       }
       const card = el("div", "stack explore-card");
@@ -1186,7 +1198,7 @@
       const info = RPG.professionInfo(save);
       if (!info) {
         if (save.character.classId === RPG.DEFAULT_CLASS) {
-          box.append(el("p", "note", `Квест «${P.name}» — зміна професії — Адміністратор дає Селянину з ${RPG.PROFESSION_LEVEL} рівня.`));
+          box.append(el("p", "note", `Квест «${P.name}» — зміна професії — Артеміда дає Селянину з ${RPG.PROFESSION_LEVEL} рівня.`));
         }
         return;
       }
@@ -1217,7 +1229,7 @@
           await RPG.saveGame(save);
           showMsg(msg, r.finished
             ? `Ваша нова професія — ${RPG.getClass(r.classId).name}! ${RPG.getClass(r.classId).description} ` +
-              `Рівень професії почався з 1, а бонуси Селянина лишилися. Тренер навчить новим навичкам.`
+              `Рівень професії почався з 1, а бонуси Селянина лишилися. Тренер Брут навчить новим навичкам.`
             : `Частину виконано! Далі: ${P.parts[RPG.professionState(save).part - 1].title}.`);
           renderAll();
         });
@@ -1246,7 +1258,7 @@
       const type = RPG.weaponTypeOf(tms);
       const cap = RPG.masteryCap(tms.character.level);
       box.append(el("p", "note", "«Покажи, чим б'єшся, — і я навчу тебе володіти цим краще.» " +
-        "Тренер навчає лише тієї зброї, яка зараз у вас у правій руці."));
+        "Брут навчає лише тієї зброї, яка зараз у вас у правій руці."));
       box.append(el("p", "note",
         `Межа володіння зараз: ${cap}` + (cap < RPG.MASTERY_MAX ? " (з 10 рівня персонажа — 20)." : ".") +
         " Володіння 10 відкриває зброю 2 виду, 20 — 3 виду."));
@@ -1344,7 +1356,7 @@
       dlg.append(el("div", "champion-badge", "Увага — чемпіон!"), face,
         el("h3", null, `${e.name} · рівень ${e.level}`),
         el("p", null, "Утричі сильніший за звичайного: здоров'я, мана, атака, магія й захист ×3. " +
-          "За перемогу — трофей рідкісної якості й нагорода ×5 в Адміністратора гільдії."));
+          "За перемогу — трофей рідкісної якості й нагорода ×5 в Артеміди, адміністратора гільдії."));
       const row = el("div", "row dialog-actions");
       row.append(
         button("Прийняти виклик", "wf wf-button", () => dlg.close()),
@@ -1789,7 +1801,7 @@
       box.innerHTML = "";
       const log = RPG.questLog(save);
       if (!log.length) {
-        box.append(el("p", "status keep", "Розпочатих квестів немає. Завдання дає Адміністратор гільдії — Місто, Південний район."));
+        box.append(el("p", "status keep", "Розпочатих квестів немає. Завдання дає Артеміда, адміністратор гільдії — Місто, Південний район."));
         return;
       }
       for (const q of log) {
@@ -1897,7 +1909,7 @@
         const learned = Object.entries(ch.skills || {}).filter(([, l]) => l > 0);
         mBox.append(el("p", "note", learned.length
           ? "Навички: " + learned.map(([id, l]) => `${RPG.SKILLS[id]?.name || id} ${l}`).join(", ")
-          : "Навичок ще немає. Тренер — у Гільдії авантюристів (Місто, Південний район)."));
+          : "Навичок ще немає. Тренер Брут — у Гільдії авантюристів (Місто, Південний район)."));
       }
     }
 
@@ -2427,7 +2439,7 @@
         details.append(el("p", "note", `${d.name} — ${d.building}. ${d.description}`));
         if (districtLocked(d)) {
           details.append(el("p", "status", d.id === "center"
-            ? "Прохід закритий: його відкриває Адміністратор гільдії після особливого завдання «Час дослідити»."
+            ? "Прохід закритий: його відкриває Артеміда, адміністратор гільдії, після особливого завдання «Час дослідити»."
             : "Закрито — відкриється згодом."));
           return;
         }
