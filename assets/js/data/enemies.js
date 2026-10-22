@@ -1220,9 +1220,10 @@
   }
 
   // У локації з данжем боса немає серед звичайних боїв — він чекає в данжі
-  function pickEnemy(locationId, heroLevel = 1) {
+  // opts.noBoss — без босів (замінник другого боса в одному бою)
+  function pickEnemy(locationId, heroLevel = 1, opts = {}) {
     const loc = getLocation(locationId);
-    const list = (loc.enemies || []).filter(id => !(loc.dungeon && ENEMIES[id]?.boss));
+    const list = (loc.enemies || []).filter(id => !((loc.dungeon || opts.noBoss) && ENEMIES[id]?.boss));
     if (!list.length) return null;
     const weights = list.map(id => enemyWeight(ENEMIES[id].level, heroLevel) * (ENEMIES[id].spawnWeight ?? 1));
     let r = Math.random() * weights.reduce((a, b) => a + b, 0);

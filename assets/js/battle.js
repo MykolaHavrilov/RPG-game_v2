@@ -479,32 +479,38 @@
     return Object.assign(r, { enemyId });
   }
 
-  // Скільки ворогів може вийти проти групи (рішення 3б):
-  // максимум = розмір групи × (середній рівень групи / рівень головного героя),
-  // від 1 до розміру групи.
-  function enemyGroupCap(members) {
-    const n = Math.max(1, members.length);
-    if (n === 1) return 1;
-    const leader = Math.max(1, members[0].character.level || 1);
-    const avg = members.reduce((s, ms) => s + (ms.character.level || 1), 0) / n;
-    return Math.max(1, Math.min(n, Math.round(n * Math.min(1, avg / leader))));
+  // Скільки ворогів може вийти проти групи (звичайні бої, не данж):
+  // від половини групи (округлення вгору) до розміру групи, але не більше 6.
+  // Кожна кількість у цьому діапазоні — з однаковою ймовірністю.
+  const MAX_FOES = 6;
+  function enemyGroupRange(members) {
+    const n = Math.max(1, Math.min(MAX_FOES, members.length));
+    return { min: Math.ceil(n / 2), max: n };
   }
+  // Сумісність: верхня межа діапазону
+  function enemyGroupCap(members) { return enemyGroupRange(members).max; }
 
-  // Ворогів у бою: від 1 до groupSize (випадково), бос — не більше одного.
+  // Ворогів у бою: від min до max (випадково), бос — не більше одного.
+  // groupSize — число героїв (або { min, max }).
+  // Якщо випав другий бос — замість нього звичайний ворог локації, щоб кількість не зменшувалась.
   // members — герої групи: під їхній GS гуманоїди й боси отримують спорядження (monstergear.js)
   function rollEnemyGroup(locationId, heroLevel, groupSize, members = null) {
-    const n = 1 + Math.floor(Math.random() * Math.max(1, groupSize));
+    const range = typeof groupSize === "object" && groupSize
+      ? groupSize
+      : enemyGroupRange({ length: groupSize || 1 });
+    const min = Math.max(1, range.min), max = Math.max(min, range.max);
+    const n = min + Math.floor(Math.random() * (max - min + 1));
     const specs = [];
     let boss = false;
     for (let i = 0; i < n; i++) {
-      let id = RPG.pickEnemy(locationId, heroLevel);
-      for (let tries = 0; boss && RPG.ENEMIES[id]?.boss && tries < 20; tries++) id = RPG.pickEnemy(locationId, heroLevel);
-      if (RPG.ENEMIES[id]?.boss) { if (boss) continue; boss = true; }
+      let id = boss ? RPG.pickEnemy(locationId, heroLevel, { noBoss: true }) : RPG.pickEnemy(locationId, heroLevel);
+      if (!id) continue;
+      if (RPG.ENEMIES[id]?.boss) boss = true;
       specs.push({ id, champion: RPG.rollChampion(id) });
     }
     if (members && RPG.equipFoes) RPG.equipFoes(specs, members);
     return specs;
   }
 
-  Object.assign(RPG, { simulateBattle, simulatePartyBattle, rollEnemyGroup, enemyGroupCap, roundSchedule, BATTLE_START_DISTANCE: START_DISTANCE });
+  Object.assign(RPG, { simulateBattle, simulatePartyBattle, rollEnemyGroup, enemyGroupCap, enemyGroupRange, roundSchedule, BATTLE_START_DISTANCE: START_DISTANCE });
 })(window.RPG);

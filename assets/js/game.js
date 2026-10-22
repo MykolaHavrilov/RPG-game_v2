@@ -1545,7 +1545,7 @@
     let foes = [];              // вороги наступного бою: [{ id, champion }]
     let queueMember = 0;        // чию чергу дій налаштовуємо (0 — головний герой)
     const fighters = () => RPG.aliveMembers(save);
-    // Від 1 до межі за середнім рівнем групи — випадково (RPG.enemyGroupCap)
+    // Від половини групи до розміру групи (макс. 6) — випадково (RPG.enemyGroupRange); данж — без змін
     let champWarn = false;      // показати вікно-попередження про чемпіона
     function nextEnemy() {
       if (mode === "dungeon") {
@@ -1555,7 +1555,7 @@
         champWarn = false;
         return;
       }
-      foes = RPG.rollEnemyGroup(locId, save.character.level, RPG.enemyGroupCap(fighters()), fighters());
+      foes = RPG.rollEnemyGroup(locId, save.character.level, RPG.enemyGroupRange(fighters()), fighters());
       champWarn = foes.some(f => f.champion);
     }
 
