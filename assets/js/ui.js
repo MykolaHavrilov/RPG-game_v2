@@ -214,8 +214,11 @@ window.RPG = window.RPG || {};
     RPG.bindTip(b, () => infoContent(b._sources), null, {
       onOpen: ev => { ev.preventDefault(); ev.stopPropagation(); }
     });
-    // Мітка всередині посилання не повинна відкривати посилання
-    b.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); }, true);
+    // Мітка всередині посилання не повинна відкривати посилання.
+    // Лише preventDefault: stopPropagation на етапі перехоплення не пускав клік до самої мітки
+    // (по літері «i»), і вікно лишалось попереднім переглядом, що зникав, щойно миша зрушить.
+    // Далі клік зупиняє onOpen (у bindTip), уже на самій мітці.
+    b.addEventListener("click", ev => { ev.preventDefault(); }, true);
     return b;
   }
 
