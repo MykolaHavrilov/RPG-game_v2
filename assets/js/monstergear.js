@@ -12,13 +12,17 @@
 //   GS ПЕРШОГО (головного) героя групи, поділеному на BOSS_GS_DIV (2).
 //   Окремі речі трохи сильніші чи слабші (±10%), але середнє — рівно ця ціль.
 //   Потім сила боса множиться на BOSS_POWER (здоров'я, атака, магія, захисти):
-//   множник залежить від виду (tier) і рідкості КОЖНОЇ речі першого героя —
-//   береться середнє по всіх його вдягнених речах. Таблицю підібрано симуляцією так,
-//   щоб Селянин 10 рівня перемагав Короля слайма приблизно з такою вірогідністю:
-//                 сірі  білі  сині  фіолет./легенд.  різні
-//     речі 1 виду  10%   ~18%  ~22%       50%          ~33%
-//     речі 2 виду  15%   24%   32%        60%          ~40%
-//   Речі 3 виду поки мають ті самі множники, що й 2 вид.
+//   множник свій для кожного боса і залежить від виду (tier) і рідкості КОЖНОЇ речі
+//   першого героя — береться середнє по всіх його вдягнених речах. Таблиці підібрано
+//   симуляцією (Селянин рівня боса, лише звичайні удари) так, щоб герой перемагав боса
+//   приблизно з такою вірогідністю:
+//                     сірі  білі  сині  фіолет./легенд.  різні
+//     «нижчий» вид     10%   ~18%  ~22%       50%          ~33%
+//     «вищий» вид      15%   24%   32%        60%          ~40%
+//   Король слайм (10 рів.): нижчий — 1 вид, вищий — 2 вид.
+//   Королева павуків (18 рів.): нижчий — 1 вид, вищий — 2 вид.
+//   Володар Темного лісу (25 рів.): нижчий — 2 вид, вищий — 3 вид.
+//   Новий бос без рядка в таблиці отримує множник 1 — для нього треба підібрати свій.
 //   Боси-гуманоїди отримують таке спорядження, а боси-звірі (напр. Король слайм)
 //   — так само 6 прихованих «частин сили» (природна броня, ікла, слиз…).
 // Звичайні звірі спорядження не мають (GS 0).
@@ -39,16 +43,33 @@
 
 (function (RPG) {
   const BOSS_GS_DIV = 2;         // GS речей боса = GS першого героя / 2
-  // Множник сили боса: [вид речі][рідкість]
+  // Множник сили боса: [id боса][вид речі героя][рідкість].
+  // Бос без рядка в таблиці — множник 1.
   const BOSS_POWER = {
-    1: { broken: 0.921, common: 1.293, magic: 1.363, epic: 1.336, legendary: 1.801 },
-    2: { broken: 0.983, common: 1.2, magic: 1.505, epic: 1.821, legendary: 2.43 },
-    3: { broken: 0.983, common: 1.2, magic: 1.505, epic: 1.821, legendary: 2.43 }
+    slime_king: {
+      1: { broken: 0.921, common: 1.293, magic: 1.363, epic: 1.336, legendary: 1.801 },
+      2: { broken: 0.983, common: 1.2, magic: 1.505, epic: 1.821, legendary: 2.43 },
+      3: { broken: 0.983, common: 1.2, magic: 1.505, epic: 1.821, legendary: 2.43 }
+    },
+    spider_queen: {     // 18 рівень: 1 вид — «нижчий», 2 вид — «вищий» (3 вид — як 2)
+      1: { broken: 0.5, common: 0.516, magic: 0.537, epic: 0.577, legendary: 0.704 },
+      2: { broken: 0.53, common: 0.579, magic: 0.636, epic: 0.736, legendary: 0.955 },
+      3: { broken: 0.53, common: 0.579, magic: 0.636, epic: 0.736, legendary: 0.955 }
+    },
+    forest_lord: {      // 25 рівень: 2 вид — «нижчий», 3 вид — «вищий» (1 вид — як 2)
+      1: { broken: 0.552, common: 0.588, magic: 0.64, epic: 0.732, legendary: 0.89 },
+      2: { broken: 0.552, common: 0.588, magic: 0.64, epic: 0.732, legendary: 0.89 },
+      3: { broken: 0.578, common: 0.647, magic: 0.75, epic: 0.835, legendary: 1.041 }
+    }
   };
   // Як зводити множники різних речей в один: степеневе середнє (1 — звичайне середнє;
   // більше — сильніші речі важать більше, бо в бою вирішують саме вони).
   // Окремо для виду речей героя (середній вид усіх його вдягнених речей, округлений).
-  const BOSS_POWER_MEAN = { 1: 4, 2: 2.6, 3: 2.6 };
+  const BOSS_POWER_MEAN = {
+    slime_king:   { 1: 4,   2: 2.6, 3: 2.6 },
+    spider_queen: { 1: 0.5, 2: 1.8, 3: 1.8 },
+    forest_lord:  { 1: 2.3, 2: 2.3, 3: 3.1 }
+  };
   const BOSS_POWER_KEYS = ["hp", "attack", "magic", "defense", "magicDefense"];
   const PIECES = ["mainHand", "head", "chest", "legs", "hands", "feet"];
   const PIECE_SPREAD = 0.1;      // кожна річ — GS ±10% від цілі
@@ -83,10 +104,11 @@
   }
 
   // Множник сили боса — середнє BOSS_POWER по всіх вдягнених речах першого героя
-  function bossPower(members) {
+  function bossPower(members, bossId) {
     const lead = (members || []).find(Boolean);
-    const table = RPG.BOSS_POWER || BOSS_POWER;
-    const means = RPG.BOSS_POWER_MEAN || BOSS_POWER_MEAN;
+    const table = (RPG.BOSS_POWER || BOSS_POWER)[bossId];
+    const means = (RPG.BOSS_POWER_MEAN || BOSS_POWER_MEAN)[bossId] || {};
+    if (!table) return 1;
     const refs = Object.values(lead?.equipment || {})
       .filter(ref => ref && RPG.ITEMS[RPG.refId(ref)] && RPG.hasRarity(RPG.refId(ref)));
     const avgTier = refs.length ? Math.round(refs.reduce((a, ref) => a + (RPG.ITEMS[RPG.refId(ref)].tier || 1), 0) / refs.length) : 1;
@@ -158,9 +180,9 @@
   function equipFoes(specs, members) {
     const pGs = partyGs(members);
     const lGs = leaderGs(members);
-    const power = bossPower(members);
-    const key = pGs + "/" + lGs + "/" + power.toFixed(4);
     for (const spec of specs || []) {
+      const power = RPG.ENEMIES[spec.id]?.boss ? bossPower(members, spec.id) : 1;
+      const key = pGs + "/" + lGs + "/" + power.toFixed(4);
       if (spec.gear !== undefined && spec.gearFor === key) continue;
       spec.gear = rollMonsterGear(spec.id, pGs, lGs, power);
       spec.gearFor = key;
