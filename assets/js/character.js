@@ -75,7 +75,7 @@ function createNewSave(name, classId = DEFAULT_CLASS) {
     equipment: {},
     inventory: [],
     lootLuck: RPG.newLuck(),   // прихований лічильник рідкісних речей (rarity.js)
-    chest: [],              // скриня в Домівці — речі не зникають при смерті
+    chests: { main: [] },   // сховища скринь: { storageId: [{ id, qty }] } — речі не зникають при смерті
     battleQueue: ["attack"],   // черга дій у бою (до QUEUE_SIZE)
     location: { map: cls.startLocation, page: "game" },
     settings: { battleView: "stepByStep" }   // або "result"
@@ -533,7 +533,8 @@ function countInList(list, id) {
 
 // Зброя/броня з рідкістю — окремі екземпляри. Без вказаної рідкості
 // додається звичайна (біла) річ без випадкових бонусів, як із магазину.
-function addToList(list, id, qty = 1) {
+// maxOf(id) — ліміт стопки для цього списку (за замовчуванням item.maxStack; для скрині — chestStackMax).
+function addToList(list, id, qty = 1, maxOf = null) {
   const item = ITEMS[id];
   if (!item || qty <= 0) return false;
 
@@ -543,7 +544,7 @@ function addToList(list, id, qty = 1) {
   }
 
   if (item.stackable) {
-    const max = item.maxStack || 99;
+    const max = maxOf ? maxOf(id) : (item.maxStack || 99);
     for (const entry of list) {
       if (entry.id === id && entry.qty < max) {
         const add = Math.min(max - entry.qty, qty);
@@ -577,10 +578,10 @@ function removeFromList(list, id, qty = 1) {
 }
 
 // Покласти вже готовий запис (річ з рідкістю — як є, стопку — докупи)
-function addRefToList(list, ref) {
+function addRefToList(list, ref, maxOf = null) {
   ref = RPG.normalizeRef(ref);
   if (!ref || !ITEMS[ref.id]) return false;
-  if (ITEMS[ref.id].stackable) return addToList(list, ref.id, ref.qty || 1);
+  if (ITEMS[ref.id].stackable) return addToList(list, ref.id, ref.qty || 1, maxOf);
   list.push(ref);
   return true;
 }
@@ -612,30 +613,107 @@ function fullText(save, id, qty) {
 }
 function removeItem(save, id, qty = 1) { return removeFromList(save.inventory, id, qty); }
 
-// ---------- Скриня (лише в Домівці) ----------
-// Переносить усю стопку з однієї клітинки.
+// ---------- Скрині ----------
+// Скриня стоїть у локації, якщо в LOCATIONS (data/enemies.js) у неї є поле chest: "<id сховища>".
+// Скрині з однаковим id сховища ПОВ'ЯЗАНІ: це одне спільне сховище, тож покладене
+// в одній скрині можна забрати з будь-якої іншої (не треба вертатись на початок).
+// Окрема (непов'язана) скриня — просто свій унікальний id сховища.
+// Нове сховище додається в CHEST_STORAGES; місткість і ліміти стопок беруться з CHEST_DEFAULTS,
+// якщо для сховища не задано своїх.
+const CHEST_DEFAULTS = {
+  size: 50,                                      // клітинок у скрині
+  stack: { material: 1000, consumable: 500 }     // штук в одній клітинці: матеріали / зілля
+};
+const CHEST_STORAGES = {
+  main: { name: "Скриня" }                       // Домівка (і майбутні пов'язані скрині)
+};
+const DEFAULT_CHEST = "main";
+
+function chestConf(storageId) {
+  const conf = CHEST_STORAGES[storageId] || {};
+  return {
+    name: conf.name || "Скриня",
+    size: conf.size || CHEST_DEFAULTS.size,
+    stack: { ...CHEST_DEFAULTS.stack, ...(conf.stack || {}) }
+  };
+}
+// Скільки штук предмета влазить в одну клітинку скрині
+function chestStackMax(id, storageId = DEFAULT_CHEST) {
+  const item = ITEMS[id];
+  if (!item) return 1;
+  return chestConf(storageId).stack[item.type] || item.maxStack || 99;
+}
+// Вміст сховища (створюється порожнім, якщо його ще немає в сейві)
+function chestList(save, storageId = DEFAULT_CHEST) {
+  save.chests ??= {};
+  save.chests[storageId] ??= [];
+  return save.chests[storageId];
+}
+// id сховища скрині в поточній локації або null
+function chestHere(save) {
+  return RPG.getLocation(save.location.map).chest || null;
+}
+// Назви локацій, де стоять скрині цього сховища
+function chestPlaces(storageId = DEFAULT_CHEST) {
+  return Object.values(RPG.LOCATIONS).filter(l => l.chest === storageId && !l.locked).map(l => l.name);
+}
+function chestFree(save, storageId = DEFAULT_CHEST) {
+  return Math.max(0, chestConf(storageId).size - chestList(save, storageId).length);
+}
 
 function isAtHome(save) {
   return RPG.getLocation(save.location.map).type === "home";
 }
 
+// Покласти клітинку інвентаря в скриню поточної локації.
+// Стопка спершу доповнює неповні стопки в скрині, решта йде у вільні клітинки;
+// що не влізло — лишається в інвентарі.
 function moveToChest(save, invIndex) {
-  if (!isAtHome(save)) return { ok: false, reason: "Скриня стоїть у Домівці." };
+  const sid = chestHere(save);
+  if (!sid) return { ok: false, reason: "Тут немає скрині." };
   const entry = save.inventory[invIndex];
   if (!entry) return { ok: false, reason: "Порожня клітинка." };
-  save.inventory.splice(invIndex, 1);
-  addRefToList(save.chest, entry);
-  return { ok: true, id: entry.id, qty: entry.qty };
+  const list = chestList(save, sid);
+  const item = ITEMS[entry.id];
+  const free = chestFree(save, sid);
+  const full = { ok: false, reason: `Скриня повна (${chestConf(sid).size} клітинок) — звільніть місце.` };
+
+  if (entry.r || !item?.stackable) {
+    if (!free) return full;
+    save.inventory.splice(invIndex, 1);
+    list.push(entry);
+    return { ok: true, id: entry.id, qty: entry.qty || 1 };
+  }
+  const max = chestStackMax(entry.id, sid);
+  let room = free * max;
+  for (const e of list) if (e.id === entry.id && !e.r && e.qty < max) room += max - e.qty;
+  const qty = Math.min(entry.qty, room);
+  if (!qty) return full;
+  addToList(list, entry.id, qty, id => chestStackMax(id, sid));
+  entry.qty -= qty;
+  if (entry.qty <= 0) save.inventory.splice(invIndex, 1);
+  return { ok: true, id: entry.id, qty, left: entry.qty > 0 ? entry.qty : 0 };
 }
 
+// Забрати клітинку скрині в інвентар. Якщо вся стопка не влазить — береться скільки влізе.
 function takeFromChest(save, chestIndex) {
-  if (!isAtHome(save)) return { ok: false, reason: "Скриня стоїть у Домівці." };
-  const entry = save.chest[chestIndex];
+  const sid = chestHere(save);
+  if (!sid) return { ok: false, reason: "Тут немає скрині." };
+  const list = chestList(save, sid);
+  const entry = list[chestIndex];
   if (!entry) return { ok: false, reason: "Порожня клітинка." };
-  if (entry.r ? !invFree(save) : fitQty(save, entry.id, entry.qty) < entry.qty) return { ok: false, reason: "Інвентар повний — звільніть місце." };
-  save.chest.splice(chestIndex, 1);
-  addRefToList(save.inventory, entry);
-  return { ok: true, id: entry.id, qty: entry.qty };
+  if (entry.r || !ITEMS[entry.id]?.stackable) {
+    if (!invFree(save)) return { ok: false, reason: "Інвентар повний — звільніть місце." };
+    list.splice(chestIndex, 1);
+    save.inventory.push(entry);
+    return { ok: true, id: entry.id, qty: entry.qty || 1 };
+  }
+  const qty = fitQty(save, entry.id, entry.qty);
+  if (!qty) return { ok: false, reason: "Інвентар повний — звільніть місце." };
+  addToList(save.inventory, entry.id, qty);
+  entry.qty -= qty;
+  if (entry.qty <= 0) list.splice(chestIndex, 1);
+  return { ok: true, id: entry.id, qty, left: entry.qty > 0 ? entry.qty : 0 };
 }
 
 // ---------- Екіпірування ----------
@@ -888,6 +966,7 @@ Object.assign(RPG, {
   getClassChanges, changeClass,
   countInList, addToList, addRefToList, removeFromList, countItem, addItem, removeItem,
   isAtHome, moveToChest, takeFromChest,
+  CHEST_DEFAULTS, CHEST_STORAGES, DEFAULT_CHEST, chestConf, chestStackMax, chestList, chestHere, chestPlaces, chestFree,
   canEquip, fixHands, equipSlotFor, equipItem, unequipItem, previewEquip, useItem,
   currentShop, buyItem, sellItem, applyReward
 });

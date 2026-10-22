@@ -671,4 +671,4 @@ a.travel-locked { opacity: .4; cursor: not-allowed; }
 .notice-close:hover, .notice-close:focus-visible { color: var(--gold); border-color: var(--gold); }
 /* Телефон: кнопка локації над портретами (game.js переносить її перед .battle) */
 main > a.location { display: flex; margin-bottom: 10px; }
-#gold.is-full { color: #ffb04d; }
+#gold.is-full, #chest-note.is-full { color: #ffb04d; }

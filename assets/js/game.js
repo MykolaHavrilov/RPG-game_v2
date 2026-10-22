@@ -272,6 +272,8 @@
       cell.append(el("span", "item-name item-ph" + rarityTextClass(ref), item.name));
     }
     if (qty > 1) cell.append(el("span", "item-qty", `×${qty}`));
+    const gs = RPG.gearScore ? RPG.gearScore(ref) : null;
+    if (gs !== null) cell.append(el("span", "item-gs", String(gs)));
     return cell;
   }
 
@@ -288,6 +290,8 @@
     if (item) {
       cell.classList.add("has-icon");
       cell.append(smallIcon(ref, "equip-icon"));
+      const gs = RPG.gearScore ? RPG.gearScore(ref) : null;
+      if (gs !== null) cell.append(el("span", "item-gs", String(gs)));
       cell.setAttribute("aria-label", `${RPG.SLOTS[slot]}: ${RPG.itemFullName(ref)}`);
     } else {
       cell.append(el("span", "equip-slot-name", SLOT_SHORT[slot] || RPG.SLOTS[slot]));
@@ -324,6 +328,20 @@
     layer("doll-base", doll.base);
     for (const l of doll.layers) if (!l.behind) layer("doll-item", l.style, l.ref);
     for (const [x, y] of doll.fists) layer("doll-base", RPG.heroFistStyle(doll.base, x, y));
+    renderHeroGs(box, save);
+  }
+
+  // «GS: N» у правому верхньому куті картинки героя: N — середній GS вдягнених речей
+  function renderHeroGs(box, save) {
+    const pic = box.parentElement;
+    if (!pic || !RPG.equipmentScore) return;
+    let badge = pic.querySelector(".hero-gs");
+    if (!badge) { badge = el("span", "hero-gs"); pic.append(badge); }
+    const es = RPG.equipmentScore(save);
+    badge.textContent = `GS: ${es.avg}`;
+    badge.title = es.count
+      ? `Середній Gear Score вдягнених речей: ${es.avg} (речей: ${es.count}, сума: ${es.total})`
+      : "Gear Score: нічого не вдягнено";
   }
 
   // Смужка HP / MP для невеликих рядків (напарники, вороги групою)
@@ -499,6 +517,14 @@
     if (qty > 1) sub.push(`×${fmtNum(qty)}`);
     title.append(el("span", "tip-sub", sub.filter(Boolean).join(" · ")));
     head.append(title);
+    const gs = RPG.gearScore ? RPG.gearScore(ref) : null;
+    if (gs !== null) {
+      const p = RPG.gearScoreParts(ref);
+      const badge = el("div", "tip-gs", `GS ${gs}`);
+      badge.title = `Gear Score: основні ${p.primary}, ` +
+        `другорядні ${p.secondary}, допоміжні ${p.auxiliary}` + (p.extra ? `, рідкість і рівень ${p.extra}` : "");
+      head.append(badge);
+    }
     box.append(head);
 
     const stats = Object.entries(RPG.itemStats(ref));
@@ -785,6 +811,12 @@
       else if (locData.type === "city") renderCity();
       else if (locData.type === "gate") renderDarkGate();
       else if (locData.type === "citygate") renderCityGate();
+      // Скриня в іншій (не Домівка) локації — пов'язана або окрема, див. character.js → CHEST_STORAGES
+      if (locData.chest && locData.type !== "home") {
+        const used = RPG.chestList(save, locData.chest).length;
+        place.append(el("p", "note", `Скриня: ${used}/${RPG.chestConf(locData.chest).size} клітинок зайнято.`));
+        place.append(link("Інвентар і скриня", "inventory.html"));
+      }
     }
 
     function renderHome() {
@@ -793,8 +825,9 @@
       place.append(el("p", "note",
         `Відпочинок: додатково +${Math.round(RPG.HOME_REGEN_PCT * 100)}% здоров'я та мани кожні 10 секунд ` +
         `понад звичайне відновлення. Зараз: +${per.hp.toFixed(1)} HP і +${per.mp.toFixed(1)} MP за 10 с.`));
-      const used = save.chest.length;
-      place.append(el("p", "note", `Скриня: ${used ? `${used} клітинок зайнято` : "порожній"}. Речі в скрині не зникають, навіть якщо герой загине.`));
+      const sid = RPG.chestHere(save) || RPG.DEFAULT_CHEST;
+      const used = RPG.chestList(save, sid).length;
+      place.append(el("p", "note", `Скриня: ${used}/${RPG.chestConf(sid).size} клітинок зайнято. Речі в скрині не зникають, навіть якщо герой загине.`));
       const row = el("div", "row");
       row.append(link("Інвентар і скриня", "inventory.html"), link("Вирушити (Мапа)", "maps.html"));
       place.append(row);
@@ -2130,14 +2163,18 @@
     const btnDrop = button("Викинути", "wf wf-danger");
     const btnToChest = button("У скриню", "wf wf-secondary");
     const btnFromChest = button("Забрати зі скрині", "wf wf-secondary");
-    const atHome = RPG.isAtHome(ms);
+    // Скриня поточної локації (або основна — тоді її можна лише переглянути)
+    const chestId = RPG.chestHere(ms);
+    const atHome = !!chestId;
+    const viewChest = chestId || RPG.DEFAULT_CHEST;
+    const chestOf = () => RPG.chestList(ms, viewChest);
 
     // selected: { kind: "inv", index } | { kind: "eq", slot } | { kind: "chest", index }
     let selected = null;
 
     function gridOf(list, minCells, kind, box) {
       box.innerHTML = "";
-      const total = Math.max(minCells, Math.ceil(list.length / 12) * 12);
+      const total = Math.max(minCells, list.length);
       for (let i = 0; i < total; i++) {
         const entry = list[i];
         if (!entry) { box.append(el("div", "wf wf-slot slot-empty", "")); continue; }
@@ -2173,10 +2210,14 @@
       }
 
       gridOf(ms.inventory, 36, "inv", $("item-grid"));
-      $("chest-note").textContent = atHome
-        ? "Речі тут не зникають навіть після загибелі."
-        : "Скриня стоїть у Домівці — тут її можна лише переглянути.";
-      gridOf(ms.chest, 24, "chest", $("chest-grid"));
+      const conf = RPG.chestConf(viewChest);
+      const chest = chestOf();
+      $("chest-title").textContent = conf.name;
+      $("chest-note").textContent = `Клітинок: ${chest.length}/${conf.size} · ` + (atHome
+        ? `Матеріали — до ${fmtNum(conf.stack.material)} шт., зілля — до ${fmtNum(conf.stack.consumable)} шт. в клітинці. Речі тут не зникають навіть після загибелі.`
+        : `Скриня стоїть тут: ${RPG.chestPlaces(viewChest).join(", ") || "Домівка"} — звідси її можна лише переглянути.`);
+      $("chest-note").classList.toggle("is-full", chest.length >= conf.size);
+      gridOf(chest, conf.size, "chest", $("chest-grid"));
 
       $("gold").textContent = `Клітинок: ${ms.inventory.length}/${RPG.INV_SIZE} · Золото: ${fmtNum(ms.character.gold)}`;
       $("gold").classList.toggle("is-full", !RPG.invFree(ms));
@@ -2214,7 +2255,7 @@
     function selectedRef() {
       if (!selected) return null;
       if (selected.kind === "eq") return ms.equipment[selected.slot] || null;
-      if (selected.kind === "chest") return ms.chest[selected.index] || null;
+      if (selected.kind === "chest") return chestOf()[selected.index] || null;
       return ms.inventory[selected.index] || null;
     }
 
@@ -2226,7 +2267,7 @@
       const id = selectedItemId();
       desc.innerHTML = "";
       for (const b of [btnEquip, btnUnequip, btnUse, btnDrop, btnToChest, btnFromChest]) b.disabled = true;
-      btnToChest.title = btnFromChest.title = atHome ? "" : "Доступно лише в Домівці";
+      btnToChest.title = btnFromChest.title = atHome ? "" : "Доступно лише біля скрині";
       if (!id) {
         desc.append(el("div", null, "Оберіть предмет, щоб побачити опис."));
         return;
@@ -2292,13 +2333,15 @@
     btnToChest.addEventListener("click", async () => {
       const r = RPG.moveToChest(ms, selected.index);
       selected = null;
-      await commit(r.ok ? `У скриню: ${RPG.ITEMS[r.id].name}${r.qty > 1 ? ` ×${r.qty}` : ""}` : r.reason, !r.ok);
+      await commit(r.ok ? `У скриню: ${RPG.ITEMS[r.id].name}${r.qty > 1 ? ` ×${r.qty}` : ""}` +
+        (r.left ? `. Не влізло ${r.left} шт. — скриня повна.` : "") : r.reason, !r.ok);
     });
 
     btnFromChest.addEventListener("click", async () => {
       const r = RPG.takeFromChest(ms, selected.index);
       selected = null;
-      await commit(r.ok ? `Забрано зі скрині: ${RPG.ITEMS[r.id].name}${r.qty > 1 ? ` ×${r.qty}` : ""}` : r.reason, !r.ok);
+      await commit(r.ok ? `Забрано зі скрині: ${RPG.ITEMS[r.id].name}${r.qty > 1 ? ` ×${r.qty}` : ""}` +
+        (r.left ? `. У скрині лишилось ${r.left} шт. — інвентар повний.` : "") : r.reason, !r.ok);
     });
 
     render();

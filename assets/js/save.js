@@ -12,7 +12,7 @@
   const STORE = "saves";
   const LS_PREFIX = "rpg_save_"; // запасне сховище в localStorage
 
-  const SAVE_VERSION = 5;        // версія ФОРМАТУ сейву (полів усередині)
+  const SAVE_VERSION = 6;        // версія ФОРМАТУ сейву (полів усередині)
   const CURRENT_SLOT_KEY = "rpg_current_slot";
 
   // ---------- Відкриття бази ----------
@@ -159,10 +159,11 @@
 
   // Зводить неповні стопки однакових предметів докупи (напр. після
   // збільшення maxStack дві клітинки по 99 хвостів стають однією на 198)
-  function compactStacks(list) {
+  // maxOf — ліміт стопки (для скрині — свій, RPG.chestStackMax)
+  function compactStacks(list, maxOf = null) {
     const out = [];
     for (const entry of list) {
-      if (RPG.ITEMS[entry.id]?.stackable) RPG.addToList(out, entry.id, entry.qty);
+      if (RPG.ITEMS[entry.id]?.stackable) RPG.addToList(out, entry.id, entry.qty, maxOf);
       else out.push(entry);
     }
     return out;
@@ -182,7 +183,13 @@
     save.character.kills ??= 0;
     save.equipment ??= {};
     save.inventory ??= [];
-    save.chest ??= [];
+    // Версія 6: скрині — окремі сховища save.chests = { main: [...] } (пов'язані скрині ділять одне сховище).
+    // Стара скриня Домівки (save.chest) переїжджає в сховище "main".
+    save.chests = (save.chests && typeof save.chests === "object" && !Array.isArray(save.chests)) ? save.chests : {};
+    if (Array.isArray(save.chest)) save.chests.main = (save.chests.main || []).concat(save.chest);
+    delete save.chest;
+    save.chests.main ??= [];
+    for (const sid in save.chests) if (!Array.isArray(save.chests[sid])) save.chests[sid] = [];
     save.location ??= { map: RPG.DEFAULT_LOCATION, page: "game" };
     const loc = RPG.LOCATIONS[save.location.map];
     if (!loc || loc.locked) save.location.map = RPG.DEFAULT_LOCATION;
@@ -215,14 +222,14 @@
     delete save.equipment.ring;
     for (const slot in save.equipment) save.equipment[slot] = renameRef(save.equipment[slot]);
     save.inventory = save.inventory.map(renameRef);
-    save.chest = save.chest.map(renameRef);
+    for (const sid in save.chests) save.chests[sid] = save.chests[sid].map(renameRef);
     save.character.mastery ??= {};
     save.character.skills ??= {};
 
     // Версія 3: рідкість речей. Старі речі (рядок-ID) стають білими (common)
     for (const slot in save.equipment) save.equipment[slot] = RPG.normalizeRef(save.equipment[slot]);
     save.inventory = save.inventory.map(RPG.normalizeRef).filter(Boolean);
-    save.chest = save.chest.map(RPG.normalizeRef).filter(Boolean);
+    for (const sid in save.chests) save.chests[sid] = save.chests[sid].map(RPG.normalizeRef).filter(Boolean);
     save.lootLuck = Object.assign(RPG.newLuck(), save.lootLuck || {});
 
     // Прибираємо предмети, яких більше немає в довіднику
@@ -230,7 +237,12 @@
       if (!ITEMS[save.equipment[slot]?.id] || !RPG.SLOTS[slot]) delete save.equipment[slot];
     }
     save.inventory = compactStacks(save.inventory.filter(entry => ITEMS[entry.id] && entry.qty > 0));
-    save.chest = compactStacks(save.chest.filter(entry => ITEMS[entry.id] && entry.qty > 0));
+    // Стопки в скрині зводяться під її ліміти (матеріали 1000, зілля 500). Якщо клітинок
+    // більше, ніж місткість скрині, — нічого не губиться, просто нових речей не покласти.
+    for (const sid in save.chests) {
+      save.chests[sid] = compactStacks(save.chests[sid].filter(entry => ITEMS[entry.id] && entry.qty > 0),
+        id => RPG.chestStackMax(id, sid));
+    }
 
     // Версія 5: група героїв (save.party), сюжет (save.story: «Час дослідити», дошка оголошень)
     save.party = (Array.isArray(save.party) ? save.party : []).filter(m => m && m.character && m.equipment);

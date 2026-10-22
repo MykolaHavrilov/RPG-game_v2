@@ -130,6 +130,19 @@
 Стопки в інвентарі (`maxStack` у `data/items.js`): зілля — 100 в клітинці, ресурси — 200.
 У Шинку стопку можна продати цілком або вказати свою кількість.
 
+## Скрині
+
+- Скриня стоїть у локації, якщо в `LOCATIONS` (`data/enemies.js`) є поле `chest: "<id сховища>"`. Зараз — лише Домівка (`chest: "main"`).
+- Місткість: **50 клітинок**. В одній клітинці скрині: **матеріали — до 1000 шт., зілля — до 500 шт.**
+  (`CHEST_DEFAULTS` у `character.js`; інвентар має свої ліміти — `maxStack`).
+- **Пов'язані скрині**: кілька локацій з однаковим `chest: "main"` — це одна спільна скриня,
+  тож покладене в одній забирається з будь-якої іншої (не треба вертатись на початок).
+- **Окрема скриня**: новий id (`chest: "dark_camp"`) + запис у `CHEST_STORAGES`
+  (`{ name, size?, stack? }` — без `size`/`stack` беруться 50 / 1000 / 500).
+- Сейв: `save.chests = { main: [...], ... }` (до версії 6 сейву було `save.chest` — переноситься автоматично).
+- Покласти: стопка доповнює неповні стопки, решта — у вільні клітинки; що не влізло, лишається в інвентарі.
+  Забрати: береться стільки, скільки влізе в інвентар, решта лишається в скрині.
+
 ## Відновлення HP / MP
 
 Кожні 10 секунд: `hpRegen` / `mpRegen` (атрибути + речі). У Домівці додатково +5% максимуму.
@@ -167,7 +180,7 @@ const enemyId = RPG.pickEnemy(save.location.map, save.character.level);
 const result = RPG.simulateBattle(save, enemyId);
 if (result.win) RPG.applyReward(save, RPG.getEnemy(enemyId).exp, RPG.rollLoot(enemyId));
 else if (!result.draw) RPG.applyDeath(save, result.enemyIds);
-RPG.moveToChest(save, 0);                     // лише в Домівці
+RPG.moveToChest(save, 0);                     // лише в локації зі скринею
 RPG.buyItem(save, "potion_hp_medium");        // лише в Шинку
 await RPG.saveGame(save);
 ```
