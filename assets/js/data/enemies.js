@@ -441,10 +441,10 @@
         { id: "earring_t2", chance: 0.004, qty: [1, 1] }
       ]
     },
-    skeleton_archer: {
-      name: "Скелет-лучник",
-      range: 3, move: { name: "Кістяна стріла", mult: 1.54, chance: 0.25 },
-      verb: "стріляє",
+    skeleton_archer: {            // id лишається старий (сейви, квести); це скелет-мечник
+      name: "Скелет-мечник",
+      range: 1, move: { name: "Удар іржавого меча", mult: 1.54, chance: 0.25 },
+      verb: "рубає",
       level: 14,
       stats: { hp: 1086, mp: 0, attack: 122, defense: 58, magicDefense: 58, speed: 15, crit: 8 },
       exp: 588,
@@ -1115,7 +1115,12 @@
   }
 
   // Вороги з окремою картинкою assets/images/enemies/<id>.webp (додати ID, коли з'явиться файл)
-  const ENEMY_FILES = new Set([]);
+  const ENEMY_FILES = new Set([
+    "ancient_treant", "black_rider", "bog_leech", "cultist", "drowner", "forest_lord",
+    "forest_spider", "ghost", "ghoul", "pack_leader", "rot_boar", "shadow_beast",
+    "shadow_wolf", "skeleton_archer", "spider_queen", "stone_golem", "web_hunter", "web_weaver",
+    "werewolf", "will_wisp", "witch"
+  ]);
   // Заглушка, поки картинки немає: темний силует з очима
   const ENEMY_PLACEHOLDER = "data:image/svg+xml," + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +

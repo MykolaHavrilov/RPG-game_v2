@@ -2,7 +2,7 @@
 // HTML / JS / CSS: спершу мережа (щоб оновлення гри підтягувались одразу),
 // а без інтернету — з кешу. Картинки: спершу кеш.
 // Після великих змін можна збільшити номер версії — старий кеш видалиться.
-const CACHE = "rpg-game-v38";
+const CACHE = "rpg-game-v39";
 const PRECACHE = [
   "./",
   "./assets/css/game.css",
@@ -71,6 +71,27 @@ const PRECACHE = [
   "./assets/images/map/bld_village_start.webp",
   "./assets/images/map/map_dark_forest.webp",
   "./assets/images/map/start_location.webp",
+  "./assets/images/enemies/ancient_treant.webp",
+  "./assets/images/enemies/black_rider.webp",
+  "./assets/images/enemies/bog_leech.webp",
+  "./assets/images/enemies/cultist.webp",
+  "./assets/images/enemies/drowner.webp",
+  "./assets/images/enemies/forest_lord.webp",
+  "./assets/images/enemies/forest_spider.webp",
+  "./assets/images/enemies/ghost.webp",
+  "./assets/images/enemies/ghoul.webp",
+  "./assets/images/enemies/pack_leader.webp",
+  "./assets/images/enemies/rot_boar.webp",
+  "./assets/images/enemies/shadow_beast.webp",
+  "./assets/images/enemies/shadow_wolf.webp",
+  "./assets/images/enemies/skeleton_archer.webp",
+  "./assets/images/enemies/spider_queen.webp",
+  "./assets/images/enemies/stone_golem.webp",
+  "./assets/images/enemies/web_hunter.webp",
+  "./assets/images/enemies/web_weaver.webp",
+  "./assets/images/enemies/werewolf.webp",
+  "./assets/images/enemies/will_wisp.webp",
+  "./assets/images/enemies/witch.webp",
   "./assets/images/map/city_map.webp",
   "./assets/images/map_world.webp",
   "./assets/images/npc/npc_captain.webp",
