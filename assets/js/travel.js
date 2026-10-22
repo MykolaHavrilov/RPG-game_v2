@@ -8,7 +8,8 @@
 //   dark  — Темний ліс (за Центральною брамою, через капітана варти).
 // Між регіонами переходять лише через брами (миттєво): south_gate ↔ Місто, Північний район ↔ dark_gate.
 //
-// У межах регіону герой іде дорогами (ROUTES): клітинки маршруту × TRAVEL_SEC_PER_CELL секунд.
+// У межах регіону герой іде дорогами (ROUTES): клітинки маршруту × TRAVEL_SEC_PER_CELL секунд;
+// у Місті будь-який перехід між районами триває CITY_TRAVEL_SEC (3 с).
 // Переміщення не скасовується. Поки воно триває, доступні лише «Персонаж», «Інвентар» і «Мапа».
 // Стан у сейві: save.travel = { region, from, to, cells, pts, start, end }.
 //
@@ -17,6 +18,7 @@
 
 (function (RPG) {
   const TRAVEL_PAGES = ["character", "inventory", "maps"];   // що можна відкривати в дорозі
+  const CITY_TRAVEL_SEC = 3;                                  // у Місті будь-який перехід між районами — 3 с
 
   function regionOf(locId) {
     return RPG.LOCATIONS[locId]?.region || "start";
@@ -39,7 +41,8 @@
     return null;
   }
 
-  function travelSeconds(cells) {
+  function travelSeconds(cells, region) {
+    if (region === "city") return CITY_TRAVEL_SEC;
     return cells * RPG.TRAVEL_SEC_PER_CELL;
   }
 
@@ -63,7 +66,7 @@
     if (!can.ok) return can;
     const r = route(region, spot, to);
     if (!r) return { ok: false, reason: "Туди немає дороги." };
-    const ms = travelSeconds(r.cells) * 1000;
+    const ms = travelSeconds(r.cells, region) * 1000;
     save.travel = { region, from: spot, to, cells: r.cells, pts: r.pts, start: now, end: now + ms };
     return { ok: true, cells: r.cells, seconds: ms / 1000 };
   }
@@ -141,7 +144,7 @@
   }
 
   Object.assign(RPG, {
-    TRAVEL_PAGES, regionOf, whereIs, route, travelSeconds, canGo, startTravel, isTraveling,
+    TRAVEL_PAGES, CITY_TRAVEL_SEC, regionOf, whereIs, route, travelSeconds, canGo, startTravel, isTraveling,
     travelState, finishTravel, enterCity, leaveCityToStart, fmtLeft
   });
 })(window.RPG);
