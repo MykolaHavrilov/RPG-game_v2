@@ -84,6 +84,23 @@
 
   function leaveDungeon(save) { delete save.dungeon; }
 
+  // Множник сили ВСІХ ворогів данжу (боїв 1–3) за розміром групи — живих героїв у бою:
+  // здоров'я, атака, магія, захисти × множник (monstergear.js → equipFoes).
+  // Підібрано симуляцією (група однакових Селян рівня боса, лише звичайні удари, без лікування):
+  // група 2–6 героїв проходить УВЕСЬ данж приблизно з тією ж вірогідністю, з якою один герой
+  // перемагає боса (≈10–60% залежно від речей, у середньому ≈35%). 1 герой — ×1 (без змін).
+  const GROUP_POWER = {
+    cave_secret: { 1: 1, 2: 1.04, 3: 1.64, 4: 2.2,  5: 2.62, 6: 3.19 },
+    web_nest:    { 1: 1, 2: 0.59, 3: 0.86, 4: 1.11, 5: 1.35, 6: 1.55 },
+    dark_throne: { 1: 1, 2: 0.66, 3: 0.95, 4: 1.2,  5: 1.41, 6: 1.66 }
+  };
+  function groupPower(dungeonId, size) {
+    const row = (RPG.DUNGEON_GROUP_POWER || GROUP_POWER)[dungeonId];
+    if (!row) return 1;
+    const n = Math.max(1, Math.min(6, size || 1));
+    return row[n] ?? 1;
+  }
+
   // Опис бою stage для гравця
   function dungeonStageText(d, stage) {
     const names = d.pool.map(id => RPG.ENEMIES[id].name);
@@ -97,7 +114,7 @@
   function dungeonSpecs(save) {
     const a = activeDungeon(save);
     if (!a) return [];
-    return a.foes.map(id => ({ id, champion: false, dungeonGs: !RPG.ENEMIES[id]?.boss }));
+    return a.foes.map(id => ({ id, champion: false, dungeonGs: !RPG.ENEMIES[id]?.boss, dungeon: a.id }));
   }
 
   // Ключі зі «Обстеження»: шанс keyChance з кожного переможеного ворога з pool.
@@ -115,7 +132,7 @@
   }
 
   Object.assign(RPG, {
-    DUNGEON_STAGES: STAGES, DUNGEON_POOL_TEXT: dungeonStageText, getDungeon, locationDungeon, keyCount, activeDungeon, openDungeon,
+    DUNGEON_STAGES: STAGES, DUNGEON_GROUP_POWER: GROUP_POWER, dungeonGroupPower: groupPower, DUNGEON_POOL_TEXT: dungeonStageText, getDungeon, locationDungeon, keyCount, activeDungeon, openDungeon,
     advanceDungeon, leaveDungeon, dungeonSpecs, rollKeyDrops
   });
 })(window.RPG);

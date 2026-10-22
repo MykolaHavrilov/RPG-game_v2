@@ -166,7 +166,7 @@
     const e = RPG.ENEMIES[enemyId];
     if (!e) return null;
     const target = targetGs(enemyId, pGs, lGs, forced);
-    if (target <= 0) return e.boss ? { gs: 0, partyGs: pGs, leaderGs: lGs, power, pieces: [], stats: {} } : null;
+    if (target <= 0) return e.boss || power !== 1 ? { gs: 0, partyGs: pGs, leaderGs: lGs, power, pieces: [], stats: {} } : null;
     const caster = (e.stats.magic || 0) > (e.stats.attack || 0);
     const withMp = (e.stats.mp || 0) > 0;
     const w = PIECES.map(() => rnd(1 - PIECE_SPREAD, 1 + PIECE_SPREAD));
@@ -175,7 +175,7 @@
     const stats = {};
     for (const p of pieces) for (const k in p.stats) add(stats, k, p.stats[k]);
     const gs = Math.round(target);
-    return { gs, partyGs: pGs, leaderGs: lGs, power: e.boss ? power : 1, humanoid: !!e.humanoid, pieces, stats };
+    return { gs, partyGs: pGs, leaderGs: lGs, power: e.boss || forced ? power : 1, humanoid: !!e.humanoid, pieces, stats };
   }
 
   // Додати спорядження до специфікацій ворогів [{ id, champion }] під групу героїв.
@@ -184,7 +184,9 @@
     const pGs = partyGs(members);
     const lGs = leaderGs(members);
     for (const spec of specs || []) {
-      const power = RPG.ENEMIES[spec.id]?.boss ? bossPower(members, spec.id) : 1;
+      // Бос — множник за речами першого героя; у данжі — ще й за розміром групи (dungeon.js)
+      const group = spec.dungeon && RPG.dungeonGroupPower ? RPG.dungeonGroupPower(spec.dungeon, (members || []).filter(Boolean).length) : 1;
+      const power = (RPG.ENEMIES[spec.id]?.boss ? bossPower(members, spec.id) : 1) * group;
       const key = pGs + "/" + lGs + "/" + power.toFixed(4);
       if (spec.gear !== undefined && spec.gearFor === key) continue;
       spec.gear = rollMonsterGear(spec.id, pGs, lGs, power, !!spec.dungeonGs);
