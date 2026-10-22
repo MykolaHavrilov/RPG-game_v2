@@ -18,6 +18,9 @@
 // move  — власний прийом ворога: { name, mult, chance } — фізичний удар attack × mult;
 //         якщо не вказано — береться типовий прийом за дальністю (MONSTER_MOVES)
 // noChampion — не може стати чемпіоном; boss — показується як бос
+//         (GS боса завжди на 200 більший за GS групи героїв — monstergear.js)
+// humanoid — гуманоїд (руки, ноги, голова): перед боєм вдягає приховане спорядження
+//         під GS групи героїв (monstergear.js); ці речі ніколи не випадають
 // spawnWeight — множник шансу зустрічі (1 — звичайно, 0.1 — у 10 разів рідше)
 // ============================================================
 
@@ -380,6 +383,7 @@
     },
     drowner: {
       name: "Утопленик",
+      humanoid: true,
       range: 1, move: { name: "Мертва хватка", mult: 1.53, chance: 0.25 },
       verb: "дряпає",
       level: 13,
@@ -443,6 +447,7 @@
     },
     skeleton_archer: {            // id лишається старий (сейви, квести); це скелет-мечник
       name: "Скелет-мечник",
+      humanoid: true,
       range: 1, move: { name: "Удар іржавого меча", mult: 1.54, chance: 0.25 },
       verb: "рубає",
       level: 14,
@@ -506,6 +511,7 @@
     },
     ghoul: {
       name: "Гуль",
+      humanoid: true,
       range: 1, move: { name: "Трупні пазурі", mult: 1.56, chance: 0.25 },
       verb: "шматує",
       level: 16,
@@ -636,6 +642,7 @@
     },
     werewolf: {
       name: "Вовкулака",
+      humanoid: true,
       range: 1, move: { name: "Розшматувати", mult: 1.58, chance: 0.25 },
       verb: "роздирає",
       level: 18,
@@ -730,6 +737,7 @@
     },
     cultist: {
       name: "Культист",
+      humanoid: true,
       range: 2, move: { name: "Ритуальний ніж", mult: 1.60, chance: 0.25 },
       verb: "б'є ножем",
       level: 20,
@@ -762,6 +770,7 @@
     },
     witch: {
       name: "Лісова відьма",
+      humanoid: true,
       range: 3, move: { name: "Удар патерицею", mult: 1.61, chance: 0.25 },
       verb: "вдаряє патерицею",
       level: 21,
@@ -856,6 +865,7 @@
     },
     black_rider: {
       name: "Чорний вершник",
+      humanoid: true,
       range: 1, move: { name: "Наскок вершника", mult: 1.64, chance: 0.25 },
       verb: "рубає",
       level: 24,
@@ -887,6 +897,7 @@
     },
     forest_lord: {
       name: "Володар Темного лісу",
+      humanoid: true,
       range: 2, move: { name: "Гнів лісу", mult: 1.65, chance: 0.25 },
       verb: "б'є",
       level: 25,

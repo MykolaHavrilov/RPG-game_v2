@@ -71,7 +71,7 @@
   }
 
   function makeEnemy(spec, label) {
-    const base = RPG.getEnemy(spec.id, spec.champion);
+    const base = RPG.enemyFromSpec ? RPG.enemyFromSpec(spec) : RPG.getEnemy(spec.id, spec.champion);
     const enemy = label ? { ...base, name: label } : base;
     return {
       side: "enemy", id: spec.id, champion: !!(spec.champion && !base.noChampion), enemy, name: enemy.name,
@@ -422,7 +422,9 @@
 
   // Бій одного героя з одним ворогом
   function simulateBattle(save, enemyId, champion = false) {
-    const r = simulatePartyBattle([save], [{ id: enemyId, champion }]);
+    const specs = [{ id: enemyId, champion }];
+    if (RPG.equipFoes) RPG.equipFoes(specs, [save]);
+    const r = simulatePartyBattle([save], specs);
     return Object.assign(r, { enemyId });
   }
 
@@ -438,7 +440,8 @@
   }
 
   // Ворогів у бою: від 1 до groupSize (випадково), бос — не більше одного.
-  function rollEnemyGroup(locationId, heroLevel, groupSize) {
+  // members — герої групи: під їхній GS гуманоїди й боси отримують спорядження (monstergear.js)
+  function rollEnemyGroup(locationId, heroLevel, groupSize, members = null) {
     const n = 1 + Math.floor(Math.random() * Math.max(1, groupSize));
     const specs = [];
     let boss = false;
@@ -448,6 +451,7 @@
       if (RPG.ENEMIES[id]?.boss) { if (boss) continue; boss = true; }
       specs.push({ id, champion: RPG.rollChampion(id) });
     }
+    if (members && RPG.equipFoes) RPG.equipFoes(specs, members);
     return specs;
   }
 

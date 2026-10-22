@@ -1530,7 +1530,7 @@
     // Від 1 до межі за середнім рівнем групи — випадково (RPG.enemyGroupCap)
     let champWarn = false;      // показати вікно-попередження про чемпіона
     function nextEnemy() {
-      foes = RPG.rollEnemyGroup(locId, save.character.level, RPG.enemyGroupCap(fighters()));
+      foes = RPG.rollEnemyGroup(locId, save.character.level, RPG.enemyGroupCap(fighters()), fighters());
       champWarn = foes.some(f => f.champion);
     }
     // Вікно «Увага, чемпіон!» — з'являється, коли серед ворогів є чемпіон
@@ -1557,7 +1557,8 @@
       dlg.append(row);
       if (!dlg.open) dlg.showModal();
     }
-    function curEnemy(i = 0) { return RPG.getEnemy(foes[i].id, foes[i].champion); }
+    function curEnemy(i = 0) { return RPG.enemyFromSpec(foes[i]); }
+    const gsText = e => (e.gs ? ` · GS ${e.gs}` : "");
     const anyChampion = () => foes.some(f => f.champion);
     if (combat) nextEnemy();
 
@@ -1570,7 +1571,7 @@
       $("enemy-col").classList.toggle("is-champion", anyChampion());
       Object.assign($("enemy-img").style, RPG.enemySpriteStyle(foes[0].id));
       $("enemy-img").setAttribute("aria-label", enemy.name);
-      $("enemy-name").textContent = `${enemy.name} (рівень ${enemy.level})` + (foes.length > 1 ? ` + ще ${foes.length - 1}` : "");
+      $("enemy-name").textContent = `${enemy.name} (рівень ${enemy.level}${gsText(enemy)})` + (foes.length > 1 ? ` + ще ${foes.length - 1}` : "");
       setBar($("enemy-hp"), enemy.stats.hp, enemy.stats.hp);
       const mpBar = $("enemy-mp");
       mpBar.hidden = !enemy.stats.mp;
@@ -1588,7 +1589,7 @@
         const face = el("span", "party-face");
         Object.assign(face.style, RPG.enemySpriteStyle(f.id));
         const info = el("div", "party-info");
-        info.append(el("strong", null, `${e.name} · рів. ${e.level}${f.champion ? " · чемпіон" : ""}${e.boss ? " · бос" : ""}`));
+        info.append(el("strong", null, `${e.name} · рів. ${e.level}${gsText(e)}${f.champion ? " · чемпіон" : ""}${e.boss ? " · бос" : ""}`));
         const hp = miniBar("bar-hp", "HP", "foe-hp-" + i);
         setBar(hp, e.stats.hp, e.stats.hp);
         info.append(hp);
@@ -1768,6 +1769,8 @@
       logBox.innerHTML = "";
 
       const maxStats = team.map(ms => RPG.calcStats(ms));
+      RPG.equipFoes(foes, team);   // GS групи міг змінитися (перевдягнулись) — речі ворогів під нього
+      renderEnemy();
       const result = RPG.simulatePartyBattle(team, foes);
       const group = team.length > 1;
 
