@@ -11,6 +11,14 @@
 // Боси (boss: true) — мають власні випадкові речі, середній GS яких дорівнює
 //   GS ПЕРШОГО (головного) героя групи, поділеному на BOSS_GS_DIV (2).
 //   Окремі речі трохи сильніші чи слабші (±10%), але середнє — рівно ця ціль.
+//   Потім сила боса множиться на BOSS_POWER (здоров'я, атака, магія, захисти):
+//   множник залежить від виду (tier) і рідкості КОЖНОЇ речі першого героя —
+//   береться середнє по всіх його вдягнених речах. Таблицю підібрано симуляцією так,
+//   щоб Селянин 10 рівня перемагав Короля слайма приблизно з такою вірогідністю:
+//                 сірі  білі  сині  фіолет./легенд.  різні
+//     речі 1 виду  10%   ~18%  ~22%       50%          ~33%
+//     речі 2 виду  15%   24%   32%        60%          ~40%
+//   Речі 3 виду поки мають ті самі множники, що й 2 вид.
 //   Боси-гуманоїди отримують таке спорядження, а боси-звірі (напр. Король слайм)
 //   — так само 6 прихованих «частин сили» (природна броня, ікла, слиз…).
 // Звичайні звірі спорядження не мають (GS 0).
@@ -31,6 +39,17 @@
 
 (function (RPG) {
   const BOSS_GS_DIV = 2;         // GS речей боса = GS першого героя / 2
+  // Множник сили боса: [вид речі][рідкість]
+  const BOSS_POWER = {
+    1: { broken: 0.921, common: 1.293, magic: 1.363, epic: 1.336, legendary: 1.801 },
+    2: { broken: 0.983, common: 1.2, magic: 1.505, epic: 1.821, legendary: 2.43 },
+    3: { broken: 0.983, common: 1.2, magic: 1.505, epic: 1.821, legendary: 2.43 }
+  };
+  // Як зводити множники різних речей в один: степеневе середнє (1 — звичайне середнє;
+  // більше — сильніші речі важать більше, бо в бою вирішують саме вони).
+  // Окремо для виду речей героя (середній вид усіх його вдягнених речей, округлений).
+  const BOSS_POWER_MEAN = { 1: 4, 2: 2.6, 3: 2.6 };
+  const BOSS_POWER_KEYS = ["hp", "attack", "magic", "defense", "magicDefense"];
   const PIECES = ["mainHand", "head", "chest", "legs", "hands", "feet"];
   const PIECE_SPREAD = 0.1;      // кожна річ — GS ±10% від цілі
   const CORE_SHARE = 0.4;        // частка балів на основу речі
@@ -61,6 +80,25 @@
   function leaderGs(members) {
     const lead = (members || []).find(Boolean);
     return lead && RPG.equipmentScore ? RPG.equipmentScore(lead).avg : 0;
+  }
+
+  // Множник сили боса — середнє BOSS_POWER по всіх вдягнених речах першого героя
+  function bossPower(members) {
+    const lead = (members || []).find(Boolean);
+    const table = RPG.BOSS_POWER || BOSS_POWER;
+    const means = RPG.BOSS_POWER_MEAN || BOSS_POWER_MEAN;
+    const refs = Object.values(lead?.equipment || {})
+      .filter(ref => ref && RPG.ITEMS[RPG.refId(ref)] && RPG.hasRarity(RPG.refId(ref)));
+    const avgTier = refs.length ? Math.round(refs.reduce((a, ref) => a + (RPG.ITEMS[RPG.refId(ref)].tier || 1), 0) / refs.length) : 1;
+    const pw = means[Math.min(3, Math.max(1, avgTier))] || 1;
+    let sum = 0, n = 0;
+    for (const ref of refs) {
+      const item = RPG.ITEMS[RPG.refId(ref)];
+      const row = table[Math.min(3, Math.max(1, item.tier || 1))];
+      sum += Math.pow(row[RPG.rarityOf(ref)] ?? row.common, pw);
+      n++;
+    }
+    return n ? Math.pow(sum / n, 1 / pw) : table[1].broken;
   }
 
   // Цільовий середній GS речей ворога (0 — без спорядження)
@@ -99,10 +137,11 @@
 
   // Спорядження для одного ворога: { gs, pieces, stats } або null.
   // Середній GS речей рівно дорівнює цілі; окремі речі — ±10% навколо неї.
-  function rollMonsterGear(enemyId, pGs, lGs = pGs) {
+  function rollMonsterGear(enemyId, pGs, lGs = pGs, power = 1) {
     const e = RPG.ENEMIES[enemyId];
+    if (!e) return null;
     const target = targetGs(enemyId, pGs, lGs);
-    if (!e || target <= 0) return null;
+    if (target <= 0) return e.boss ? { gs: 0, partyGs: pGs, leaderGs: lGs, power, pieces: [], stats: {} } : null;
     const caster = (e.stats.magic || 0) > (e.stats.attack || 0);
     const withMp = (e.stats.mp || 0) > 0;
     const w = PIECES.map(() => rnd(1 - PIECE_SPREAD, 1 + PIECE_SPREAD));
@@ -111,7 +150,7 @@
     const stats = {};
     for (const p of pieces) for (const k in p.stats) add(stats, k, p.stats[k]);
     const gs = Math.round(target);
-    return { gs, partyGs: pGs, leaderGs: lGs, humanoid: !!e.humanoid, pieces, stats };
+    return { gs, partyGs: pGs, leaderGs: lGs, power: e.boss ? power : 1, humanoid: !!e.humanoid, pieces, stats };
   }
 
   // Додати спорядження до специфікацій ворогів [{ id, champion }] під групу героїв.
@@ -119,10 +158,11 @@
   function equipFoes(specs, members) {
     const pGs = partyGs(members);
     const lGs = leaderGs(members);
-    const key = pGs + "/" + lGs;
+    const power = bossPower(members);
+    const key = pGs + "/" + lGs + "/" + power.toFixed(4);
     for (const spec of specs || []) {
       if (spec.gear !== undefined && spec.gearFor === key) continue;
-      spec.gear = rollMonsterGear(spec.id, pGs, lGs);
+      spec.gear = rollMonsterGear(spec.id, pGs, lGs, power);
       spec.gearFor = key;
     }
     return specs;
@@ -155,6 +195,7 @@
     const speedCap = Math.max(1, (own.speed || 1) * SPEED_MULT_CAP);
     if (st.speed > speedCap) { overflowPts += (st.speed - speedCap) * RPG.GS_WEIGHTS.auxiliary; st.speed = speedCap; }
     if (overflowPts) add(st, "hp", pointsToValue("hp", overflowPts));
+    if (gear.power && gear.power !== 1) for (const k of BOSS_POWER_KEYS) if (st[k]) st[k] *= gear.power;
 
     for (const k in st) {
       st[k] = ["crit", "dodge", "blockPhys", "blockMag"].includes(k) ? Math.round(st[k] * 10) / 10 : Math.round(st[k]);
@@ -171,6 +212,6 @@
   }
 
   Object.assign(RPG, {
-    BOSS_GS_DIV, leaderGs, isHumanoid, partyGs, rollMonsterGear, equipFoes, enemyFromSpec
+    BOSS_GS_DIV, BOSS_POWER, BOSS_POWER_MEAN, bossPower, leaderGs, isHumanoid, partyGs, rollMonsterGear, equipFoes, enemyFromSpec
   });
 })(window.RPG);
