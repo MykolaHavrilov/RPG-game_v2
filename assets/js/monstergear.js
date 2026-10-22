@@ -8,13 +8,9 @@
 //   перед кожним боєм отримують випадкове спорядження: 6 речей
 //   (зброя, голова, тіло, штани, наручі, взуття), середній GS яких
 //   дорівнює GS групи героїв (кожна річ ±10%).
-// Боси (boss: true) — середній GS речей боса більший за GS групи на надбавку,
-//   що залежить від рідкості речей героїв (BOSS_BONUS_BY_RARITY):
-//   сірі +10, білі +50, сині +70, фіолетові +90, легендарні +110.
-//   Якщо речі різної рідкості — береться середнє надбавок усіх вдягнених речей
-//   усіх героїв групи (напр. половина білих і половина синіх → +60).
-//   Надбавка ділиться між усіма 6 речами боса: їхній СЕРЕДНІЙ GS = GS групи + надбавка
-//   (окремі речі трохи сильніші чи слабші, ±10%).
+// Боси (boss: true) — мають власні випадкові речі, середній GS яких дорівнює
+//   GS ПЕРШОГО (головного) героя групи, поділеному на BOSS_GS_DIV (2).
+//   Окремі речі трохи сильніші чи слабші (±10%), але середнє — рівно ця ціль.
 //   Боси-гуманоїди отримують таке спорядження, а боси-звірі (напр. Король слайм)
 //   — так само 6 прихованих «частин сили» (природна броня, ікла, слиз…).
 // Звичайні звірі спорядження не мають (GS 0).
@@ -34,9 +30,7 @@
 // ============================================================
 
 (function (RPG) {
-  // Надбавка GS боса за рідкістю речей героїв
-  const BOSS_BONUS_BY_RARITY = { broken: 10, common: 50, magic: 70, epic: 90, legendary: 110 };
-  const BOSS_BONUS_NO_GEAR = 10; // героїв без речей — як у сірих
+  const BOSS_GS_DIV = 2;         // GS речей боса = GS першого героя / 2
   const PIECES = ["mainHand", "head", "chest", "legs", "hands", "feet"];
   const PIECE_SPREAD = 0.1;      // кожна річ — GS ±10% від цілі
   const CORE_SHARE = 0.4;        // частка балів на основу речі
@@ -63,25 +57,17 @@
     return Math.round(sum / list.length);
   }
 
-  // Надбавка GS боса: середнє надбавок за рідкістю всіх вдягнених речей групи (ціле)
-  function bossBonus(members) {
-    let sum = 0, n = 0;
-    for (const ms of (members || []).filter(Boolean)) {
-      for (const slot in ms.equipment || {}) {
-        const ref = ms.equipment[slot];
-        if (!ref || !RPG.hasRarity(RPG.refId(ref))) continue;
-        sum += BOSS_BONUS_BY_RARITY[RPG.rarityOf(ref)] ?? BOSS_BONUS_BY_RARITY.common;
-        n++;
-      }
-    }
-    return n ? Math.round(sum / n) : BOSS_BONUS_NO_GEAR;
+  // GS першого (головного) героя
+  function leaderGs(members) {
+    const lead = (members || []).find(Boolean);
+    return lead && RPG.equipmentScore ? RPG.equipmentScore(lead).avg : 0;
   }
 
   // Цільовий середній GS речей ворога (0 — без спорядження)
-  function targetGs(enemyId, pGs, bonus) {
+  function targetGs(enemyId, pGs, lGs) {
     const e = RPG.ENEMIES[enemyId];
     if (!e) return 0;
-    if (e.boss) return pGs + bonus;
+    if (e.boss) return Math.round(lGs / BOSS_GS_DIV);
     return e.humanoid ? pGs : 0;
   }
 
@@ -113,9 +99,9 @@
 
   // Спорядження для одного ворога: { gs, pieces, stats } або null.
   // Середній GS речей рівно дорівнює цілі; окремі речі — ±10% навколо неї.
-  function rollMonsterGear(enemyId, pGs, bonus = 0) {
+  function rollMonsterGear(enemyId, pGs, lGs = pGs) {
     const e = RPG.ENEMIES[enemyId];
-    const target = targetGs(enemyId, pGs, bonus);
+    const target = targetGs(enemyId, pGs, lGs);
     if (!e || target <= 0) return null;
     const caster = (e.stats.magic || 0) > (e.stats.attack || 0);
     const withMp = (e.stats.mp || 0) > 0;
@@ -125,18 +111,18 @@
     const stats = {};
     for (const p of pieces) for (const k in p.stats) add(stats, k, p.stats[k]);
     const gs = Math.round(target);
-    return { gs, partyGs: pGs, bonus: e.boss ? bonus : 0, humanoid: !!e.humanoid, pieces, stats };
+    return { gs, partyGs: pGs, leaderGs: lGs, humanoid: !!e.humanoid, pieces, stats };
   }
 
   // Додати спорядження до специфікацій ворогів [{ id, champion }] під групу героїв.
   // Повторний виклик перекидає речі, лише якщо GS групи змінився.
   function equipFoes(specs, members) {
     const pGs = partyGs(members);
-    const bonus = bossBonus(members);
-    const key = pGs + "/" + bonus;
+    const lGs = leaderGs(members);
+    const key = pGs + "/" + lGs;
     for (const spec of specs || []) {
       if (spec.gear !== undefined && spec.gearFor === key) continue;
-      spec.gear = rollMonsterGear(spec.id, pGs, bonus);
+      spec.gear = rollMonsterGear(spec.id, pGs, lGs);
       spec.gearFor = key;
     }
     return specs;
@@ -185,6 +171,6 @@
   }
 
   Object.assign(RPG, {
-    BOSS_BONUS_BY_RARITY, bossBonus, isHumanoid, partyGs, rollMonsterGear, equipFoes, enemyFromSpec
+    BOSS_GS_DIV, leaderGs, isHumanoid, partyGs, rollMonsterGear, equipFoes, enemyFromSpec
   });
 })(window.RPG);
