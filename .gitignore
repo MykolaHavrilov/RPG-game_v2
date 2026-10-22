@@ -5,3 +5,5 @@ desktop.ini
 _old/
 # вихідник логотипа (великий; у гру йдуть зменшені копії)
 assets/icons/Logo_game.png
+# вихідник мапи Міста (у гру йде assets/images/map/city_map.webp)
+assets/images/map/Town_1.png

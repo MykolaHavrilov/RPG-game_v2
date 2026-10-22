@@ -86,13 +86,74 @@
       if (!save) { showNoGame(); return null; }
       // старий сейв: зайва річ з лівої руки — в інвентар (для кожного героя групи)
       const fixed = RPG.partyMembers(save).map(ms => RPG.fixHands(ms)).some(Boolean);
-      if (RPG.applyRegenAll(save) || fixed) await RPG.saveGame(save);
+      const arrived = RPG.finishTravel(save);          // дорога скінчилась, поки гра була закрита
+      if (RPG.applyRegenAll(save) || fixed || arrived) await RPG.saveGame(save);
+      // У дорозі доступні лише «Персонаж», «Інвентар» і «Мапа»
+      if (RPG.isTraveling(save)) {
+        const page = document.body.dataset.page;
+        if (!RPG.TRAVEL_PAGES.includes(page)) { location.replace("maps.html"); return null; }
+        lockNavForTravel();
+        if (page !== "maps") showTravelBanner(save);
+      }
       return save;
     } catch (e) {
       console.error(e);
       showNoGame();
       return null;
     }
+  }
+
+  // ---------- Дорога: блокування вкладок і банер з відліком ----------
+  const TRAVEL_HREFS = ["character.html", "inventory.html", "maps.html"];
+  function blockLink(ev) {
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+  }
+  function lockNavForTravel() {
+    document.body.classList.add("is-traveling");
+    document.querySelectorAll("header nav a, main a[href]").forEach(a => {
+      const href = (a.getAttribute("href") || "").split("?")[0];
+      if (TRAVEL_HREFS.includes(href)) return;
+      a.classList.add("travel-locked");
+      a.setAttribute("aria-disabled", "true");
+      a.title = "Недоступно в дорозі";
+      a.addEventListener("click", blockLink, true);
+    });
+  }
+  function unlockNavAfterTravel() {
+    document.body.classList.remove("is-traveling");
+    document.querySelectorAll("a.travel-locked").forEach(a => {
+      a.classList.remove("travel-locked");
+      a.removeAttribute("aria-disabled");
+      a.removeAttribute("title");
+      a.removeEventListener("click", blockLink, true);
+    });
+  }
+  // Банер «В дорозі» на сторінках Персонаж / Інвентар
+  function showTravelBanner(save) {
+    const main = document.querySelector("main");
+    if (!main) return;
+    const bar = el("div", "travel-banner");
+    bar.setAttribute("role", "status");
+    const text = el("span");
+    bar.append(text, link("Мапа", "maps.html"));
+    main.prepend(bar);
+    const name = id => (save.travel.region === "city"
+      ? (RPG.LOCATIONS.city.districts.find(d => d.id === id) || {}).name
+      : RPG.LOCATIONS[id]?.name) || id;
+    const to = name(save.travel.to);
+    const upd = async () => {
+      const tr = RPG.travelState(save);
+      if (tr && tr.leftMs > 0) { text.textContent = `В дорозі до «${to}»: ${RPG.fmtLeft(tr.leftMs)}`; return; }
+      clearInterval(timer);
+      RPG.finishTravel(save);
+      await RPG.saveGame(save).catch(e => console.error(e));
+      text.textContent = `Ви прибули: «${to}».`;
+      bar.classList.add("is-done");
+      unlockNavAfterTravel();
+    };
+    const timer = setInterval(upd, 250);
+    upd();
   }
 
   // Щосекунди перевіряє, чи настав час відновлення (кожні 10 с).
@@ -357,6 +418,7 @@
 
   // Картинка локації для CSS (var(--loc-img))
   function locImage(id) {
+    if (id === "south_gate") id = "city";            // вхід у Місто — та сама картинка
     return `url("${RPG.asset("assets/images/locations/loc_" + id + ".webp")}")`;
   }
 
@@ -579,18 +641,24 @@
 
     const msg = $("msg");
 
-    // Перехід з мапи: game.html?loc=village_start
-    const locParam = new URLSearchParams(location.search).get("loc");
+    // Посилання «game.html?loc=…» / «?district=…» — герой не телепортується, а вирушає туди дорогою (travel.js)
+    const params = new URLSearchParams(location.search);
+    const locParam = params.get("loc");
+    const distParam = params.get("district");
     let enterError = null;
-    if (locParam && RPG.LOCATIONS[locParam] && save.location.map !== locParam) {
-      const can = RPG.canEnterLocation(locParam, save.character.level, save);
-      if (can.ok) {
-        save.location.map = locParam;
+    let target = null;
+    if (save.location.map === "city" && distParam && distParam !== (save.location.district || "south")) target = distParam;
+    else if (locParam && RPG.LOCATIONS[locParam] && save.location.map !== locParam && locParam !== "city") target = locParam;
+    if (target) {
+      const r = RPG.startTravel(save, target);
+      if (r.ok) {
         await RPG.saveGame(save);
-      } else {
-        enterError = can.reason;
+        location.replace("maps.html");
+        return;
       }
+      enterError = r.reason;
     }
+    if (locParam || distParam) history.replaceState(null, "", "game.html");
     const locId = save.location.map;
     const locData = RPG.getLocation(locId);
     $("location-name").textContent = locData.name;
@@ -656,6 +724,7 @@
       else if (locData.type === "tavern") renderTavern();
       else if (locData.type === "city") renderCity();
       else if (locData.type === "gate") renderDarkGate();
+      else if (locData.type === "citygate") renderCityGate();
     }
 
     function renderHome() {
@@ -674,9 +743,22 @@
     // Темний ліс: зворотний бік Центральної брами
     function renderDarkGate() {
       place.append(el("p", "note", locData.description));
-      place.append(el("p", "note", "Тут не б'ються. Звідси — дороги до всіх місць Темного лісу (Мапа) або назад у Місто крізь браму."));
+      place.append(el("p", "note", "Тут не б'ються. Звідси — дороги до всіх місць Темного лісу (Мапа). Щоб повернутися в Місто, гукніть капітана варти."));
+      renderNpc(place, "captain");
       const row = el("div", "row");
-      row.append(link("Повернутися в Місто", "game.html?loc=city&district=north"), link("Мапа Темного лісу", "maps.html"));
+      row.append(link("Мапа Темного лісу", "maps.html"));
+      place.append(row);
+    }
+
+    // Стартова мапа: Південні ворота Міста
+    function renderCityGate() {
+      place.append(el("p", "note", "Тут не б'ються. Крізь ворота — Південний район Міста з Гільдією авантюристів."));
+      const row = el("div", "row");
+      row.append(button("Увійти в Місто", "wf wf-button", async () => {
+        RPG.enterCity(save, "south");
+        await RPG.saveGame(save);
+        location.reload();
+      }), link("Мапа", "maps.html"));
       place.append(row);
     }
 
@@ -686,7 +768,7 @@
         "відновіться зіллям або вирушайте відпочити в Домівку."));
       renderNpc(place, "nun");
       const row = el("div", "row");
-      row.append(link("До Домівки", "game.html?loc=home"), link("Мапа", "maps.html"));
+      row.append(link("Мапа", "maps.html"));
       place.append(row);
     }
 
@@ -725,8 +807,17 @@
           (r.levelUps.length ? `, новий рівень: ${r.levelUps.at(-1)}!` : ".") };
       },
       async gate_go() {
-        location.href = "game.html?loc=dark_gate";
+        if (!RPG.isGateOpen(save)) return { text: "«Брама зачинена.»", error: true };
+        save.location.map = "dark_gate";               // крізь браму — одразу, без дороги
+        await RPG.saveGame(save);
+        location.href = "game.html";
         return { text: "Брама відчиняється…" };
+      },
+      async gate_back() {
+        RPG.enterCity(save, "north");
+        await RPG.saveGame(save);
+        location.href = "game.html";
+        return { text: "Варта відчиняє хвіртку в брамі…" };
       },
       async reset() {
         const ms = RPG.memberSave(save, npcCtx.member);
@@ -781,7 +872,7 @@
         `а купує за ${Math.round(RPG.SHOP_BUY_RATE * 100)}%. Великі та чарівні зілля тут не купиш — лише здобути в бою.`));
       renderShop(place, locData.shop || []);
       const row = el("div", "row");
-      row.append(link("До Домівки", "game.html?loc=home"), link("Мапа", "maps.html"));
+      row.append(link("Мапа", "maps.html"));
       place.append(row);
     }
 
@@ -926,12 +1017,8 @@
     // ---------- Місто: райони та Гільдія авантюристів ----------
     // Центральний район відкривається після особливого завдання «Час дослідити»
     const districtLocked = d => !RPG.isDistrictOpen(save, d);
-    const districtParam = new URLSearchParams(location.search).get("district");
-    let cityDistrict = "south";     // обраний район (Південний відкритий)
-    {
-      const d = (locData.districts || []).find(x => x.id === districtParam);
-      if (d && !districtLocked(d)) cityDistrict = d.id;
-    }
+    // Район, де зараз герой (переходи між районами — дорогою по мапі Міста)
+    const cityDistrict = save.location.district || "south";
     let guildNpc = "admin";         // admin | trader | trainer
     let trainMember = 0;            // кого навчає Тренер (герой групи)
 
@@ -942,8 +1029,15 @@
         const locked = districtLocked(d);
         const card = button("", "wf loc-card " + (locked ? "wf-locked" : "wf-link"));
         card.append(el("strong", null, d.name), el("span", "loc-desc", locked ? "Закрито" : d.building));
-        if (cityDistrict === d.id) card.classList.add("is-selected");
-        card.addEventListener("click", () => { cityDistrict = d.id; renderPlace(); });
+        if (cityDistrict === d.id) { card.classList.add("is-selected"); card.append(el("span", "loc-desc", "Ви тут")); }
+        card.addEventListener("click", async () => {
+          if (cityDistrict === d.id) return;
+          if (locked) { showMsg(msg, RPG.districtLockText(d), true); return; }
+          const r = RPG.startTravel(save, d.id);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          location.href = "maps.html";
+        });
         grid.append(card);
       }
       place.append(grid);
@@ -953,14 +1047,21 @@
         const box = el("div", "stack district");
         box.append(el("h3", null, `${d.name} — ${d.building}`), el("p", "note", d.description));
         if (districtLocked(d)) box.append(el("p", "status", RPG.districtLockText(d)));
-        else if (d.id === "south") renderGuild(box);
+        else if (d.id === "south") {
+          renderGuild(box);
+          box.append(button("Вийти з міста", "wf wf-secondary", async () => {
+            RPG.leaveCityToStart(save);
+            await RPG.saveGame(save);
+            location.reload();
+          }));
+        }
         else if (d.id === "trade") renderTradeGuild(box);
         else if (d.id === "north") renderNpc(box, "captain");
         else if (d.id === "center") renderTownHall(box);
         place.append(box);
       }
       const row = el("div", "row");
-      row.append(link("До Домівки", "game.html?loc=home"), link("Мапа", "maps.html"));
+      row.append(link("Мапа", "maps.html"));
       place.append(row);
     }
 
@@ -1158,7 +1259,7 @@
       card.append(el("h3", null, `Особливе завдання: «${E.name}»`));
       if (info.done) {
         card.append(el("p", "note", E.finale));
-        card.append(link("До Центрального району (Мерія)", "game.html?loc=city&district=center"));
+        card.append(link("До Центрального району (Мерія)", "game.html?district=center"));
       } else if (info.canStart) {
         card.append(el("p", "note", `«Ви вже досвідчений авантюрист. Час дослідити світ далі — але спершу допоможіть нам. ` +
           `Завдання з ${info.total} частин, кожна відкривається після попередньої.»`));
@@ -1659,7 +1760,7 @@
         setArena(group ? "Група загинула" : "Загибель", lines);
         arena.dataset.state = "lose";
         addLogLine({ who: "info", text: lines.join(" ") });
-        arena.append(link("Прокинутися в Храмі", "game.html?loc=temple"));
+        arena.append(link("Прокинутися в Храмі", "game.html"));
         renderHeroBars(save);
         renderQuickSlots();
         document.body.classList.remove("is-fighting");
@@ -2123,15 +2224,25 @@
   }
 
   // ============================================================
-  // МАПА
+  // МАПА: три частини світу (data/routes.js → MAP_REGIONS), переміщення з часом (travel.js)
   // ============================================================
-  const LOCATION_ORDER = ["home", "temple", "village_start", "tavern", "city", "forest_path", "forest_cave"];
-  const TYPE_LABEL = { home: "Безпечно", temple: "Безпечно", tavern: "Торговець", city: "Гільдія", combat: "Бої", gate: "Брама" };
-  // ---------- Темний ліс (друга частина світу, region: "dark") ----------
-  // Основа мапи: assets/images/map/map_dark_forest.webp (2048×1280). Поки її немає — темна заглушка з підписами місць.
-  const DARK_ORDER = ["dark_gate", "dk_edge", "dk_marsh", "dk_grave", "dk_webs", "dk_ravine", "dk_ruins", "dk_heart"];
-  const DARK_MAP_BASE = "assets/images/map/map_dark_forest.webp";
-  const DARK_MAP = {                         // під картинку map_dark_forest.webp
+  const TYPE_LABEL = { home: "Безпечно", temple: "Безпечно", tavern: "Торговець", city: "Гільдія", combat: "Бої", gate: "Брама", citygate: "Вхід у Місто" };
+  // Порядок місць у списку під мапою
+  const REGION_ORDER = {
+    start: ["home", "temple", "village_start", "tavern", "south_gate", "forest_path", "forest_cave"],
+    city: ["south", "center", "trade", "rest", "north"],
+    dark: ["dark_gate", "dk_edge", "dk_marsh", "dk_grave", "dk_webs", "dk_ravine", "dk_ruins", "dk_heart"]
+  };
+  // Зони кліку (x, y — центр; w, h — розмір у % мапи). Стартова мапа — за картинками будівель (map_layout.js):
+  // Місто на ній — це вхід south_gate («Південний район»).
+  const CITY_ZONES = {                       // під картинку city_map.webp (з Town_1.png)
+    south:  { x: 50.0, y: 79.0, w: 56, h: 28 },
+    center: { x: 50.0, y: 51.0, w: 32, h: 28 },
+    north:  { x: 50.0, y: 20.0, w: 56, h: 30 },
+    trade:  { x: 16.5, y: 50.0, w: 32, h: 36 },
+    rest:   { x: 83.0, y: 51.0, w: 32, h: 36 }
+  };
+  const DARK_ZONES = {                       // під картинку map_dark_forest.webp
     dark_gate: { x: 48.5, y: 78.0, w: 14.0, h: 18.0 },
     dk_edge:   { x: 24.0, y: 64.0, w: 12.0, h: 14.0 },
     dk_marsh:  { x: 13.0, y: 43.0, w: 15.0, h: 15.0 },
@@ -2141,98 +2252,11 @@
     dk_ruins:  { x: 91.0, y: 11.0, w: 9.0,  h: 16.0 },
     dk_heart:  { x: 55.5, y: 9.5,  w: 14.0, h: 16.0 }
   };
-
-
-  // Зони локацій на картинці мапи (assets/images/map_world.*), у відсотках:
-  // x, y — центр зони; w, h — ширина й висота. Нову локацію достатньо дописати сюди.
-  // Мапу зібрано з map_full_1 + споруди (128x128, 160x128, Town_1) і стежки за маршрутом:
-  // Домівка → розвилка → Храм / Ферма → Шинок → Лісова стежка → Печера; Ферма → Південний район;
-  // з Північного району стежка йде за край мапи.
-  const WORLD_MAP = {
-    home:          { x: 9.46,  y: 78.63, w: 8.07,  h: 10.89 },
-    temple:        { x: 15.01, y: 65.52, w: 6.81,  h: 12.9 },
-    village_start: { x: 18.92, y: 45.87, w: 8.07,  h: 11.09 },
-    tavern:        { x: 32.79, y: 46.88, w: 8.07,  h: 11.39 },
-    city:          { x: 55.87, y: 35.49, w: 12.11, h: 12.44 },   // точка героя — біля Південного району
-    forest_path:   { x: 48.87, y: 63.0,  w: 10.09, h: 11.59 },
-    forest_cave:   { x: 91.11, y: 46.88, w: 10.09, h: 12.6 }
-  };
-  // Місто клікабельне по районах (id — як у LOCATIONS.city.districts)
-  const CITY_MAP = {
-    north:  { x: 55.87, y: 6.63,  w: 12.11, h: 11.41 },
-    trade:  { x: 46.89, y: 21.32, w: 9.08,  h: 17.97 },
-    center: { x: 55.87, y: 20.45, w: 9.08,  h: 14.52 },
-    rest:   { x: 64.73, y: 21.49, w: 9.08,  h: 17.97 },
-    south:  { x: 55.87, y: 35.49, w: 12.11, h: 12.44 }
-  };
-
-  // Нова мапа: «чиста» основа без будівель (assets/images/map/map_world_base.webp, 2048×1280)
-  // + будівлі окремими картинками поверх неї (вирізані зі старої мапи).
-  // x, y — центр, w, h — розмір картинки будівлі у % від мапи.
-  // Якщо основи ще немає — показується стара мапа map_world.webp (будівлі на ній уже намальовані).
-  const MAP_BASE = "assets/images/map/map_world_base.webp";
-  const MAP_BUILDINGS = {
-    home:          { x: 9.46,  y: 78.63, w: 10.5, h: 14.2 },
-    temple:        { x: 15.01, y: 65.52, w: 9.0,  h: 16.5 },
-    village_start: { x: 18.92, y: 45.87, w: 10.5, h: 14.4 },
-    tavern:        { x: 32.79, y: 46.88, w: 10.5, h: 14.8 },
-    city:          { x: 55.87, y: 21.5,  w: 30.0, h: 43.0 },
-    forest_path:   { x: 48.87, y: 63.0,  w: 12.0, h: 14.0 },
-    forest_cave:   { x: 91.11, y: 46.88, w: 12.0, h: 15.5 }
-  };
-
-  // Свої координати під згенеровану мапу варіанта: assets/js/map_layout.js → RPG.MAP_LAYOUT
-  //   { buildings: { id: {x,y,w,h} }, spots: { id: {x,y,w,h} }, city: { id: {x,y,w,h} } }
-  // Діють лише тоді, коли є нова основа мапи.
-  function applyMapLayout() {
-    const L = RPG.MAP_LAYOUT;
-    if (!L) return false;
-    for (const [id, v] of Object.entries(L.buildings || {})) MAP_BUILDINGS[id] = Object.assign(MAP_BUILDINGS[id] || {}, v);
-    for (const [id, v] of Object.entries(L.spots || {})) WORLD_MAP[id] = Object.assign(WORLD_MAP[id] || {}, v);
-    for (const [id, v] of Object.entries(L.city || {})) CITY_MAP[id] = Object.assign(CITY_MAP[id] || {}, v);
-    return true;
-  }
-
-  function setupDarkMap(mapBox) {
-    const img = mapBox && mapBox.querySelector(".map-img");
-    if (!img) return;
-    const h2 = mapBox.closest(".panel")?.querySelector("h2");
-    if (h2) h2.firstChild.textContent = "Мапа світу — Темний ліс";
-    img.alt = "Мапа: Темний ліс";
-    mapBox.classList.add("is-dark", "no-art");
-    img.removeAttribute("src");
-    const probe = new Image();
-    probe.onload = () => { img.src = probe.src; mapBox.classList.remove("no-art"); };
-    probe.src = RPG.asset(DARK_MAP_BASE);
-    // Стежки між місцями — видно лише на заглушці
-    const roads = [["dark_gate", "dk_edge"], ["dk_edge", "dk_marsh"], ["dk_marsh", "dk_grave"], ["dk_grave", "dk_webs"],
-                   ["dk_edge", "dk_webs"], ["dk_webs", "dk_ravine"], ["dk_ravine", "dk_ruins"], ["dk_ruins", "dk_heart"]];
-    const svg = roads.map(([a, b]) => `<line x1="${DARK_MAP[a].x}" y1="${DARK_MAP[a].y}" x2="${DARK_MAP[b].x}" y2="${DARK_MAP[b].y}"/>`).join("");
-    const layer = el("div", "map-roads");
-    layer.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${svg}</svg>`;
-    img.after(layer);
-  }
-
-  function setupMapLayers(mapBox, onReady) {
-    const img = mapBox && mapBox.querySelector(".map-img");
-    if (!img) return;
-    const probe = new Image();
-    probe.onload = () => {
-      img.src = probe.src;
-      mapBox.classList.add("has-base");
-      if (applyMapLayout() && onReady) onReady();
-      const layer = el("div", "map-buildings");
-      for (const [id, b] of Object.entries(MAP_BUILDINGS)) {
-        const bi = el("img", "map-building");
-        bi.src = RPG.asset(`assets/images/map/bld_${id}.webp`);
-        bi.alt = "";
-        bi.dataset.loc = id;
-        Object.assign(bi.style, { left: b.x + "%", top: b.y + "%", width: b.w + "%", height: b.h + "%" });
-        layer.append(bi);
-      }
-      img.after(layer);
-    };
-    probe.src = RPG.asset(MAP_BASE);
+  function startZones() {
+    const b = (RPG.MAP_LAYOUT && RPG.MAP_LAYOUT.buildings) || {};
+    const z = {};
+    for (const id of REGION_ORDER.start) z[id] = b[id === "south_gate" ? "city" : id];
+    return z;
   }
 
   // Фігурка героя (SVG)
@@ -2249,112 +2273,108 @@
     const grid = $("loc-list");
     const details = $("loc-details");
     const mapBox = $("world-map");
-    // Яку частину світу показувати: де зараз герой
-    const dark = RPG.getLocation(save.location.map).region === "dark";
-    const SPOTS = dark ? DARK_MAP : WORLD_MAP;
-    const ids = dark ? DARK_ORDER
-      : [...LOCATION_ORDER, ...Object.keys(RPG.LOCATIONS).filter(id => !LOCATION_ORDER.includes(id) && RPG.LOCATIONS[id].region !== "dark")];
-    let selected = save.location.map;      // id локації
-    let selDistrict = null;                // район міста (якщо обрано на мапі)
-    let traveling = false;
-    const districts = dark ? [] : (RPG.LOCATIONS.city?.districts || []);
-    const districtLocked = d => !RPG.isDistrictOpen(save, d);
+    const t0 = RPG.travelState(save);
+    const here = RPG.whereIs(save);
+    const region = t0 ? t0.region : here.region;
+    const R = RPG.MAP_REGIONS[region];
+    const ZONES = region === "city" ? CITY_ZONES : region === "dark" ? DARK_ZONES : startZones();
+    const districts = RPG.LOCATIONS.city.districts || [];
+    const ids = REGION_ORDER[region].filter(id => ZONES[id] && R.spots[id]);
+    let selected = t0 ? t0.to : here.spot;
+    let travelTimer = null;
 
-    // Стан локації для героя: here | open | closed
-    function locState(id) {
-      if (save.location.map === id) return { kind: "here", text: "Ви тут" };
+    // Опис місця регіону: { name, desc, loc? (LOCATIONS), district? }
+    function place(id) {
+      if (region === "city") {
+        const d = districts.find(x => x.id === id);
+        return { name: d.name, desc: `${d.building}. ${d.description}`, district: d, typeLabel: d.building };
+      }
       const loc = RPG.LOCATIONS[id];
-      const can = RPG.canEnterLocation(id, save.character.level, save);
-      if (can.ok) return { kind: "open", text: "Можна перейти" };
-      if (loc.locked) return { kind: "closed", text: "Закрито — відкриється згодом" };
-      return { kind: "closed", text: `Недоступно: потрібен ${loc.minLevel} рівень (у вас ${save.character.level})` };
+      return { name: loc.name, desc: loc.description, loc, typeLabel: TYPE_LABEL[loc.type] + (loc.minLevel ? ` · від ${loc.minLevel} рів.` : "") };
+    }
+
+    // here | open | closed | road (поки герой у дорозі)
+    function placeState(id) {
+      const tr = RPG.travelState(save);
+      if (tr) return tr.to === id ? { kind: "here", text: "Сюди прямуєте" } : { kind: "closed", text: "Ви в дорозі" };
+      if (here.spot === id) return { kind: "here", text: "Ви тут" };
+      const can = RPG.canGo(save, region, id);
+      if (!can.ok) return { kind: "closed", text: can.reason };
+      const r = RPG.route(region, here.spot, id);
+      if (!r) return { kind: "closed", text: "Туди немає дороги." };
+      return { kind: "open", text: `Час у дорозі: ${RPG.fmtLeft(RPG.travelSeconds(r.cells) * 1000)}`, cells: r.cells };
     }
 
     function shortText(s, n = 130) {
       return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
     }
 
-    // ---------- Мапа-картинка: зони, підказка, фігурка героя ----------
-    let tip = null, hero = null;
-    function buildWorldMap() {
-      if (!mapBox) return;
-      mapBox.querySelectorAll(".map-spot, .map-tip, .map-hero").forEach(n => n.remove());
-      // Райони міста — окремі зони
-      for (const d of districts) {
-        const pos = CITY_MAP[d.id];
-        if (!pos) continue;
-        const cityOpen = locState("city").kind !== "closed";
-        const closed = !cityOpen || districtLocked(d);
-        const spot = button("", `map-spot map-district is-${closed ? "closed" : (save.location.map === "city" ? "here" : "open")}`);
-        spot.dataset.loc = "city";
-        spot.dataset.district = d.id;
-        Object.assign(spot.style, { left: pos.x + "%", top: pos.y + "%", width: pos.w + "%", height: pos.h + "%" });
-        spot.setAttribute("aria-label", `Місто, ${d.name} — ${closed ? "закрито" : d.building}`);
-        spot.addEventListener("mouseenter", () => showTip("city", d.id));
-        spot.addEventListener("focus", () => showTip("city", d.id));
-        spot.addEventListener("mouseleave", () => showTip(selected, selDistrict));
-        spot.addEventListener("blur", () => showTip(selected, selDistrict));
-        spot.addEventListener("click", () => { selected = "city"; selDistrict = d.id; render(); });
-        spot.addEventListener("dblclick", () => travel("city", d.id));
-        mapBox.append(spot);
+    // ---------- Картинка мапи ----------
+    const h2 = mapBox.closest(".panel")?.querySelector("h2");
+    if (h2) h2.textContent = `Мапа: ${R.name}`;
+    const img = mapBox.querySelector(".map-img");
+    img.src = RPG.asset(R.image);
+    img.width = R.w; img.height = R.h;
+    img.alt = `Мапа: ${R.name}`;
+    mapBox.classList.add("region-" + region);
+    if (region === "start" && RPG.MAP_LAYOUT) {
+      const layer = el("div", "map-buildings");
+      for (const [id, b] of Object.entries(RPG.MAP_LAYOUT.buildings || {})) {
+        const bi = el("img", "map-building");
+        bi.src = RPG.asset(`assets/images/map/bld_${id}.webp`);
+        bi.alt = "";
+        Object.assign(bi.style, { left: b.x + "%", top: b.y + "%", width: b.w + "%", height: b.h + "%" });
+        layer.append(bi);
       }
-      for (const id of ids) {
-        const pos = SPOTS[id], loc = RPG.LOCATIONS[id];
-        if (!pos || !loc || id === "city") continue;
-        const st = locState(id);
-        const spot = button("", `map-spot is-${st.kind}`);
-        spot.dataset.loc = id;
-        spot.dataset.name = loc.name;          // підпис на мапі-заглушці (поки немає картинки)
-        Object.assign(spot.style, { left: pos.x + "%", top: pos.y + "%", width: pos.w + "%", height: pos.h + "%" });
-        spot.setAttribute("aria-label", `${loc.name} — ${st.text}`);
-        spot.addEventListener("mouseenter", () => showTip(id));
-        spot.addEventListener("focus", () => showTip(id));
-        spot.addEventListener("mouseleave", () => showTip(selected, selDistrict));
-        spot.addEventListener("blur", () => showTip(selected, selDistrict));
-        spot.addEventListener("click", () => { selected = id; selDistrict = null; render(); });
-        spot.addEventListener("dblclick", () => travel(id));
-        mapBox.append(spot);
-      }
-      tip = el("div", "map-tip");
-      tip.hidden = true;
-      mapBox.append(tip);
+      img.after(layer);
+    }
+    // Лінія маршруту (видно під час дороги)
+    const pathLayer = el("div", "map-route");
+    img.after(pathLayer);
 
-      // Фігурка героя (для групи в майбутньому — по фігурці на кожного)
-      hero = el("div", "map-hero");
-      hero.innerHTML = HERO_FIGURE;
-      hero.append(el("span", "hero-tag", save.character.name));
-      placeHero(save.location.map, false);
-      mapBox.append(hero);
+    let tip = null, hero = null, timerTag = null;
+    for (const id of ids) {
+      const pos = ZONES[id], p = place(id);
+      const spot = button("", "map-spot" + (region === "city" ? " map-district" : ""));
+      spot.dataset.loc = id;
+      Object.assign(spot.style, { left: pos.x + "%", top: pos.y + "%", width: pos.w + "%", height: pos.h + "%" });
+      spot.setAttribute("aria-label", p.name);
+      spot.addEventListener("mouseenter", () => showTip(id));
+      spot.addEventListener("focus", () => showTip(id));
+      spot.addEventListener("mouseleave", restTip);
+      spot.addEventListener("blur", restTip);
+      spot.addEventListener("click", () => { selected = id; render(); });
+      spot.addEventListener("dblclick", () => go(id));
+      mapBox.append(spot);
+    }
+    tip = el("div", "map-tip");
+    tip.hidden = true;
+    mapBox.append(tip);
+    hero = el("div", "map-hero");
+    hero.innerHTML = HERO_FIGURE;
+    hero.append(el("span", "hero-tag", save.character.name));
+    timerTag = el("span", "hero-timer");
+    timerTag.hidden = true;
+    hero.append(timerTag);
+    mapBox.append(hero);
+
+    function setHero(x, y) {
+      hero.style.left = x + "%";
+      hero.style.top = y + "%";
     }
 
-    function heroPoint(id) {
-      const pos = SPOTS[id] || SPOTS[ids[0]];
-      return { x: pos.x, y: pos.y + pos.h * 0.25 };
-    }
-
-    function placeHero(id, animate) {
-      if (!hero) return;
-      hero.classList.toggle("no-anim", !animate);
-      const pt = heroPoint(id);
-      hero.style.left = pt.x + "%";
-      hero.style.top = pt.y + "%";
-    }
-
-    function showTip(id, district) {
-      if (!tip) return;
-      mapBox.querySelectorAll(".map-spot").forEach(s => s.classList.toggle("is-selected",
-        s.dataset.loc === selected && (s.dataset.district || null) === (selected === "city" ? (selDistrict || s.dataset.district || null) : null)));
-      const d = district && districts.find(x => x.id === district);
-      const pos = d ? CITY_MAP[d.id] : SPOTS[id], loc = RPG.LOCATIONS[id];
-      if (!pos || !loc) { tip.hidden = true; return; }
-      let st = locState(id);
-      if (d && st.kind !== "closed" && districtLocked(d)) {
-        st = { kind: "closed", text: d.id === "center" ? "Закрито — прохід відкриває Гільдія авантюристів («Час дослідити»)"
-          : d.id === "trade" ? `Закрито — Торгова гільдія приймає з ${RPG.TRADE_MIN_LEVEL} рівня` : "Закрито — відкриється згодом" };
-      }
+    function showTip(id) {
+      mapBox.querySelectorAll(".map-spot").forEach(s => {
+        s.classList.toggle("is-selected", s.dataset.loc === selected);
+        const st = placeState(s.dataset.loc);
+        s.classList.toggle("is-closed", st.kind === "closed");
+      });
+      const pos = ZONES[id];
+      if (!pos) { tip.hidden = true; return; }
+      const p = place(id), st = placeState(id);
       tip.innerHTML = "";
-      tip.append(el("strong", null, d ? `${loc.name}: ${d.name}` : loc.name), el("div", `tip-status tip-${st.kind}`, st.text),
-                 el("div", "tip-desc", shortText(d ? `${d.building}. ${d.description}` : (loc.locked ? "Закрито — відкриється згодом." : loc.description))));
+      tip.append(el("strong", null, p.name), el("div", `tip-status tip-${st.kind}`, st.text),
+                 el("div", "tip-desc", shortText(p.desc)));
       let below = pos.y < 45;
       tip.style.left = Math.min(82, Math.max(18, pos.x)) + "%";
       tip.style.top = (below ? pos.y + pos.h / 2 : pos.y - pos.h / 2) + "%";
@@ -2376,93 +2396,116 @@
       }
     }
 
-    // Перехід: фігурка йде до нової локації, потім відкривається її сторінка
-    function travel(id, district) {
-      if (traveling) return;
-      const d = district && districts.find(x => x.id === district);
-      if (d && districtLocked(d)) { selected = id; selDistrict = district; render(); return; }
-      let href = id === save.location.map ? "game.html" : "game.html?loc=" + encodeURIComponent(id);
-      if (d) href += (href.includes("?") ? "&" : "?") + "district=" + encodeURIComponent(d.id);
-      if (id !== save.location.map && !RPG.canEnterLocation(id, save.character.level, save).ok) {
-        selected = id; render();
-        return;
-      }
-      traveling = true;
-      if (!hero || id === save.location.map) { location.href = href; return; }
-      hero.classList.add("is-walking");
-      placeHero(id, true);
-      setTimeout(() => { location.href = href; }, 950);
+    // ---------- Дорога ----------
+    function drawRoute(pts) {
+      const line = pts.map(p => p.join(",")).join(" ");
+      pathLayer.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${line}"/></svg>`;
+    }
+
+    function tick() {
+      const tr = RPG.travelState(save);
+      if (!tr) return;
+      setHero(tr.pos.x, tr.pos.y);
+      timerTag.textContent = RPG.fmtLeft(tr.leftMs);
+      if (tr.leftMs > 0) return;
+      clearInterval(travelTimer);
+      RPG.finishTravel(save);
+      RPG.saveGame(save).then(() => { location.href = "game.html"; });
+    }
+
+    function followTravel() {
+      const tr = RPG.travelState(save);
+      if (!tr) return;
+      document.body.classList.add("is-traveling");
+      lockNavForTravel();
+      drawRoute(tr.pts);
+      hero.classList.add("is-walking", "on-road");
+      hero.classList.add("no-anim");
+      setHero(tr.pos.x, tr.pos.y);
+      void hero.offsetWidth;
+      hero.classList.remove("no-anim");
+      timerTag.hidden = false;
+      tick();
+      travelTimer = setInterval(tick, 250);
+    }
+
+    async function go(id) {
+      if (RPG.isTraveling(save)) return;
+      const r = RPG.startTravel(save, id);
+      if (!r.ok) { selected = id; render(); showMsg($("map-msg"), r.reason, true); return; }
+      await RPG.saveGame(save);
+      selected = id;
+      render();
+      followTravel();
+    }
+
+    // ---------- Список місць і опис ----------
+    // Без наведення: підказка обраного місця (у дорозі — схована, щоб не закривати фігурку)
+    function restTip() {
+      showTip(selected);
+      if (RPG.isTraveling(save)) tip.hidden = true;
     }
 
     function render() {
-      showTip(selected, selDistrict);
+      restTip();
       grid.innerHTML = "";
       for (const id of ids) {
-        const loc = RPG.LOCATIONS[id];
-        if (!loc) continue;
-        const here = save.location.map === id;
-        const closed = !here && !RPG.canEnterLocation(id, save.character.level, save).ok;
-        const cell = button("", "wf loc-card " + (closed ? "wf-locked" : "wf-link"));
-        cell.append(el("strong", null, loc.name));
-        const label = loc.locked ? "Закрито"
-          : here ? "Ви тут"
-          : closed ? `З ${loc.minLevel} рівня`
-          : TYPE_LABEL[loc.type] + (loc.minLevel ? ` · від ${loc.minLevel} рів.` : "");
-        cell.append(el("span", "loc-desc", label));
+        const p = place(id), st = placeState(id);
+        const cell = button("", "wf loc-card " + (st.kind === "closed" ? "wf-locked" : "wf-link"));
+        cell.append(el("strong", null, p.name));
+        cell.append(el("span", "loc-desc", st.kind === "open" ? p.typeLabel
+          : st.kind === "closed" && !RPG.isTraveling(save) ? "Закрито" : st.text));
         if (selected === id) cell.classList.add("is-selected");
-        if (closed) cell.setAttribute("aria-disabled", "true");
-        cell.addEventListener("click", () => { selected = id; selDistrict = null; render(); });
+        if (st.kind === "closed") cell.setAttribute("aria-disabled", "true");
+        cell.addEventListener("click", () => { selected = id; render(); });
         grid.append(cell);
       }
       renderDetails();
     }
 
     function renderDetails() {
-      const loc = RPG.LOCATIONS[selected];
+      const p = place(selected), st = placeState(selected);
       details.innerHTML = "";
       const banner = el("div", "place-banner info-anchor");
-      banner.style.setProperty("--loc-img", locImage(selected));
-      banner.append(el("h2", null, loc.name));
+      banner.style.setProperty("--loc-img", locImage(region === "city" ? "city" : selected));
+      banner.append(el("h2", null, p.name));
       details.append(banner);
-      if (loc.locked) {
-        details.append(el("p", "status", "Закрито — відкриється згодом."));
-        return;
-      }
-      details.append(el("p", "note", loc.description));
-      if (loc.type === "combat") {
-        const enemies = (loc.enemies || []).map(e => `${RPG.getEnemy(e).name} (рів. ${RPG.getEnemy(e).level})`).join(", ");
+      details.append(el("p", "note", p.desc));
+      if (p.loc && p.loc.type === "combat") {
+        const enemies = (p.loc.enemies || []).map(e => `${RPG.getEnemy(e).name} (рів. ${RPG.getEnemy(e).level})`).join(", ");
         details.append(el("p", "note", "Вороги: " + enemies));
-      } else {
-        details.append(el("p", "note", "Тут не б'ються, монстрів немає."));
       }
-      const d = selected === "city" && selDistrict && districts.find(x => x.id === selDistrict);
-      if (d) {
-        details.append(el("p", "note", `${d.name} — ${d.building}. ${d.description}`));
-        if (districtLocked(d)) {
-          details.append(el("p", "status", d.id === "center"
-            ? "Прохід закритий: його відкриває Артеміда, адміністратор гільдії, після особливого завдання «Час дослідити»."
-            : "Закрито — відкриється згодом."));
-          return;
-        }
-      }
-      if (save.location.map === selected) {
-        const go = link("Ви тут — відкрити локацію", "game.html" + (d ? "?district=" + d.id : ""));
-        details.append(go);
+      const tr = RPG.travelState(save);
+      if (tr) {
+        details.append(el("p", "status", `Ви в дорозі до «${place(tr.to).name}». Переміщення не скасувати — дочекайтеся прибуття.`));
         return;
       }
-      const can = RPG.canEnterLocation(selected, save.character.level, save);
-      if (can.ok) {
-        const go = link("Перейти сюди", "game.html?loc=" + encodeURIComponent(selected));
-        go.addEventListener("click", ev => { ev.preventDefault(); travel(selected, selDistrict); });
-        details.append(go);
+      if (st.kind === "here") {
+        details.append(link("Ви тут — відкрити локацію", "game.html"));
+        if (region === "city" && selected === "south") {
+          details.append(button("Вийти з міста", "wf wf-secondary", async () => {
+            RPG.leaveCityToStart(save);
+            await RPG.saveGame(save);
+            location.reload();
+          }));
+        }
+        return;
+      }
+      if (st.kind === "open") {
+        details.append(button(`Вирушити · ${RPG.fmtLeft(RPG.travelSeconds(st.cells) * 1000)}`, "wf wf-button", () => go(selected)));
+        details.append(el("p", "note", "Переміщення не можна скасувати; у дорозі доступні лише «Персонаж», «Інвентар» і «Мапа»."));
       } else {
-        details.append(el("p", "status", `Доступ з ${loc.minLevel} рівня персонажа (зараз у вас ${save.character.level}).`));
+        details.append(el("p", "status", st.text));
       }
     }
 
-    if (dark) setupDarkMap(mapBox);
-    else setupMapLayers(mapBox, () => { buildWorldMap(); render(); });
-    buildWorldMap();
+    if (t0) {
+      followTravel();
+    } else {
+      const s = R.spots[here.spot] || R.spots[ids[0]];
+      hero.classList.add("no-anim");
+      setHero(s.x, s.y);
+    }
     render();
   }
 

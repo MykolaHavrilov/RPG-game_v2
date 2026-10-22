@@ -1,8 +1,8 @@
-// map_layout.js — координати під згенеровану мапу ВАРІАНТА 1 (assets/images/map/map_world_base.webp).
+// map_layout.js — будівлі на стартовій мапі (assets/images/map/start_location.webp).
 // x, y — центр; w, h — розмір у % від ширини / висоти мапи.
-//   buildings — картинки будівель (assets/images/map/bld_*.webp)
-//   spots     — зони кліку локацій і точки фігурки героя
-//   city      — зони районів міста
+//   buildings — картинки будівель (assets/images/map/bld_*.webp); вони ж — зони кліку
+//               (Місто = вхід south_gate «Південний район»). Точки фігурки й дороги — data/routes.js.
+//   spots, city — старі координати (не використовуються)
 window.RPG = window.RPG || {};
 RPG.MAP_LAYOUT = {
   buildings: {

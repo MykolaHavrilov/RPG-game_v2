@@ -633,3 +633,28 @@ body.buy-locked .popover .wf-button { pointer-events: none; opacity: .55; }
 .champion-dialog h3 { margin: 4px 0 6px; color: var(--gold); }
 .champion-dialog p { margin: 0 0 14px; line-height: 1.45; }
 .champion-dialog .dialog-actions { justify-content: center; gap: 10px; }
+
+/* ---------- Дорога (travel.js): маршрут, відлік під фігуркою, заблоковані вкладки ---------- */
+.map-route { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.map-route svg { width: 100%; height: 100%; }
+.map-route polyline {
+  fill: none; stroke: rgba(255, 214, 120, .9); stroke-width: 3px; stroke-dasharray: 6 5;
+  stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, .9));
+}
+.map-hero.on-road { transition: left .25s linear, top .25s linear; }
+.map-hero .hero-timer {
+  margin-top: 2px; padding: 0 6px; border-radius: 3px;
+  background: rgba(20, 14, 6, .85); border: 1px solid rgba(255, 210, 122, .8);
+  color: #ffd27a; font-size: .72rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.travel-banner {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 10px; padding: 8px 12px; border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 210, 122, .7); background: rgba(255, 210, 122, .1);
+  font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.travel-banner.is-done { border-color: rgba(120, 200, 120, .7); background: rgba(120, 200, 120, .1); }
+a.travel-locked { opacity: .4; cursor: not-allowed; }
+.world-map.region-city { background: #181e16; }
+.world-map.region-city { max-width: 720px; margin-inline: auto; }

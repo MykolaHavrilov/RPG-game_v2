@@ -457,6 +457,7 @@ function applyDeath(save, enemyIds) {
   ch.mp = Math.floor(s.mp * RESPAWN_MP_PCT);
   ch.regenAt = Date.now();
   save.location.map = RPG.RESPAWN_LOCATION;
+  delete save.travel;
 
   return { penalty, expLost, expPct: exp.pct, levelDown: exp.levelDown, newLevel: exp.newLevel,
            pointsLost: exp.pointsLost, lostItems, itemLossLimit: limit };

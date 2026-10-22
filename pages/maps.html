@@ -30,11 +30,12 @@
     <div class="stack">
       <div class="panel stack">
         <h2>Мапа світу</h2>
-        <!-- Зони локацій і фігурка героя малюються поверх картинки (game.js → WORLD_MAP) -->
+        <!-- Картинка, зони місць і фігурка героя — game.js → pageMaps (дані мап: data/routes.js) -->
         <div class="world-map" id="world-map">
-          <img class="map-img" src="../assets/images/map_world.webp" alt="Мапа світу" width="1586" height="992">
+          <img class="map-img" alt="Мапа" width="2048" height="1280">
         </div>
-        <p class="note" data-anchor="heading">Наведіть на місце на мапі, щоб побачити опис. Клік — обрати, подвійний клік — перейти. Місто можна обрати по районах.</p>
+        <div class="msg" id="map-msg" role="status" hidden></div>
+        <p class="note" data-anchor="heading">Наведіть на місце на мапі, щоб побачити опис. Клік — обрати, подвійний клік — вирушити. Герой іде дорогами — час у дорозі видно в підказці; переміщення не скасувати.</p>
       </div>
       <div class="panel stack">
         <h2>Локації</h2>
@@ -60,6 +61,8 @@
   <script src="../assets/js/party.js" defer></script>
   <script src="../assets/js/battle.js" defer></script>
   <script src="../assets/js/map_layout.js" defer></script>
+  <script src="../assets/js/data/routes.js" defer></script>
+  <script src="../assets/js/travel.js" defer></script>
   <script src="../assets/js/game.js" defer></script>
   <script src="../assets/js/menu.js" defer></script>
 </body>

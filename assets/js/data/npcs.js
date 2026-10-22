@@ -190,20 +190,24 @@
 
   // ---------- Північний район: Центральна брама ----------
   const gate = save => RPG.gateInfo(save);
+  const outside = save => save.location.map === "dark_gate";    // розмова з боку Темного лісу
   NPCS.captain = {
     name: "Капітан Северин Залізняк",
     portrait: "npc_captain",
     nodes: {
       start: {
-        text: save => gate(save).done
+        text: save => outside(save)
+          ? "Ви гукаєте варту, і з бійниці над брамою визирає Капітан Северин Залізняк. «А, це ти. Живий? Ну, кажи, чого треба.»"
+          : gate(save).done
           ? "Капітан киває вам, як старому знайомому. «Брама для тебе відчинена. Тримай меч напоготові — у Темному лісі ночі довгі.»"
           : "Кремезний капітан у кірасі з гербом міста загороджує дорогу. «Северин Залізняк, капітан варти Центральної брами. " +
             "Далі — Темний ліс. Без мого дозволу туди не ходять.»",
         replies: [
           { text: "Що там, за брамою?", to: "about" },
-          { text: "Хочу пройти за браму.", to: "offer", show: save => gate(save).st.part === 0 },
-          { text: "Щодо вашого доручення…", to: "progress", show: save => !!gate(save).part },
-          { text: "Відчиніть браму — я йду в Темний ліс.", action: "gate_go", show: save => !!gate(save).done },
+          { text: "Хочу пройти за браму.", to: "offer", show: save => !outside(save) && gate(save).st.part === 0 },
+          { text: "Щодо вашого доручення…", to: "progress", show: save => !outside(save) && !!gate(save).part },
+          { text: "Відчиніть браму — я йду в Темний ліс.", action: "gate_go", show: save => !outside(save) && !!gate(save).done },
+          { text: "Пропустіть мене в місто.", action: "gate_back", show: save => outside(save) },
           { text: "Бувай, капітане.", to: "bye" }
         ]
       },
