@@ -1040,7 +1040,7 @@
       enemies: ["skeleton_archer", "ghost", "ghoul"]
     },
     dk_webs: {
-      name: "Павутинна гущавина", type: "combat", region: "dark", minLevel: 10,
+      name: "Ліс павутини", type: "combat", region: "dark", minLevel: 10,
       description: "Велетенські дерева, обплетені павутинням, і кокони на гілках. Десь у глибині — гніздо Королеви павуків.",
       enemies: ["web_hunter", "web_weaver", "spider_queen"],
       dungeon: "web_nest"
@@ -1076,10 +1076,10 @@
     cave_secret: {
       name: "Таємниці печери", explore: "Обстеження печери", location: "forest_cave",
       key: "key_cave_secret", keyChance: 0.01, boss: "slime_king", pool: ["slime", "slime2", "slime3"],
-      description: "Важкі кам'яні ворота в глибині печери. За ними — три зали, повні слизу, і трон Короля слайма. Зілля там не допоможуть: лише навички й відновлення."
+      description: "Важкі кам'яні ворота в глибині печери. За ними — три зали, повні слизу, і трон Короля слайма. Зілля й відпочинок там не допоможуть — лише навички лікування."
     },
     web_nest: {
-      name: "Гніздо Королеви", explore: "Обстеження гущавини", location: "dk_webs",
+      name: "Гніздо Королеви", explore: "Обстеження глибин лісу", location: "dk_webs",
       key: "key_web_nest", keyChance: 0.01, boss: "spider_queen", pool: ["web_hunter", "web_weaver"],
       description: "Прохід у кокон завбільшки з будинок. Усередині — мисливці й ткачі, а в самому серці гнізда — Королева павуків."
     },

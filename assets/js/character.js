@@ -283,6 +283,9 @@ function resetAttrs(save) {
 function applyRegen(save, now = Date.now()) {
   const ch = save.character;
   if (!ch.regenAt || ch.regenAt > now) { ch.regenAt = now; return true; }
+  // У данжі (dungeon.js) відновлення не працює — лише навички лікування.
+  // Час не накопичується, тож після виходу з данжу «запасу» тиків не буде.
+  if (save.dungeon) { ch.regenAt = now; return false; }
   const graceChanged = applyGrace(save, now);
   const ticks = Math.floor((now - ch.regenAt) / REGEN_TICK_MS);
   if (ticks <= 0) return graceChanged;
@@ -825,7 +828,7 @@ function useItem(save, id) {
   const item = ITEMS[id];
   if (item?.type !== "consumable") return { ok: false, reason: "Цей предмет не можна використати." };
   // У данжі (dungeon.js) зілля не діють — лікування лише навичками й відновленням
-  if (save.dungeon) return { ok: false, reason: "У данжі не можна пити зілля — лише навички лікування та відновлення." };
+  if (save.dungeon) return { ok: false, reason: "У данжі не можна пити зілля — лікують лише навички." };
   const s = calcStats(save);
   const ch = save.character;
   if (ch.hp <= 0) return { ok: false, reason: "Загиблий не може пити зілля." };

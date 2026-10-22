@@ -1579,8 +1579,8 @@
       panel.append(el("h3", null, `Данж «${dungeonInfo.name}»`), el("p", "note", dungeonInfo.description));
       panel.append(el("p", "note",
         `3 бої поспіль: 1) ${RPG.DUNGEON_POOL_TEXT(dungeonInfo, 1)}; 2) ${RPG.DUNGEON_POOL_TEXT(dungeonInfo, 2)}; ` +
-        `3) бос «${RPG.ENEMIES[dungeonInfo.boss].name}». Між боями й під час них зілля не діють — ` +
-        "лише навички лікування та відновлення. Досвід і здобич — тільки за перемогу над босом."));
+        `3) бос «${RPG.ENEMIES[dungeonInfo.boss].name}». Зілля й відновлення HP/MP у данжі не діють — ` +
+        "лікують лише навички. Досвід і здобич — тільки за перемогу над босом."));
       panel.append(el("p", "note" + (keys ? "" : " is-neg"),
         `${RPG.ITEMS[dungeonInfo.key].name}: ${keys}. Одна спроба — один ключ (зникає при вході). ` +
         `Ключ можна знайти під час «${dungeonInfo.explore}» — шанс ${Math.round(dungeonInfo.keyChance * 100)}% з кожного ворога.`));
@@ -1590,7 +1590,7 @@
         const r = RPG.openDungeon(save, dungeonInfo.id);
         if (!r.ok) { showMsg(msg, r.reason, true); return; }
         await RPG.saveGame(save);
-        showMsg(msg, "Ворота відчинено. Бій 1 з 3 — зілля тут не діють.");
+        showMsg(msg, "Ворота відчинено. Бій 1 з 3 — зілля й відновлення тут не діють.");
         nextEnemy();
         renderMode();
         renderEnemy();
@@ -1750,7 +1750,7 @@
           return;
         }
         const lines = [`Бій ${a.stage} з ${a.stages}: ${foesText()}.`,
-          "Зілля в данжі не діють — лікують лише навички та відновлення."];
+          "Зілля й відновлення в данжі не діють — лікують лише навички."];
         if (a.stage < a.stages) lines.push("За цей бій нагороди немає — досвід і здобич дає лише бос.");
         else lines.push("Це БОС! Кожен третій свій хід він застосовує особливу навичку. Перемога — нагорода за весь данж.");
         if (!fighters().length) lines.push("Усі герої групи полягли.");
@@ -1984,7 +1984,7 @@
       if (dun && result.win && !dunNext.done) {
         const lines = [`Бій ${dun.stage} з ${dun.stages} виграно. Нагороди за нього немає — лише за боса.`];
         if (summary.length) lines.push(summary.join(" · "));
-        lines.push("Зілля не діють: відновлюйтесь навичками або дочекайтеся регенерації перед наступним боєм.");
+        lines.push("Зілля й відновлення тут не діють — HP переходить у наступний бій як є (лікують лише навички).");
         setArena(`Данж: бій ${dun.stage} з ${dun.stages} — перемога`, lines, "win");
       } else if (result.win) {
         const lines = [summary.join(" · ")];
