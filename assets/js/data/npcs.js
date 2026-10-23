@@ -23,6 +23,8 @@
     return ch.level >= 10 || RPG.getClass(ch.classId).tier > 1;
   };
 
+  const STEWARD_MIN_LEVEL = 11;    // з цього рівня Захар перерозподіляє атрибути
+
   const NPCS = {
     // ---------- Шинок біля млина ----------
     ostap: {
@@ -142,7 +144,9 @@
         start: {
           text: "За широким столом, заваленим сувоями, сидить сивий чоловік у зеленому каптані. «Захар Вергун, розпорядник Мерії. Слухаю вас.»",
           replies: [
-            { text: "Хочу почати навчання заново — перерозподілити свої вміння.", to: "reset" },
+            { text: "Хочу почати навчання заново — перерозподілити свої вміння.", to: "reset",
+              show: save => save.character.level >= STEWARD_MIN_LEVEL },
+            { text: "Що це за книга у вас на столі?", to: "book" },
             { text: "Чим займається Мерія?", to: "about" },
             { text: "До побачення.", to: "bye" }
           ]
@@ -160,6 +164,20 @@
             { text: (save, ctx) => `Згоден, ось ${fmt(RPG.attrResetPrice(RPG.memberSave(save, ctx.member || 0)))} золота`, action: "reset",
               show: (save, ctx) => RPG.investedAttrs(RPG.memberSave(save, ctx.member || 0)).sum > 0 },
             { text: "Я ще подумаю.", to: "start" }
+          ]
+        },
+        book: {
+          text: save => {
+            const st = save.chronicle || {};
+            const n = Object.keys(st).length;
+            return "Захар кладе долоню на важку книгу в обкладинці з потемнілого дуба. «Це — «Предки Минулих та Майбутніх часів». " +
+              "Кажуть, її передав Мерії сам Велес. Ніхто в ній не пише: щойно хтось із Перунових дітей здолає великого ворога, " +
+              "сторінки наповнюються самі — і хто бився, і хто поліг, і коли це сталося. " +
+              (n ? "Про вашу групу там уже є записи. Хочете погортати?»" : "Про вас там поки лише Пролог — та, гадаю, це ненадовго. Хочете прочитати?»");
+          },
+          replies: [
+            { text: "Так, покажіть книгу.", action: "chronicle", to: "book" },
+            { text: "Іншим разом.", to: "start" }
           ]
         },
         about: {
@@ -253,8 +271,6 @@
       bye
     }
   };
-
-  const STEWARD_MIN_LEVEL = 11;
 
   Object.assign(RPG, { NPCS, STEWARD_MIN_LEVEL });
 })(window.RPG);

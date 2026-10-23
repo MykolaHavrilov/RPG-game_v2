@@ -694,3 +694,7 @@ a, button, input, label, select, [tabindex] { touch-action: manipulation; -webki
 .info-body p + p { margin-top: 8px; }
 .popover.is-sheet .info-body { max-width: none; }
 .status { margin: 0; font-size: .92rem; }
+
+/* Вступ на екрані «Нова гра» */
+.intro-panel .intro-title { font-family: "Ruslan Display", var(--font-head); font-weight: 400; color: var(--gold); text-align: center; margin: 0; }
+.intro-panel .intro-p { margin: 0; line-height: 1.55; font-style: italic; }

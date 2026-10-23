@@ -190,6 +190,84 @@
     });
   }
 
+  // ---------- Книга «Предки Минулих та Майбутніх часів» (data/chronicle.js) ----------
+  // Вікно-книга з пергаменту: зміст ліворуч (на телефоні — зверху), сторінка праворуч.
+  function showChronicle(save, startKey = "prologue") {
+    const C = RPG.CHRONICLE;
+    document.querySelector(".chronicle-dialog")?.remove();
+    const dlg = el("dialog", "chronicle-dialog");
+    const close = button("×", "notice-close chronicle-close", () => dlg.close());
+    close.setAttribute("aria-label", "Закрити книгу");
+    const book = el("div", "chronicle-book");
+    const toc = el("nav", "chronicle-toc");
+    const page = el("article", "chronicle-page");
+    book.append(toc, page);
+    dlg.append(close, book);
+    let key = startKey;
+
+    const openKeys = () => RPG.chronicleContents(save).filter(c => c.open).map(c => c.key);
+
+    function drawToc() {
+      toc.innerHTML = "";
+      toc.append(el("div", "chronicle-cover", C.TITLE));
+      for (const c of RPG.chronicleContents(save)) {
+        if (!c.open) { toc.append(el("span", "chronicle-toc-item is-sealed", `${c.title} — запечатано`)); continue; }
+        const b = button(c.title, "chronicle-toc-item" + (c.key === key ? " is-current" : ""), () => { key = c.key; draw(); });
+        toc.append(b);
+      }
+    }
+
+    function drawPage() {
+      page.innerHTML = "";
+      if (key === "prologue") {
+        page.append(el("h2", "chronicle-title", C.PROLOGUE.title));
+        C.PROLOGUE.paras.forEach((p, i) => page.append(el("p", i === 0 ? "chronicle-p is-initial" : "chronicle-p", p)));
+      } else {
+        const ch = C.CHAPTERS.find(c => c.id === key);
+        page.append(el("h2", "chronicle-title", ch.title), el("p", "chronicle-region", ch.region));
+        page.append(el("p", "chronicle-p is-initial", ch.intro));
+        ch.bosses.forEach((b, i) => {
+          const e = RPG.chronicleEntry(save, b.dungeon);
+          const sec = el("section", "chronicle-entry");
+          if (!e) {
+            sec.append(el("p", "chronicle-blank", "Ця сторінка ще чиста. Її напише перемога, якої поки не було…"));
+            page.append(sec);
+            return;
+          }
+          const t = RPG.chronicleBossEntry(b.dungeon, e);
+          sec.append(el("h3", "chronicle-sub", t.title), el("p", "chronicle-date", t.date));
+          const roster = el("ul", "chronicle-roster");
+          t.roster.forEach(r => roster.append(el("li", null, r)));
+          sec.append(roster);
+          t.lines.forEach(l => sec.append(el("p", "chronicle-p", l)));
+          if (t.wins > 1) sec.append(el("p", "chronicle-note", `Відтоді цей данж пройдено ще ${t.wins - 1} раз(ів).`));
+          sec.append(el("p", "chronicle-mark" + (b.final ? " is-final" : ""), `✦ ${b.mark} ✦`));
+          page.append(sec);
+        });
+        if (ch.bosses.every(b => RPG.chronicleEntry(save, b.dungeon))) {
+          page.append(el("p", "chronicle-p chronicle-ending", ch.ending), el("p", "chronicle-end", "— Кінець глави —"));
+        }
+      }
+      // Гортання
+      const keys = openKeys();
+      const i = keys.indexOf(key);
+      const nav = el("div", "row chronicle-nav");
+      const prev = button("◂ Попередня", "wf wf-link", () => { key = keys[i - 1]; draw(); });
+      const next = button("Наступна ▸", "wf wf-link", () => { key = keys[i + 1]; draw(); });
+      prev.disabled = i <= 0;
+      next.disabled = i >= keys.length - 1;
+      nav.append(prev, next);
+      page.append(nav);
+      page.scrollTop = 0;
+    }
+
+    function draw() { drawToc(); drawPage(); }
+    dlg.addEventListener("close", () => dlg.remove());
+    document.body.append(dlg);
+    draw();
+    dlg.showModal();
+  }
+
   // ---------- Здобич на полі бою (save.fieldLoot) ----------
   // Поки герой б'ється на одній локації, усе здобуте складається; при виході з неї
   // (перед дорогою або після загибелі) показується окреме вікно з підсумком.
@@ -657,6 +735,12 @@
   function pageNewGame() {
     const form = $("new-game-form");
     const msg = $("msg");
+    const intro = $("intro-panel");
+    if (intro && RPG.CHRONICLE) {
+      intro.append(el("h2", "intro-title", "Кров Іггдрасиля"));
+      RPG.CHRONICLE.INTRO.forEach(p => intro.append(el("p", "intro-p", p)));
+      intro.hidden = false;
+    }
     form.addEventListener("submit", async event => {
       event.preventDefault();
       const name = form.elements.name.value.trim();
@@ -1049,6 +1133,10 @@
         location.href = "game.html";
         return { text: "Варта відчиняє хвіртку в брамі…" };
       },
+      async chronicle() {
+        showChronicle(save);
+        return { text: "Захар обережно розгортає перед вами книгу. Від пергаменту пахне димом і старим дубом." };
+      },
       async reset() {
         const ms = RPG.memberSave(save, npcCtx.member);
         const r = RPG.resetAttrs(ms);
@@ -1306,14 +1394,14 @@
     // --- Мерія: Дошка оголошень (найм у групу) ---
     let hallNpc = "board";     // board | steward
     function renderTownHall(box) {
-      const stewardOpen = save.character.level >= RPG.STEWARD_MIN_LEVEL;
-      if (stewardOpen) {
+      // Захар доступний завжди (книга «Предки…»); перерозподіл атрибутів — з RPG.STEWARD_MIN_LEVEL рівня
+      {
         const tabs = el("div", "row npc-tabs");
         for (const [id, name] of [["board", "Дошка оголошень"], ["steward", "Розпорядник Захар"]]) {
           tabs.append(button(name, "wf " + (hallNpc === id ? "wf-button" : "wf-link"), () => { hallNpc = id; renderPlace(); }));
         }
         box.append(tabs);
-      } else hallNpc = "board";
+      }
       if (hallNpc === "steward") {
         if (npcCtx.member >= RPG.partySize(save)) npcCtx.member = 0;
         if (RPG.partySize(save) > 1) {
@@ -2357,9 +2445,11 @@
       }
       // Данж: перемога — наступний бій (або кінець), поразка чи втеча ворогів — данж провалено
       let dunNext = null;
+      let chron = null;   // запис у книзі «Предки…» (перша перемога над босом данжу)
       if (dun) {
         if (result.win) dunNext = RPG.advanceDungeon(save);
         else RPG.leaveDungeon(save);
+        if (result.win && dunNext.done && RPG.chronicleRecord) chron = RPG.chronicleRecord(save, dun.id, team, result);
       }
       if (!result.draw || result.win) fieldLootAdd(save, { win: result.win, exp: battleExp, gold: battleGold, items: got, lost, filtered });
       await RPG.saveGame(save).catch(e => console.error(e));
@@ -2423,6 +2513,9 @@
         const lines = [summary.join(" · ")];
         for (const l of levelLines) lines.push(l + " Здоров'я та мана відновлені, є нові вільні очки атрибутів (сторінка «Персонаж»).");
         lines.push(`Переможено ворогів: ${save.character.kills}`);
+        if (chron?.first) lines.push(`📜 У книзі «${RPG.CHRONICLE.TITLE}» з'явився новий запис` +
+          (chron.chapterDone ? ` — «${chron.chapter.title}» завершено!` : ` («${chron.chapter.title}»).`) +
+          " Попросіть Розпорядника Захара в Мерії показати книгу.");
         setArena(dun ? `Данж «${dun.name}» пройдено!` : "Перемога!", lines, "win");
       } else if (dun) {
         setArena(foes.length > 1 ? "Вороги втекли — данж провалено" : "Ворог утік — данж провалено",
