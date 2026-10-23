@@ -227,7 +227,7 @@
     const effects = {};
     for (const [k, pair] of Object.entries(sk.effects)) effects[k] = RPG.skillValue(pair, lvl);
     H.buffs[id] = { effects, turns: RPG.skillTurns(lvl) };
-    return { who: "hero", text: `${H.name} — «${sk.name}» (−${sk.mp} MP): ${RPG.describeSkill(id, lvl).split(" · ")[0]}`, crit: false };
+    return { who: "hero", text: `${H.name} — «${sk.name}» (−${sk.mp} MP): ${RPG.describeSkill(id, lvl).split(" · ")[0]}`, crit: false, sound: "skill:" + id };
   }
 
   // Лікування: targets — кого лікувати (за замовчуванням себе). Кожен отримує % від СВОГО макс. HP
@@ -245,7 +245,7 @@
     const h = heroNow(H);
     const es = E.enemy.stats;
     if (roll(es.dodge)) {
-      return { who: "hero", text: `${H.name} б'є «${E.name}», але той ухиляється`, crit: false };
+      return { who: "hero", text: `${H.name} б'є «${E.name}», але той ухиляється`, crit: false, sound: "miss" };
     }
     const crit = roll(h.crit);
     const blocked = roll(es.blockPhys);
@@ -256,7 +256,7 @@
       : `${H.name} б'є кулаками «${E.name}»: ${dmg} шкоди`;
     if (blocked) text += " (ворог частково заблокував)";
     if (crit) text += " — КРИТ!";
-    return { who: "hero", text, crit };
+    return { who: "hero", text, crit, sound: "weapon:" + (H.weapon.type || "") };
   }
 
   function spellAttack(H, E) {
@@ -269,7 +269,7 @@
     let text = `${H.name} кидає «Іскру» (−${SPELL_COST} MP) в «${E.name}»: ${dmg} шкоди`;
     if (blocked) text += " (ворог частково заблокував)";
     if (crit) text += " — КРИТ!";
-    return { who: "hero", text, crit };
+    return { who: "hero", text, crit, sound: "fire" };
   }
 
   // ---------- Дії ворога ----------
@@ -283,13 +283,13 @@
     let text = `${E.name} — «${name}» (−${mp} MP) по ${H.name}: ${dmg} магічної шкоди`;
     if (blocked) text += ` (${H.name} частково блокує)`;
     if (crit) text += " — КРИТ!";
-    return { who: "enemy", text, crit };
+    return { who: "enemy", text, crit, sound: "dark" };
   }
 
   function enemyPhysHit(E, H, moveName, mult) {
     const hero = heroNow(H);
     if (roll(hero.dodge)) {
-      return { who: "enemy", text: `${E.name} ${moveName ? `— «${moveName}»` : "кидається"}, але ${H.name} ухиляється!`, crit: false };
+      return { who: "enemy", text: `${E.name} ${moveName ? `— «${moveName}»` : "кидається"}, але ${H.name} ухиляється!`, crit: false, sound: "miss" };
     }
     const crit = roll(E.enemy.stats.crit);
     const blocked = roll(hero.blockPhys);
@@ -301,7 +301,7 @@
       : `${E.name} ${verb} ${H.name}: ${dmg} шкоди`;
     if (blocked) text += ` (${H.name} блокує частину удару)`;
     if (crit) text += " — КРИТ!";
-    return { who: "enemy", text, crit };
+    return { who: "enemy", text, crit, sound: `enemy:${E.enemy.weapon || ""}:${verb}` };
   }
 
   // ---------- Бій групи проти кількох ворогів ----------
@@ -338,7 +338,9 @@
   // кожна подія: { who: "hero" | "enemy" | "info" | "round", text, crit,
   //               heroes: [{hp, mp, pos: {r, c}}], enemies: [{hp, mp, pos: {r, c}}],
   //               actor: { side: "hero" | "enemy", i } | null, target: { side, i } | null,
-  //               heroHp, heroMp, enemyHp, enemyMp }
+  //               heroHp, heroMp, enemyHp, enemyMp,
+  //               sound? — який звук грати (audio.js → battleSound): "skill:<id>", "weapon:<тип>",
+  //                        "enemy:<зброя>:<дієслово>" або назва звуку ("miss", "dark", "death"…) }
   function simulatePartyBattle(members, enemySpecs, opts = {}) {
     const heroes = members.map(makeHero);
     const labels = enemyLabels(enemySpecs);
@@ -425,7 +427,7 @@
       }
       H.mp -= act.sk.mp;
       H.qi++;
-      push(castHeal(H, act.sk, act.lvl, targets));
+      push(Object.assign(castHeal(H, act.sk, act.lvl, targets), { sound: "skill:" + act.id }));
       return true;
     }
 
@@ -440,7 +442,7 @@
         if (H.mp < act.sk.mp || H.stun > 0) continue;
         H.mp -= act.sk.mp;
         H.qi++;
-        push(Object.assign(castHeal(H, act.sk, act.lvl, [w]), { actor: ref(H), target: ref(w) }));
+        push(Object.assign(castHeal(H, act.sk, act.lvl, [w]), { actor: ref(H), target: ref(w), sound: "skill:" + act.id }));
       }
     }
 
@@ -448,7 +450,7 @@
     function heroTurn(H) {
       if (H.stun > 0) {
         H.stun--;
-        push({ who: "hero", text: `${H.name} застряг у слизу й пропускає хід`, crit: false });
+        push({ who: "hero", text: `${H.name} застряг у слизу й пропускає хід`, crit: false, sound: "squish" });
         return;
       }
       const act = resolveAction(H);
@@ -469,10 +471,10 @@
       }
       cur.target = target;
       H.qi++;
-      if (act.type === "skill") { H.mp -= act.sk.mp; push(skillAttack(H, target, act.sk, act.lvl)); }
+      if (act.type === "skill") { H.mp -= act.sk.mp; push(Object.assign(skillAttack(H, target, act.sk, act.lvl), { sound: "skill:" + act.id })); }
       else if (act.type === "spell") push(spellAttack(H, target));
       else push(basicAttack(H, target));
-      if (target.hp <= 0 && foes.length > 1) push({ who: "info", text: `«${target.name}» переможений.` });
+      if (target.hp <= 0 && foes.length > 1) push({ who: "info", text: `«${target.name}» переможений.`, sound: "death" });
     }
 
     // --- Хід ворога ---
@@ -480,8 +482,8 @@
       if (firstInRound && E.dot && E.dot.turns > 0) {
         E.hp = Math.max(0, E.hp - E.dot.dmg);
         E.dot.turns--;
-        push({ who: "hero", text: `Отрута / вогонь: ${E.dot.dmg} шкоди «${E.name}»`, crit: false });
-        if (E.hp <= 0) { if (foes.length > 1) push({ who: "info", text: `«${E.name}» переможений.` }); return; }
+        push({ who: "hero", text: `Отрута / вогонь: ${E.dot.dmg} шкоди «${E.name}»`, crit: false, sound: "hit" });
+        if (E.hp <= 0) { if (foes.length > 1) push({ who: "info", text: `«${E.name}» переможений.`, sound: "death" }); return; }
       }
       E.turn++;
       const inReach = () => nearestInReach(E, aliveH(), E.range);
@@ -501,7 +503,7 @@
             E.mp -= sk.mp;
             const before = E.hp;
             E.hp = Math.min(E.enemy.stats.hp, E.hp + Math.round(E.enemy.stats.hp * sk.healPct));
-            push({ who: "enemy", text: `${E.name} — «${sk.name}» (−${sk.mp} MP): відновлює ${E.hp - before} HP`, crit: false });
+            push({ who: "enemy", text: `${E.name} — «${sk.name}» (−${sk.mp} MP): відновлює ${E.hp - before} HP`, crit: false, sound: "heal" });
             return;
           }
           const H = inReach();

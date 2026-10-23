@@ -21,9 +21,18 @@
       <div class="panel stack">
         <h2>Звук</h2>
         <label class="field">
-          <span>Гучність: <span id="volume-value">70%</span></span>
+          <span>Загальна гучність: <span id="volume-value">70%</span></span>
           <input type="range" id="volume" min="0" max="100" value="70">
         </label>
+        <label class="field">
+          <span>Музика: <span id="music-volume-value">60%</span></span>
+          <input type="range" id="music-volume" min="0" max="100" value="60">
+        </label>
+        <label class="field">
+          <span>Звуки бою: <span id="sfx-volume-value">80%</span></span>
+          <input type="range" id="sfx-volume" min="0" max="100" value="80">
+        </label>
+        <label class="choice"><input type="checkbox" id="mute"> Вимкнути весь звук</label>
       </div>
       
       <div class="panel stack">
@@ -44,6 +53,7 @@
   </main>
 
   <script src="../assets/js/core.js" defer></script>
+  <script src="../assets/js/audio.js" defer></script>
   <script src="../assets/js/ui.js" defer></script>
   <script src="../assets/js/data/levels.js" defer></script>
   <script src="../assets/js/data/items.js" defer></script>

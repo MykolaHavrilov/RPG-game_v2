@@ -750,14 +750,30 @@
       });
     });
 
-    const volume = $("volume");
-    const volumeValue = $("volume-value");
-    if (volume) {
-      volume.value = settings.volume;
-      volumeValue.textContent = settings.volume + "%";
-      volume.addEventListener("input", () => { volumeValue.textContent = volume.value + "%"; });
-      volume.addEventListener("change", () => {
-        RPG.setSettings({ volume: Number(volume.value) });
+    // Гучність: загальна, музика, звуки (audio.js). Змінюється одразу, зберігається при відпусканні
+    const VOL = [["volume", "volume", 70], ["music-volume", "musicVolume", 60], ["sfx-volume", "sfxVolume", 80]];
+    for (const [id, key, def] of VOL) {
+      const input = $(id), out = $(id + "-value");
+      if (!input) continue;
+      const v = settings[key] != null ? settings[key] : def;
+      input.value = v;
+      out.textContent = v + "%";
+      input.addEventListener("input", () => {
+        out.textContent = input.value + "%";
+        RPG.setSettings({ [key]: Number(input.value) });
+        RPG.audio?.applyVolume();
+      });
+      input.addEventListener("change", () => {
+        if (key === "sfxVolume") RPG.audio?.sfx("sword");
+        showMsg(msg, "Налаштування збережено.");
+      });
+    }
+    const mute = $("mute");
+    if (mute) {
+      mute.checked = !!settings.muted;
+      mute.addEventListener("change", () => {
+        RPG.setSettings({ muted: mute.checked });
+        RPG.audio?.applyVolume();
         showMsg(msg, "Налаштування збережено.");
       });
     }
@@ -868,6 +884,16 @@
     const dungeonInfo = combat ? RPG.locationDungeon(locId) : null;
     let mode = dungeonInfo && RPG.activeDungeon(save) ? "dungeon" : "explore";
     const dungeonOn = () => mode === "dungeon" && !!RPG.activeDungeon(save);
+    // Музика локації: бій — під тип локації (останній бій данжу — тема боса), Місто — під район
+    function playLocationMusic() {
+      if (!RPG.audio) return;
+      const dun = dungeonOn() ? RPG.activeDungeon(save) : null;
+      if (combat) RPG.audio.scene({ screen: "combat", location: locId, region: locData.region, boss: !!(dun && dun.stage === dun.stages) });
+      else if (locData.type === "city") RPG.audio.scene({ screen: "city", district: save.location.district || "south" });
+      else if (locData.type === "citygate") RPG.audio.scene({ screen: "city", district: "south" });
+      else RPG.audio.scene({ screen: "map", region: locData.region || "start" });
+    }
+    playLocationMusic();
     if (enterError) setTimeout(() => showMsg(msg, enterError + " Ви залишились тут.", true), 0);
 
     function renderQuickSlots() {
@@ -2351,6 +2377,7 @@
           addLogLine(ev);
           applyEventToBars(ev, team, maxStats);
           battleFx(ev, team);
+          RPG.audio?.battleSound(ev);
           fieldEvent(ev, prevEv, team, maxStats);
           prevEv = ev;
           await sleep(ev.who === "info" ? 400 : 550);
@@ -2361,7 +2388,12 @@
         fieldEvent(result.events[result.events.length - 1], null, team, maxStats);
       }
 
-      // Підсумок
+      // Підсумок: коротка мелодія, далі знову музика локації
+      if (RPG.audio) {
+        if (deaths) RPG.audio.jingle("defeat");
+        else if (result.win && levelLines.length) RPG.audio.jingle("levelup");
+        else if (result.win) RPG.audio.jingle("victory");
+      }
       if (deaths) {
         const lines = deaths.map(({ ms, d }) =>
           `${group ? ms.character.name + ": " : ""}штраф досвіду −${d.expPct}% (${fmtNum(d.expLost)} EXP)` +
@@ -2411,6 +2443,8 @@
 
       renderAll();
       setFighting(false);
+      // Данж перейшов до бою з босом (або завершився) — після джингла грає відповідна тема
+      if (RPG.audio && dun) setTimeout(playLocationMusic, 5500);
       if (!fighters().length) startBtn.disabled = true;
       // Інвентар заповнився (або щось уже пропало) — окреме повідомлення, щоб не пропустити
       if (result.win && (Object.keys(lost).length || (freeBefore > 0 && !RPG.invFree(save)))) {
@@ -2945,6 +2979,8 @@
     const ids = REGION_ORDER[region].filter(id => ZONES[id] && R.spots[id]);
     let selected = t0 ? t0.to : here.spot;
     let travelTimer = null;
+    // Музика мапи: регіон світу; на мапі Міста — тема району, куди йде (або де стоїть) герой
+    RPG.audio?.scene({ screen: "map", region, district: region === "city" ? selected : null });
 
     // Опис місця регіону: { name, desc, loc? (LOCATIONS), district? }
     function place(id) {
@@ -3192,8 +3228,30 @@
     if (img && img._save) renderHeroDoll(img, img._save);
   });
 
+  // Музика сторінок без власної логіки звуку (Локація й Мапа обирають трек самі)
+  async function pageMusic(page) {
+    const A = RPG.audio;
+    if (!A) return;
+    if (page === "new-game" || page === "load") { A.play("menu"); return; }
+    if (page === "settings") {
+      const from = new URLSearchParams(location.search).get("from");
+      if (!from || from === "index") A.play("menu"); else A.resume();
+      return;
+    }
+    if (page === "character" || page === "inventory") {
+      if (A.resume()) return;
+      const save = await RPG.loadCurrentGame().catch(() => null);
+      if (!save) return;
+      const here = RPG.whereIs(save);
+      if (RPG.isCombatLocation(save.location.map)) A.scene({ screen: "combat", location: save.location.map, region: here.region });
+      else if (here.region === "city") A.scene({ screen: "city", district: here.spot });
+      else A.scene({ screen: "map", region: here.region });
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     const page = document.body.dataset.page;
+    pageMusic(page).catch(() => {});
     if (PAGES[page]) {
       Promise.resolve(PAGES[page]()).catch(e => console.error("[game]", e));
     }

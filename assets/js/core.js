@@ -25,7 +25,7 @@ window.RPG = window.RPG || {};
 
   // ---------- Глобальні налаштування (не залежать від сейву) ----------
   const SETTINGS_KEY = "rpg_settings";
-  const DEFAULT_SETTINGS = { battleView: "stepByStep", volume: 70 };
+  const DEFAULT_SETTINGS = { battleView: "stepByStep", volume: 70, musicVolume: 60, sfxVolume: 80, muted: false };
 
   RPG.getSettings = function () {
     try {

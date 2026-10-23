@@ -2,6 +2,9 @@
 
 document.addEventListener('DOMContentLoaded', () => {
 
+  // ---- Музика головного меню (audio.js) ----------------------------
+  if (document.body.dataset.page === 'index' && window.RPG && RPG.audio) RPG.audio.play('menu');
+
   // ---- Кнопки «Назад» (data-back) --------------------------------
   // Налаштування: повертаємо туди, звідки їх відкрили
   // (settings.html?from=character → character.html).
