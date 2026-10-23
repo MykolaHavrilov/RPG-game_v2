@@ -367,20 +367,29 @@
     return bar;
   }
 
-  // Напарники під головним героєм (сторінка локації): ім'я, рівень, HP / MP
-  function renderPartyList(save) {
+  // Інші герої групи під портретом (сторінка локації): ім'я, рівень, HP / MP.
+  // shown — хто зараз на великому портреті (його в списку немає; 0 — головний герой).
+  // onPick(index) — якщо задано, клік по рядку обирає цього героя (зілля, черга дій)
+  function renderPartyList(save, shown = 0, onPick = null) {
     const box = $("party-list");
     if (!box) return;
-    const members = RPG.partyMembers(save).slice(1);
+    const all = RPG.partyMembers(save);
     box.innerHTML = "";
-    box.hidden = !members.length;
-    if (!members.length) return;
-    box.append(el("div", "party-title", `Група: ${members.length + 1} / ${RPG.MAX_PARTY}`));
-    members.forEach((ms, k) => {
-      const i = k + 1;
+    box.hidden = all.length < 2;
+    if (all.length < 2) return;
+    box.append(el("div", "party-title", `Група: ${all.length} / ${RPG.MAX_PARTY}` + (onPick ? " · клік — обрати героя" : "")));
+    all.forEach((ms, i) => {
+      if (i === shown) return;
       const st = RPG.calcStats(ms);
       const dead = RPG.isMemberDead(ms);
-      const row = el("div", "party-row" + (dead ? " is-dead" : ""));
+      const row = el("div", "party-row" + (dead ? " is-dead" : "") + (onPick ? " is-pickable" : ""));
+      if (onPick) {
+        row.tabIndex = 0;
+        row.setAttribute("role", "button");
+        row.title = `Обрати: ${ms.character.name}`;
+        row.addEventListener("click", () => onPick(i));
+        row.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onPick(i); } });
+      }
       const face = el("span", "party-face");
       Object.assign(face.style, RPG.heroSpriteStyle(ms.character.classId));
       const info = el("div", "party-info");
@@ -775,6 +784,25 @@
     document.querySelector(".battle").classList.toggle("no-enemy", !combat);
 
     let fighting = false;
+    let queueMember = 0;        // обраний герой групи: його чергу дій налаштовуємо, йому — зілля (0 — головний)
+    // Чий портрет, смужки HP/MP і швидкий доступ показуємо: обраного героя,
+    // а під час показу бою — завжди головного (анімація бою пише в його смужки)
+    function heroView() {
+      if (!combat || fighting) return save;
+      if (queueMember >= RPG.partySize(save)) queueMember = 0;
+      return RPG.memberSave(save, queueMember);
+    }
+    function drawHero() {
+      const v = heroView();
+      renderHeroBars(v);
+      renderPartyList(save, v.memberIndex || 0, combat && !fighting && RPG.partySize(save) > 1 ? pickMember : null);
+    }
+    // Обрали іншого героя групи (вкладки над чергою дій або клік по рядку групи)
+    function pickMember(i) {
+      queueMember = i;
+      if (fighting) { renderQueue(); return; }
+      renderAll();
+    }
     // Данж локації (dungeon.js): режим «explore» — звичайні бої, «dungeon» — данж
     const dungeonInfo = combat ? RPG.locationDungeon(locId) : null;
     let mode = dungeonInfo && RPG.activeDungeon(save) ? "dungeon" : "explore";
@@ -792,11 +820,13 @@
         cell.removeAttribute("title");
         cell.setAttribute("aria-label", itemLabel(entry));
         const usable = item.type === "consumable";
+        const ms = heroView();   // зілля п'є обраний герой групи
+        const who = RPG.partySize(save) > 1 ? `${ms.character.name}: ` : "";
         const use = async () => {
           if (fighting) return;
-          const r = RPG.useItem(save, entry.id);
-          if (!r.ok) { showMsg(msg, r.reason, true); return; }
-          showMsg(msg, useResultText(item, r));
+          const r = RPG.useItem(ms, entry.id);
+          if (!r.ok) { showMsg(msg, who + r.reason, true); return; }
+          showMsg(msg, who + useResultText(item, r));
           await RPG.saveGame(save);
           renderAll();
         };
@@ -806,13 +836,15 @@
         } else {
           cell.classList.add("slot-passive");
         }
-        RPG.bindTip(cell, () => itemInfo(entry, entry.qty, save), () => [
+        RPG.bindTip(cell, () => itemInfo(entry, entry.qty, ms), () => [
           usable && { text: "Використати", className: "wf-button", onClick: use },
           { text: "Інвентар", className: "wf-link", onClick: () => { location.href = "inventory.html"; } }
         ]);
         box.append(cell);
       }
       $("gold").textContent = `Золото: ${fmtNum(save.character.gold)}`;
+      const qt = $("quick-title");
+      if (qt) qt.textContent = RPG.partySize(save) > 1 ? `Швидкий доступ · ${heroView().character.name}` : "Швидкий доступ";
     }
 
     // ---------- Мирні локації ----------
@@ -1543,7 +1575,6 @@
     const saveBtn = $("save-btn");
     const logBox = $("battle-log");
     let foes = [];              // вороги наступного бою: [{ id, champion }]
-    let queueMember = 0;        // чию чергу дій налаштовуємо (0 — головний герой)
     const fighters = () => RPG.aliveMembers(save);
     // Від половини групи до розміру групи (макс. 6) — випадково (RPG.enemyGroupRange); данж — без змін
     let champWarn = false;      // показати вікно-попередження про чемпіона
@@ -1689,7 +1720,7 @@
       box.innerHTML = "";
       if (queueMember >= RPG.partySize(save)) queueMember = 0;
       const qms = RPG.memberSave(save, queueMember);
-      memberTabs($("queue-member"), save, queueMember, i => { queueMember = i; renderQueue(); });
+      memberTabs($("queue-member"), save, queueMember, pickMember);
       const weaponRef = qms.equipment.mainHand;
       const weaponItem = RPG.ITEMS[RPG.refId(weaponRef)];
       const weaponSt = weaponItem ? RPG.itemStats(weaponRef) : {};
@@ -1737,7 +1768,7 @@
     }
 
     function renderAll() {
-      renderHeroBars(save);
+      drawHero();
       renderQuickSlots();
       if (combat) renderQueue();
       else renderPlace();
@@ -1855,6 +1886,8 @@
       fighting = on;
       startBtn.disabled = rerollBtn.disabled = saveBtn.disabled = on;
       document.body.classList.toggle("is-fighting", on);
+      drawHero();          // на час бою — портрет головного героя, після — знову обраного
+      renderQuickSlots();
     }
 
     async function startBattle() {
@@ -1986,10 +2019,10 @@
         wake.append(link("Прокинутися в Храмі", "game.html"));
         logBox.append(wake);
         logBox.scrollTop = logBox.scrollHeight;
-        renderHeroBars(save);
-        renderQuickSlots();
         document.body.classList.remove("is-fighting");
         fighting = false;
+        drawHero();
+        renderQuickSlots();
         startBtn.disabled = rerollBtn.disabled = true;   // бій звідси вже неможливий
         saveBtn.disabled = false;
         return;
@@ -2082,7 +2115,7 @@
 
     renderAll();
     // У мирних локаціях не перемальовуємо панель щосекунди — лише смужки героя
-    startRegenTimer(save, () => { renderHeroBars(save); }, () => fighting);
+    startRegenTimer(save, () => { drawHero(); }, () => fighting);
   }
 
   // ============================================================

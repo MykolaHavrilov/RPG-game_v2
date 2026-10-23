@@ -48,10 +48,10 @@
         <div class="party-list" id="party-list" hidden></div>
 
         <div class="inv-head">
-          <span>Швидкий доступ</span>
+          <span id="quick-title">Швидкий доступ</span>
           <span id="gold">Золото: 0</span>
         </div>
-        <!-- Перші 12 предметів інвентаря; зілля можна випити кліком (game.js) -->
+        <!-- Перші 12 предметів інвентаря; зілля п'є обраний герой групи (game.js) -->
         <div class="slots slots-4" id="quick-slots"></div>
 
         <a class="wf wf-link" href="inventory.html">Відкрити інвентар</a>
@@ -74,8 +74,14 @@
           <div class="panel stack dungeon-panel" id="dungeon-panel" hidden></div>
           <!-- Журнал бою: тут і готовність до бою, і хід бою, і нагорода (game.js → setArena / addLogLine) -->
           <ol class="log" id="battle-log" aria-label="Журнал бою" aria-live="polite"></ol>
+          <!-- Одразу під журналом: почати бій / пропустити суперника -->
+          <div class="row actions">
+            <button class="wf wf-button" id="start-btn" type="button">Почати бій</button>
+            <button class="wf wf-link" id="reroll-btn" type="button">Шукати іншого ворога</button>
+            <button class="wf wf-link" id="leave-btn" type="button" hidden>Покинути данж</button>
+          </div>
 
-          <!-- Чию чергу дій налаштовуємо (якщо в групі кілька героїв) -->
+          <!-- Обраний герой групи: його черга дій, портрет і зілля зі швидкого доступу -->
           <div class="row member-tabs" id="queue-member" hidden></div>
           <div class="queue-head">
             <span class="info-anchor">Черга дій</span>
@@ -83,12 +89,6 @@
             <span class="note" id="weapon-info"></span>
           </div>
           <div class="queue" id="queue"></div>
-
-          <div class="row actions">
-            <button class="wf wf-button" id="start-btn" type="button">Почати бій</button>
-            <button class="wf wf-link" id="reroll-btn" type="button">Шукати іншого ворога</button>
-            <button class="wf wf-link" id="leave-btn" type="button" hidden>Покинути данж</button>
-          </div>
         </div>
 
         <button class="wf wf-button wf-secondary" id="save-btn" type="button">Зберегти гру</button>

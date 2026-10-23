@@ -296,6 +296,8 @@ figure.is-champion figcaption { color: #ffd76a; }
   background: rgba(255, 255, 255, .05); border: 1px solid var(--border-color);
 }
 .party-row.is-dead { opacity: .5; filter: grayscale(1); }
+.party-row.is-pickable { cursor: pointer; }
+.party-row.is-pickable:hover, .party-row.is-pickable:focus-visible { border-color: var(--accent, #f2c14e); outline: none; }
 .party-row.is-champion { border-color: #f2c14e; box-shadow: 0 0 6px rgba(242, 193, 78, .5); }
 .party-face {
   flex: 0 0 44px; width: 44px; height: 44px; border-radius: 4px;
