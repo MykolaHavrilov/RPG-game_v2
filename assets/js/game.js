@@ -569,7 +569,7 @@
 
   // Картинка локації для CSS (var(--loc-img))
   function locImage(id) {
-    if (id === "south_gate") id = "city";            // вхід у Місто — та сама картинка
+    if (id === "south_gate") id = "city";            // вхід у Дубову Заставу — та сама картинка
     return `url("${RPG.asset("assets/images/locations/loc_" + id + ".webp")}")`;
   }
 
@@ -884,7 +884,7 @@
     const dungeonInfo = combat ? RPG.locationDungeon(locId) : null;
     let mode = dungeonInfo && RPG.activeDungeon(save) ? "dungeon" : "explore";
     const dungeonOn = () => mode === "dungeon" && !!RPG.activeDungeon(save);
-    // Музика локації: бій — під тип локації (останній бій данжу — тема боса), Місто — під район
+    // Музика локації: бій — під тип локації (останній бій данжу — тема боса), Дубова Застава — під район
     function playLocationMusic() {
       if (!RPG.audio) return;
       const dun = dungeonOn() ? RPG.activeDungeon(save) : null;
@@ -973,18 +973,18 @@
     // Темний ліс: зворотний бік Центральної брами
     function renderDarkGate() {
       place.append(el("p", "note", locData.description));
-      place.append(el("p", "note", "Тут не б'ються. Звідси — дороги до всіх місць Темного лісу (Мапа). Щоб повернутися в Місто, гукніть капітана варти."));
+      place.append(el("p", "note", "Тут не б'ються. Звідси — дороги до всіх місць Темного лісу (Мапа). Щоб повернутися в Дубову Заставу, гукніть капітана варти."));
       renderNpc(place, "captain");
       const row = el("div", "row");
       row.append(link("Мапа Темного лісу", "maps.html"));
       place.append(row);
     }
 
-    // Стартова мапа: Південні ворота Міста
+    // Стартова мапа: Південні ворота Дубової Застави
     function renderCityGate() {
-      place.append(el("p", "note", "Тут не б'ються. Крізь ворота — Південний район Міста з Гільдією авантюристів."));
+      place.append(el("p", "note", "Тут не б'ються. Крізь ворота — Південний район Дубової Застави з Гільдією авантюристів."));
       const row = el("div", "row");
-      row.append(button("Увійти в Місто", "wf wf-button", async () => {
+      row.append(button("Увійти в Дубову Заставу", "wf wf-button", async () => {
         RPG.enterCity(save, "south");
         await RPG.saveGame(save);
         location.reload();
@@ -1244,10 +1244,10 @@
       box.append(cols);
     }
 
-    // ---------- Місто: райони та Гільдія авантюристів ----------
+    // ---------- Дубова Застава: райони та Гільдія авантюристів ----------
     // Центральний район відкривається після особливого завдання «Час дослідити»
     const districtLocked = d => !RPG.isDistrictOpen(save, d);
-    // Район, де зараз герой (переходи між районами — дорогою по мапі Міста)
+    // Район, де зараз герой (переходи між районами — дорогою по мапі Дубової Застави)
     const cityDistrict = save.location.district || "south";
     let guildNpc = "admin";         // admin | trader | trainer
     let trainMember = 0;            // кого навчає Тренер (герой групи)
@@ -1279,7 +1279,7 @@
         if (districtLocked(d)) box.append(el("p", "status", RPG.districtLockText(d)));
         else if (d.id === "south") {
           renderGuild(box);
-          box.append(button("Вийти з міста", "wf wf-secondary", async () => {
+          box.append(button("Вийти з Дубової Застави", "wf wf-secondary", async () => {
             RPG.leaveCityToStart(save);
             await RPG.saveGame(save);
             location.reload();
@@ -2583,7 +2583,7 @@
       box.innerHTML = "";
       const log = RPG.questLog(save);
       if (!log.length) {
-        box.append(el("p", "status keep", "Розпочатих квестів немає. Завдання дає Артеміда, адміністратор гільдії — Місто, Південний район."));
+        box.append(el("p", "status keep", "Розпочатих квестів немає. Завдання дає Артеміда, адміністратор гільдії — Дубова Застава, Південний район."));
         return;
       }
       for (const q of log) {
@@ -2691,7 +2691,7 @@
         const learned = Object.entries(ch.skills || {}).filter(([, l]) => l > 0);
         mBox.append(el("p", "note", learned.length
           ? "Навички: " + learned.map(([id, l]) => `${RPG.SKILLS[id]?.name || id} ${l}`).join(", ")
-          : "Навичок ще немає. Тренер Брут — у Гільдії авантюристів (Місто, Південний район)."));
+          : "Навичок ще немає. Тренер Брут — у Гільдії авантюристів (Дубова Застава, Південний район)."));
       }
     }
 
@@ -2923,7 +2923,7 @@
   // ============================================================
   // МАПА: три частини світу (data/routes.js → MAP_REGIONS), переміщення з часом (travel.js)
   // ============================================================
-  const TYPE_LABEL = { home: "Безпечно", temple: "Безпечно", tavern: "Торговець", city: "Гільдія", combat: "Бої", gate: "Брама", citygate: "Вхід у Місто" };
+  const TYPE_LABEL = { home: "Безпечно", temple: "Безпечно", tavern: "Торговець", city: "Гільдія", combat: "Бої", gate: "Брама", citygate: "Вхід у Дубову Заставу" };
   // Порядок місць у списку під мапою
   const REGION_ORDER = {
     start: ["home", "temple", "village_start", "tavern", "south_gate", "forest_path", "forest_cave"],
@@ -2931,7 +2931,7 @@
     dark: ["dark_gate", "dk_edge", "dk_marsh", "dk_grave", "dk_webs", "dk_ravine", "dk_ruins", "dk_heart"]
   };
   // Зони кліку (x, y — центр; w, h — розмір у % мапи). Стартова мапа — за картинками будівель (map_layout.js):
-  // Місто на ній — це вхід south_gate («Південний район»).
+  // Дубова Застава на ній — це вхід south_gate («Південний район»).
   const CITY_ZONES = {                       // під картинку city_map.webp (з Town_1.png)
     south:  { x: 50.0, y: 79.0, w: 56, h: 28 },
     center: { x: 50.0, y: 51.0, w: 32, h: 28 },
@@ -2979,7 +2979,7 @@
     const ids = REGION_ORDER[region].filter(id => ZONES[id] && R.spots[id]);
     let selected = t0 ? t0.to : here.spot;
     let travelTimer = null;
-    // Музика мапи: регіон світу; на мапі Міста — тема району, куди йде (або де стоїть) герой
+    // Музика мапи: регіон світу; на мапі Дубової Застави — тема району, куди йде (або де стоїть) герой
     RPG.audio?.scene({ screen: "map", region, district: region === "city" ? selected : null });
 
     // Опис місця регіону: { name, desc, loc? (LOCATIONS), district? }
@@ -3010,7 +3010,17 @@
 
     // ---------- Картинка мапи ----------
     const h2 = mapBox.closest(".panel")?.querySelector("h2");
-    if (h2) h2.textContent = `Мапа: ${R.name}`;
+    if (h2) {
+      h2.textContent = `Мапа: ${R.name}`;
+      // Короткий опис регіону під заголовком (data/routes.js → MAP_REGIONS[…].desc)
+      let sub = h2.nextElementSibling;
+      if (!sub || !sub.classList.contains("map-desc")) {
+        sub = el("p", "note map-desc", "");
+        h2.after(sub);
+      }
+      sub.textContent = R.desc ? `(${R.desc})` : "";
+      sub.hidden = !R.desc;
+    }
     const img = mapBox.querySelector(".map-img");
     img.src = RPG.asset(R.image);
     img.width = R.w; img.height = R.h;
@@ -3185,7 +3195,7 @@
       if (st.kind === "here") {
         details.append(link("Ви тут — відкрити локацію", "game.html"));
         if (region === "city" && selected === "south") {
-          details.append(button("Вийти з міста", "wf wf-secondary", async () => {
+          details.append(button("Вийти з Дубової Застави", "wf wf-secondary", async () => {
             RPG.leaveCityToStart(save);
             await RPG.saveGame(save);
             location.reload();

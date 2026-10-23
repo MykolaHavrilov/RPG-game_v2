@@ -856,7 +856,7 @@ function useItem(save, id) {
 
 // ---------- Торгівля в Шинку ----------
 
-// Шинок — свій асортимент; Місто — торговець Гільдії авантюристів
+// Шинок — свій асортимент; Дубова Застава — торговець Гільдії авантюристів
 function currentShop(save) {
   const loc = RPG.getLocation(save.location.map);
   if (loc.type === "tavern") return loc.shop || [];
@@ -864,7 +864,7 @@ function currentShop(save) {
   return null;
 }
 
-// ---------- Торгова гільдія (Місто, Торговий район) ----------
+// ---------- Торгова гільдія (Дубова Застава, Торговий район) ----------
 // Відкривається з 20 рівня головного героя. Управляючий — Скрудж:
 // продає речі 3 виду за потрійну ціну (price × 3).
 const TRADE_MIN_LEVEL = 20;
@@ -876,7 +876,7 @@ function tradePrice(id) {
   return Math.ceil((ITEMS[id]?.price || 0) * TRADE_PRICE_MULT);
 }
 function buyFromTrade(save, id, qty = 1) {
-  if (save.location.map !== "city") return { ok: false, reason: "Торгова гільдія — у Місті, в Торговому районі." };
+  if (save.location.map !== "city") return { ok: false, reason: "Торгова гільдія — у Дубовій Заставі, в Торговому районі." };
   if (save.character.level < TRADE_MIN_LEVEL) return { ok: false, reason: `Торгова гільдія приймає з ${TRADE_MIN_LEVEL} рівня.` };
   if (!tradeStock().includes(id)) return { ok: false, reason: "Скрудж цього не продає." };
   qty = Math.floor(Number(qty));
@@ -889,7 +889,7 @@ function buyFromTrade(save, id, qty = 1) {
   return { ok: true, price, qty, unit };
 }
 
-// Чи відкритий район міста: Центральний — після «Час дослідити», Торговий — з 20 рівня
+// Чи відкритий район Дубової Застави: Центральний — після «Час дослідити», Торговий — з 20 рівня
 function isDistrictOpen(save, d) {
   if (!d.locked) return true;
   if (d.id === "center") return RPG.isCentralOpen(save);

@@ -1,7 +1,7 @@
 // map_layout.js — будівлі на стартовій мапі (assets/images/map/start_location.webp).
 // x, y — центр; w, h — розмір у % від ширини / висоти мапи.
 //   buildings — картинки будівель (assets/images/map/bld_*.webp); вони ж — зони кліку
-//               (Місто = вхід south_gate «Південний район»). Точки фігурки й дороги — data/routes.js.
+//               (Дубова Застава = вхід south_gate «Південний район»). Точки фігурки й дороги — data/routes.js.
 //   spots, city — старі координати (не використовуються)
 window.RPG = window.RPG || {};
 RPG.MAP_LAYOUT = {

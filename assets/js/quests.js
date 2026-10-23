@@ -337,7 +337,7 @@
   }
 
   // ---------- Квест капітана варти «Варта Центральної брами» ----------
-  // Видає Капітан Северин Залізняк (Місто, Північний район — відкритий після професії).
+  // Видає Капітан Северин Залізняк (Дубова Застава, Північний район — відкритий після професії).
   // Після здачі брама відчиняється: можна йти в Темний ліс.
   const GATE = {
     name: "Варта Центральної брами",
@@ -408,7 +408,7 @@
 
   // ---------- Журнал квестів (сторінка «Персонаж») ----------
   // [{ title, lines: [рядки прогресу], where, ready }]
-  const GUILD_PLACE = "Артеміда, адміністратор гільдії — Місто, Південний район";
+  const GUILD_PLACE = "Артеміда, адміністратор гільдії — Дубова Застава, Південний район";
   function questLog(save) {
     const out = [];
     const ex = exploreInfo(save);
@@ -419,7 +419,7 @@
       lines: pr.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: GUILD_PLACE, ready: pr.complete });
     const gt = gateInfo(save);
     if (gt.part) out.push({ title: `«${GATE.name}» (${gt.index}/${gt.total}): ${gt.part.title}`, special: true,
-      lines: gt.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: "Капітан варти — Місто, Північний район (Центральна брама)", ready: gt.complete });
+      lines: gt.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: "Капітан варти — Дубова Застава, Північний район (Центральна брама)", ready: gt.complete });
     for (const quest of state(save).active) {
       const have = questProgress(save, quest);
       out.push({ title: questTitle(quest), lines: [`Виконано: ${have}/${quest.need}`, `Нагорода: ${describeReward(quest.reward)}`],
