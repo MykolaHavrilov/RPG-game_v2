@@ -117,6 +117,63 @@
     return showNotice("Кишеня для ключів", [list], "is-keys");
   }
 
+  // ---------- Фільтр здобичі (rarity.js → lootFilter): автоматичне викидання речей за рідкістю ----------
+  // Зміни зберігаються одразу. onChange — оновити вигляд кнопки-воронки.
+  function showLootFilter(save, onChange) {
+    const f = RPG.lootFilter(save);
+    const store = () => { RPG.saveGame(save).catch(e => console.error(e)); onChange?.(); };
+
+    const power = el("label", "loot-filter-power");
+    const onBox = document.createElement("input");
+    onBox.type = "checkbox";
+    onBox.id = "loot-filter-on";
+    onBox.checked = f.on;
+    const state = el("b", "loot-filter-state");
+    power.append(onBox, el("span", null, "Фільтр увімкнено"), state);
+
+    const list = el("ul", "loot-filter-list");
+    const boxes = {};
+    for (const r of RPG.RARITY_ORDER) {
+      const li = el("li", "loot-filter-row rarity-" + r);
+      const lab = el("label");
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.dataset.rarity = r;
+      box.checked = f.drop[r];
+      boxes[r] = box;
+      const name = el("span", "loot-filter-name", RPG.RARITIES[r].name);
+      name.style.color = RPG.RARITIES[r].color;
+      lab.append(box, name);
+      li.append(lab);
+      list.append(li);
+      box.addEventListener("change", () => { f.drop[r] = box.checked; sync(); store(); });
+    }
+    function sync() {
+      state.textContent = f.on ? (RPG.lootFilterActive(save) ? "Працює" : "Оберіть рідкість") : "Вимкнено";
+      state.classList.toggle("is-on", RPG.lootFilterActive(save));
+      list.classList.toggle("is-off", !f.on);
+    }
+    onBox.addEventListener("change", () => { f.on = onBox.checked; sync(); store(); });
+    sync();
+
+    const note = el("p", "note", "Позначені рідкості зброї та броні, що випадуть у бою, одразу викидаються " +
+      "і не займають місця в інвентарі. Речі, які вже лежать в інвентарі, ключі, зілля й матеріали фільтр не чіпає.");
+    return showNotice("Фільтр здобичі", [power, list, note], "is-loot-filter");
+  }
+
+  // Кнопка-воронка: підсвічена, коли фільтр реально викидає речі
+  function renderFilterBtn(btn, save) {
+    if (!btn) return;
+    const on = RPG.lootFilterActive(save);
+    btn.classList.toggle("is-on", on);
+    const t = on
+      ? "Фільтр здобичі: увімкнено (" + RPG.RARITY_ORDER.filter(r => save.lootFilter.drop[r]).map(r => RPG.RARITIES[r].name).join(", ") + ")"
+      : "Фільтр здобичі: вимкнено";
+    btn.title = t;
+    btn.setAttribute("aria-label", t);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
   // ---------- Окреме повідомлення (вікно), що закривається лише хрестиком ----------
   // Повертає Promise, який виконується після закриття.
   function showNotice(title, lines, cls = "") {
@@ -139,13 +196,15 @@
   function fieldLootAdd(save, add) {
     const locId = save.location.map;
     let f = save.fieldLoot;
-    if (!f || f.loc !== locId) f = save.fieldLoot = { loc: locId, battles: 0, wins: 0, exp: 0, gold: 0, items: {}, lost: {} };
+    if (!f || f.loc !== locId) f = save.fieldLoot = { loc: locId, battles: 0, wins: 0, exp: 0, gold: 0, items: {}, lost: {}, filtered: {} };
+    f.filtered ??= {};
     f.battles++;
     if (add.win) f.wins++;
     f.exp += add.exp || 0;
     f.gold += add.gold || 0;
     for (const [k, n] of Object.entries(add.items || {})) f.items[k] = (f.items[k] || 0) + n;
     for (const [k, n] of Object.entries(add.lost || {})) f.lost[k] = (f.lost[k] || 0) + n;
+    for (const [k, n] of Object.entries(add.filtered || {})) f.filtered[k] = (f.filtered[k] || 0) + n;
   }
   // Показати підсумок і очистити. Повертає Promise (виконується після закриття вікна або одразу, якщо нічого немає)
   async function showFieldLoot(save) {
@@ -162,6 +221,8 @@
     lines.push(items.length ? "Речі й ресурси:" : "Речей і ресурсів не здобуто.");
     if (items.length) lines.push(list);
     const lost = Object.entries(f.lost);
+    const filtered = Object.values(f.filtered || {}).reduce((a, n) => a + n, 0);
+    if (filtered) lines.push(`Фільтр здобичі викинув речей: ${fmtNum(filtered)}.`);
     if (lost.length) lines.push(`Не вмістилось в інвентар і пропало: ${lost.map(([k, n]) => n > 1 ? `${k} ×${n}` : k).join(", ")}.`);
     await showNotice(`Здобич: ${name}`, lines, "is-loot");
   }
@@ -1911,7 +1972,7 @@
       // уникнути поразки, просто закривши сторінку під час показу бою
       const summary = [];
       const levelLines = [];
-      const got = {}, lost = {};          // речі цього бою (для підсумку поля бою)
+      const got = {}, lost = {}, filtered = {};   // речі цього бою (для підсумку поля бою); filtered — викинув фільтр
       const freeBefore = RPG.invFree(save);
       let battleGold = 0, battleExp = 0;
       result.heroes.forEach((h, k) => { team[k].character.hp = h.hp; team[k].character.mp = h.mp; });
@@ -1935,13 +1996,18 @@
             if (it.refs) it.refs.forEach(ref => { const n = RPG.itemFullName(ref); summary.push(n); got[n] = (got[n] || 0) + 1; });
             else if (it.got) { const n = RPG.ITEMS[it.id].name; summary.push(`${n} ×${it.got}`); got[n] = (got[n] || 0) + it.got; }
             if (it.lost) { const n = RPG.ITEMS[it.id].name; lost[n] = (lost[n] || 0) + it.lost; }
+            if (it.filtered) it.filtered.forEach(ref => { const n = RPG.itemFullName(ref); filtered[n] = (filtered[n] || 0) + 1; });
           }
           save.character.kills = (save.character.kills || 0) + 1;
           summary.push(...RPG.questOnKill(save, e.id).map(s => "Завдання: " + s));
           if (e.champion) {
             // Трофей чемпіона: одна річ (легендарна 5% → епічна 25% → магічна 50%)
             const drop = RPG.rollChampionDrop(e.id);
-            if (drop && !RPG.invFree(save)) {
+            if (drop && RPG.isFilteredOut(save, drop.r)) {
+              const n = RPG.itemFullName(RPG.makeItem(drop.id, drop.r));
+              filtered[n] = (filtered[n] || 0) + 1;
+              summary.push(`Трофей чемпіона: ${n} — викинуто фільтром`);
+            } else if (drop && !RPG.invFree(save)) {
               const n = RPG.itemFullName(RPG.makeItem(drop.id, drop.r));
               lost[n] = (lost[n] || 0) + 1;
               summary.push(`Трофей чемпіона: ${n} — пропав, інвентар повний!`);
@@ -1970,6 +2036,7 @@
           ? `+${expEach} EXP кожному, хто вижив (усього ${pool}, бонус групи +${(team.length - 1) * 10}%)`
           : `+${totalExp} EXP`);
         if (gold) summary.splice(1, 0, `+${gold} золота`);
+        if (Object.keys(filtered).length) summary.push(`Фільтр викинув: ${Object.entries(filtered).map(([k, n]) => n > 1 ? `${k} ×${n}` : k).join(", ")}`);
         if (Object.keys(lost).length) summary.push(`Не вмістилось в інвентар: ${Object.entries(lost).map(([k, n]) => `${k} ×${n}`).join(", ")}`);
         battleGold = gold;
         battleExp = group ? expEach : totalExp;
@@ -1988,7 +2055,7 @@
         if (result.win) dunNext = RPG.advanceDungeon(save);
         else RPG.leaveDungeon(save);
       }
-      if (!result.draw || result.win) fieldLootAdd(save, { win: result.win, exp: battleExp, gold: battleGold, items: got, lost });
+      if (!result.draw || result.win) fieldLootAdd(save, { win: result.win, exp: battleExp, gold: battleGold, items: got, lost, filtered });
       await RPG.saveGame(save).catch(e => console.error(e));
 
       // Показ бою
@@ -2400,6 +2467,9 @@
       $("gold").textContent = `Клітинок: ${ms.inventory.length}/${RPG.INV_SIZE} · Золото: ${fmtNum(ms.character.gold)}`;
       const pocketBtn = $("key-pocket-btn");
       if (pocketBtn) pocketBtn.onclick = () => showKeyPocket(save);
+      const filterBtn = $("loot-filter-btn");
+      renderFilterBtn(filterBtn, save);
+      if (filterBtn) filterBtn.onclick = () => showLootFilter(save, () => renderFilterBtn(filterBtn, save));
       $("gold").classList.toggle("is-full", !RPG.invFree(ms));
       renderDesc();
     }

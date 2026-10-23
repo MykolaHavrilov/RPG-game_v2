@@ -682,6 +682,25 @@ main > a.location { display: flex; margin-bottom: 10px; }
 
 /* ---------- Кишеня для ключів (game.js → showKeyPocket) ---------- */
 .key-pocket-btn { align-self: flex-start; }
+.inv-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.inv-tools .key-pocket-btn { align-self: auto; }
+
+/* ---------- Фільтр здобичі (game.js → showLootFilter) ---------- */
+.loot-filter-btn { min-height: 0; width: 40px; height: 40px; padding: 0; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center; opacity: .75; }
+.loot-filter-btn svg { display: block; }
+.loot-filter-btn.is-on { opacity: 1; color: var(--gold); border-color: var(--gold);
+  box-shadow: 0 0 8px rgba(201, 163, 90, .55); }
+.loot-filter-power { display: flex; align-items: center; gap: 10px; cursor: pointer; margin: 4px 0 10px; }
+.loot-filter-state { margin-left: auto; font-weight: 400; font-size: .9rem; color: #9a9a9a; white-space: nowrap; }
+.loot-filter-state.is-on { color: var(--gold); }
+.loot-filter-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; min-width: min(360px, 78vw); }
+.loot-filter-list.is-off { opacity: .5; }
+.loot-filter-row label { display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 8px 10px; border: 1px solid rgba(201, 163, 90, .35); border-radius: 6px; }
+.loot-filter-name { font-weight: 700; }
+.loot-filter-power input, .loot-filter-row input { width: 20px; height: 20px; accent-color: var(--gold); flex: 0 0 auto; }
+@media (hover: none) { .loot-filter-btn { width: 44px; height: 44px; } }
 .key-pocket { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; min-width: min(420px, 80vw); }
 .key-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 8px 10px; border: 1px solid rgba(201, 163, 90, .35); border-radius: 6px; }

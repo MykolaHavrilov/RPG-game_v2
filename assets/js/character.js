@@ -940,21 +940,32 @@ function sellItem(save, invIndex, qty = 1) {
 // ---------- Нагорода за бій ----------
 
 // Для кожної речі луту: it.got — скільки підібрано, it.lost — скільки пропало (не було місця)
+// it.filtered — речі, які викинув фільтр здобичі (rarity.js → lootFilter), вони не займають місця
 function applyReward(save, exp, loot) {
   save.character.gold += loot?.gold || 0;
   for (const it of loot?.items || []) {
-    const got = fitQty(save, it.id, it.qty);
-    it.got = got;
-    it.lost = it.qty - got;
     if (RPG.hasRarity(it.id)) {
       // зброя/броня: рідкість кожної речі визначається окремо (з лічильником удачі)
       it.refs = [];
-      for (let i = 0; i < got; i++) {
-        const ref = RPG.makeItem(it.id, RPG.rollRarity(save));
+      it.filtered = [];
+      const filterOn = RPG.lootFilterActive(save);
+      for (let i = 0; i < it.qty; i++) {
+        if (!filterOn && !invFree(save)) break;        // місця немає — решта пропадає
+        const r = RPG.rollRarity(save);
+        if (filterOn && RPG.isFilteredOut(save, r)) { it.filtered.push(RPG.makeItem(it.id, r)); continue; }
+        if (!invFree(save)) continue;                  // не викинута, але й не влізла — пропала
+        const ref = RPG.makeItem(it.id, r);
         save.inventory.push(ref);
         it.refs.push(ref);
       }
-    } else if (got) {
+      it.got = it.refs.length;
+      it.lost = it.qty - it.got - it.filtered.length;
+      continue;
+    }
+    const got = fitQty(save, it.id, it.qty);
+    it.got = got;
+    it.lost = it.qty - got;
+    if (got) {
       addItem(save, it.id, got);
     }
   }

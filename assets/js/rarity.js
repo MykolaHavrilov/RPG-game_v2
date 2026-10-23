@@ -265,7 +265,30 @@
     return ref;
   }
 
+  // ---------- Фільтр здобичі (save.lootFilter) ----------
+  // Речі обраних рідкостей, що випали в бою, одразу викидаються й не займають інвентар.
+  //   save.lootFilter = { on: false, drop: { broken: true, common: false, ... } }
+  // Вікно налаштування — кнопка-воронка на сторінці інвентаря (game.js → showLootFilter).
+  function lootFilter(save) {
+    const f = save.lootFilter = Object.assign({ on: false }, save.lootFilter || {});
+    f.drop = Object.assign({}, f.drop || {});
+    for (const r of RARITY_ORDER) f.drop[r] = !!f.drop[r];
+    f.on = !!f.on;
+    return f;
+  }
+  // true — річ цієї рідкості фільтр викидає (лише коли фільтр увімкнено)
+  function isFilteredOut(save, r) {
+    const f = save.lootFilter;
+    return !!(f && f.on && f.drop && f.drop[r]);
+  }
+  // Чи фільтр щось реально викидає (увімкнено й обрано хоча б одну рідкість)
+  function lootFilterActive(save) {
+    const f = save.lootFilter;
+    return !!(f && f.on && RARITY_ORDER.some(r => f.drop?.[r]));
+  }
+
   Object.assign(RPG, {
+    lootFilter, isFilteredOut, lootFilterActive,
     RARITY_ORDER, RARITIES, DROP_WEIGHTS, LUCK, LEGEND_OVERCAP, CORE_KEYS,
     refId, hasRarity, rarityOf, makeItem, rollRarity, newLuck,
     itemStats, itemName, itemFullName, itemIconRef, refSellPrice, normalizeRef

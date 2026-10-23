@@ -43,7 +43,15 @@
             <span id="gold">Золото: 0</span>
           </div>
           <!-- Кишеня для ключів від данжів — окреме вікно (game.js → showKeyPocket) -->
-          <button class="wf wf-link key-pocket-btn" id="key-pocket-btn" type="button">Кишеня для ключів</button>
+          <!-- праворуч — фільтр здобичі за рідкістю (game.js → showLootFilter) -->
+          <div class="inv-tools">
+            <button class="wf wf-link key-pocket-btn" id="key-pocket-btn" type="button">Кишеня для ключів</button>
+            <button class="wf loot-filter-btn" id="loot-filter-btn" type="button" title="Фільтр здобичі" aria-label="Фільтр здобичі">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                <path d="M3 4h18l-7 8.5V19l-4 2v-8.5z" fill="currentColor" fill-opacity=".25" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
           <div class="slots slots-12" id="item-grid"></div>
         </div>
 

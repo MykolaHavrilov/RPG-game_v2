@@ -233,6 +233,7 @@
     save.inventory = save.inventory.map(RPG.normalizeRef).filter(Boolean);
     for (const sid in save.chests) save.chests[sid] = save.chests[sid].map(RPG.normalizeRef).filter(Boolean);
     save.lootLuck = Object.assign(RPG.newLuck(), save.lootLuck || {});
+    RPG.lootFilter(save);   // фільтр здобичі за рідкістю (старі сейви — вимкнено)
 
     // Прибираємо предмети, яких більше немає в довіднику
     for (const slot in save.equipment) {
