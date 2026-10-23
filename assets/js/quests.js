@@ -535,13 +535,16 @@
   // 5) Покласти сферу на долоні статуї: 5 секунд нічого, потім з глечика біля ніг статуї тече блакитна вода
   //    й наповнює фонтан. Сфера лишається на статуї.
   // Джерело Велеса: випити води — уся група отримує +200% досвіду за бої (до досвіду з бонусом групи)
-  //   на 15 хвилин реального часу (і поки гра закрита теж). Пити знову можна, коли дія скінчилась.
-  // Стан: save.story.veles = { stage: 0..5 } (5 — джерело відкрите), save.spring = { until } (поки діє)
+  //   на 15 хвилин реального часу (і поки гра закрита теж). Після того як дія скінчилась — перерва 1 година
+  //   (cooldownMs), лише тоді можна пити знову.
+  // Стан: save.story.veles = { stage: 0..5 } (5 — джерело відкрите), save.spring = { until, next }
+  //   until — до коли діє бонус, next — з якого часу можна пити знову
   const VELES = {
     name: "Долоні Велеса",
     minLevel: 12,
     expBonusPct: 200,
     durationMs: 15 * 60 * 1000,
+    cooldownMs: 60 * 60 * 1000,   // перерва після закінчення дії
     waitMs: 5000,          // скільки «нічого не відбувається» після того, як сферу поклали
     stages: {
       1: "Дізнатися, що це за сфера: розпитати людей у Заставі чи в Храмі.",
@@ -586,11 +589,20 @@
     const until = save.spring?.until || 0;
     return Math.max(0, until - now);
   }
+  // Скільки мілісекунд до наступної можливості напитися (0 — можна зараз; поки діє бонус — теж > 0)
+  function springCooldown(save, now = Date.now()) {
+    const sp = save.spring;
+    if (!sp) return 0;
+    const next = sp.next ?? (sp.until + VELES.cooldownMs);   // старі збереження без next
+    return Math.max(0, next - now);
+  }
   // Випити з джерела → { ok, minutes } (для всієї групи; діє на досвід за бої)
   function drinkSpring(save, now = Date.now()) {
     if (velesState(save).stage < 5) return { ok: false, reason: "Фонтан сухий." };
     if (springLeft(save, now)) return { ok: false, reason: `Сила джерела ще з вами — близько ${Math.ceil(springLeft(save, now) / 60000)} хв.` };
-    save.spring = { until: now + VELES.durationMs };
+    const wait = springCooldown(save, now);
+    if (wait) return { ok: false, reason: `Вода в чаші ще не набрала сили. Спробуйте за ${Math.ceil(wait / 60000)} хв.` };
+    save.spring = { until: now + VELES.durationMs, next: now + VELES.durationMs + VELES.cooldownMs };
     return { ok: true, minutes: VELES.durationMs / 60000 };
   }
   // Множник досвіду за бій (1 або 3)
@@ -635,7 +647,7 @@
     questState: state, fillOffers, questTitle, questProgress, isQuestComplete: isComplete,
     describeReward, acceptQuest, abandonQuest, turnInQuest, questOnKill,
     EXPLORE, storyState, isCentralOpen, isHiringOpen, CENTRAL_MIN_LEVEL, exploreInfo, describeExploreReward, startExplore, turnInExplore,
-    VELES, velesState, velesStrangerDue, velesGiveOrb, velesAdvance, velesPlaceOrb, springLeft, drinkSpring, springExpMult,
+    VELES, velesState, velesStrangerDue, velesGiveOrb, velesAdvance, velesPlaceOrb, springLeft, springCooldown, drinkSpring, springExpMult,
     PROFESSION, PROFESSION_BRANCHES, PROFESSION_QUEST_LEVEL, PROFESSION_END, PROFESSION_REFUSE,
     professionState, professionInfo, professionName, professionBranches, professionCheckpoint, startProfession, turnInProfession,
     GATE, gateState, isGateOpen, gateInfo, startGate, turnInGate

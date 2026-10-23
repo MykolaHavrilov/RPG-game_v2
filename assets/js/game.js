@@ -1166,9 +1166,12 @@
       } else {
         card.append(el("p", null, "Над фонтаном височіє статуя Велеса зі сферою на долонях. З глечика біля його ніг тече блакитна вода, " +
           "і чаша фонтана повна до країв. Це чарівне джерело: хто нап'ється — тому кожен бій дає втричі більше досвіду " +
-          `(+${V.expBonusPct}% до досвіду групи) протягом ${V.durationMs / 60000} хвилин.`));
+          `(+${V.expBonusPct}% до досвіду групи) протягом ${V.durationMs / 60000} хвилин. Потім вода годину набирає силу знову.`));
         const left = RPG.springLeft(save);
-        if (left) card.append(el("p", "rt-magic", `Сила джерела ще з вами — близько ${Math.ceil(left / 60000)} хв.`));
+        const wait = RPG.springCooldown(save);
+        if (left) card.append(el("p", "rt-magic", `Сила джерела ще з вами — близько ${Math.ceil(left / 60000)} хв. ` +
+          `Після цього вода набиратиме силу ще ${RPG.VELES.cooldownMs / 60000} хв.`));
+        else if (wait) card.append(el("p", "rt-magic", `Вода в чаші ще не набрала сили — пити знову можна буде за ${Math.ceil(wait / 60000)} хв.`));
         const drink = button("Випити з джерела", "wf wf-button", async () => {
           const r = RPG.drinkSpring(save);
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
@@ -1177,7 +1180,7 @@
             `за бої на ${r.minutes} хвилин.`);
           renderAll();
         });
-        drink.disabled = !!left;
+        drink.disabled = !!wait;
         card.append(drink);
       }
       box.append(card);
