@@ -109,7 +109,7 @@
 
   // Чи можна зараз наймати: { ok, reason }
   function canHire(save) {
-    if (!RPG.isCentralOpen(save)) return { ok: false, reason: "Центральний район ще закритий." };
+    if (!RPG.isHiringOpen(save)) return { ok: false, reason: `Дошка оголошень відкривається після особливого завдання «${RPG.EXPLORE.name}» (Артеміда, Гільдія авантюристів).` };
     if (save.character.level < HIRE_MIN_LEVEL) return { ok: false, reason: `Наймати можна з ${HIRE_MIN_LEVEL} рівня головного героя.` };
     if (partySize(save) >= MAX_PARTY) return { ok: false, reason: `У групі вже ${MAX_PARTY} героїв — це максимум.` };
     const cost = nextHireCost(save);

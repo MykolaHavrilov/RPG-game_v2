@@ -12,7 +12,8 @@
 // ОСОБЛИВЕ ЗАВДАННЯ «Час дослідити» (з 10 рівня головного героя) — 3 частини по черзі:
 //   1) принести 100 щурячих шкурок → 10 000 EXP
 //   2) принести по 100 вовчих іклів і вовчих шкур → 10 000 EXP, 100 середніх зілль здоров'я, 100 малих зілль мани
-//   3) убити 70 слаймів → відкривається Центральний район (Мерія, Дошка оголошень — найм у групу)
+//   3) убити 70 слаймів → відкривається Дошка оголошень біля Мерії (найм у групу)
+// Сам Центральний район (Мерія, Розпорядник Захар) відкритий з CENTRAL_MIN_LEVEL (6) рівня.
 // Стан: save.story.explore = { part: 0 (не взято) | 1..3 (поточна частина) | 4 (виконано), kills }
 //
 // КВЕСТ «ШЛЯХ ПРОФЕСІЇ» (з 15 рівня Селянина, видає Адміністратор гільдії) — 2 частини:
@@ -216,7 +217,7 @@
         reward: { exp: 0, items: [], unlock: "center" } }
     ],
     finale: "«Ви довели, що на вас можна покластися. Біля Мерії в Центральному районі є Дошка оголошень — " +
-            "там інші авантюристи шукають собі напарників, щоб об'єднатися в групу. Прохід до Центрального району тепер відкритий.»"
+            "там інші авантюристи шукають собі напарників, щоб об'єднатися в групу. Тепер і вам там можна шукати товаришів.»"
   };
 
   function storyState(save) {
@@ -225,9 +226,14 @@
     return save.story.explore;
   }
 
-  // Відкрито Центральний район (після завершення «Час дослідити»)
-  function isCentralOpen(save) {
+  // Центральний район (Мерія, Розпорядник Захар) — з 6 рівня головного героя
+  const CENTRAL_MIN_LEVEL = 6;
+  // Дошка оголошень (найм у групу) — після завершення «Час дослідити»
+  function isHiringOpen(save) {
     return storyState(save).part > EXPLORE.parts.length;
+  }
+  function isCentralOpen(save) {
+    return save.character.level >= CENTRAL_MIN_LEVEL || isHiringOpen(save);
   }
 
   // Що показати в Адміністратора: null — ще зарано (рівень < 10)
@@ -249,7 +255,7 @@
     const out = [];
     if (r.exp) out.push(`${r.exp} EXP`);
     for (const it of r.items) out.push(`${RPG.ITEMS[it.id].name} × ${it.qty}`);
-    if (r.unlock === "center") out.push("прохід до Центрального району");
+    if (r.unlock === "center") out.push("Дошка оголошень біля Мерії (найм у групу)");
     return out.join(", ");
   }
 
@@ -436,7 +442,7 @@
     QUEST_MAX_ACTIVE: MAX_ACTIVE, QUEST_MAX_ACTIVE_PRO: MAX_ACTIVE_PRO, QUEST_MAX_SAME: MAX_SAME, questMaxActive: maxActive, questSameCount: sameCount,
     questState: state, fillOffers, questTitle, questProgress, isQuestComplete: isComplete,
     describeReward, acceptQuest, abandonQuest, turnInQuest, questOnKill,
-    EXPLORE, storyState, isCentralOpen, exploreInfo, describeExploreReward, startExplore, turnInExplore,
+    EXPLORE, storyState, isCentralOpen, isHiringOpen, CENTRAL_MIN_LEVEL, exploreInfo, describeExploreReward, startExplore, turnInExplore,
     PROFESSION, professionState, professionInfo, startProfession, turnInProfession,
     GATE, gateState, isGateOpen, gateInfo, startGate, turnInGate
   });

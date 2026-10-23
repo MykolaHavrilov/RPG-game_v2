@@ -190,6 +190,23 @@
     });
   }
 
+  // ---------- Обірваний пергамент (Домівка) ----------
+  function showParchment() {
+    const P = RPG.CHRONICLE.PARCHMENT;
+    document.querySelector(".parchment-dialog")?.remove();
+    const dlg = el("dialog", "parchment-dialog");
+    const close = button("×", "notice-close chronicle-close", () => dlg.close());
+    close.setAttribute("aria-label", "Закрити");
+    const sheet = el("article", "parchment-sheet");
+    sheet.append(el("h2", "chronicle-title", P.title));
+    P.paras.forEach((p, i) => sheet.append(el("p", "chronicle-p" + (i === 0 ? " is-initial" : "") + (i === P.paras.length - 1 ? " is-cut" : ""), p)));
+    sheet.append(el("p", "parchment-torn", P.torn));
+    dlg.append(close, sheet);
+    dlg.addEventListener("close", () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+  }
+
   // ---------- Книга «Предки Минулих та Майбутніх часів» (data/chronicle.js) ----------
   // Вікно-книга з пергаменту: зміст ліворуч (на телефоні — зверху), сторінка праворуч.
   function showChronicle(save, startKey = "prologue") {
@@ -1052,6 +1069,21 @@
       const row = el("div", "row");
       row.append(link("Інвентар і скриня", "inventory.html"), link("Вирушити (Мапа)", "maps.html"));
       place.append(row);
+      // Обірваний пергамент — шматок Прологу з книги «Предки…» (data/chronicle.js → PARCHMENT)
+      if (RPG.CHRONICLE) {
+        const P = RPG.CHRONICLE.PARCHMENT;
+        const box = el("div", "stack parchment-hint");
+        box.append(el("p", "parchment-text", P.hint));
+        box.append(button(save.story?.parchment ? "Перечитати пергамент" : "Прочитати пергамент", "wf wf-link", async () => {
+          showParchment();
+          if (!save.story?.parchment) {
+            (save.story ??= {}).parchment = true;
+            await RPG.saveGame(save).catch(e => console.error(e));
+            renderPlace();
+          }
+        }));
+        place.append(box);
+      }
     }
 
     // Темний ліс: зворотний бік Центральної брами
@@ -1333,7 +1365,7 @@
     }
 
     // ---------- Дубова Застава: райони та Гільдія авантюристів ----------
-    // Центральний район відкривається після особливого завдання «Час дослідити»
+    // Центральний район — з 6 рівня; Дошка оголошень біля Мерії — після особливого завдання «Час дослідити»
     const districtLocked = d => !RPG.isDistrictOpen(save, d);
     // Район, де зараз герой (переходи між районами — дорогою по мапі Дубової Застави)
     const cityDistrict = save.location.district || "south";
@@ -1392,7 +1424,7 @@
     }
 
     // --- Мерія: Дошка оголошень (найм у групу) ---
-    let hallNpc = "board";     // board | steward
+    let hallNpc = RPG.isHiringOpen(save) ? "board" : "steward";     // board | steward
     function renderTownHall(box) {
       // Захар доступний завжди (книга «Предки…»); перерозподіл атрибутів — з RPG.STEWARD_MIN_LEVEL рівня
       {
@@ -1410,6 +1442,12 @@
           box.append(mt);
         }
         renderNpc(box, "steward");
+        return;
+      }
+      if (!RPG.isHiringOpen(save)) {
+        box.append(el("p", "board-closed", "Біля Мерії стоїть Дошка оголошень: авантюристи шукають собі напарників. Та чужинцеві тут ніхто не довіряє — " +
+          `спершу доведіть, що на вас можна покластися: особливе завдання «${RPG.EXPLORE.name}» в Артеміди, адміністратора Гільдії авантюристів ` +
+          `(з ${RPG.EXPLORE.minLevel} рівня). А поки зазирніть до Розпорядника Захара.`));
         return;
       }
       const size = RPG.partySize(save);
@@ -1601,7 +1639,7 @@
           await RPG.saveGame(save);
           const up = r.levelUps.length ? ` Новий рівень: ${r.levelUps[r.levelUps.length - 1]}!` : "";
           showMsg(msg, r.finished
-            ? `«${E.name}» виконано! Прохід до Центрального району відкритий — шукайте Дошку оголошень біля Мерії.${up}`
+            ? `«${E.name}» виконано! Дошка оголошень біля Мерії (Центральний район) тепер відкрита — можна наймати героїв у групу.${up}`
             : `Частину виконано! Нагорода: ${RPG.describeExploreReward(r.part)}.${up} Далі: ${E.parts[RPG.storyState(save).part - 1].title}.`);
           renderAll();
         });

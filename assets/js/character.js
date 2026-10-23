@@ -889,7 +889,7 @@ function buyFromTrade(save, id, qty = 1) {
   return { ok: true, price, qty, unit };
 }
 
-// Чи відкритий район Дубової Застави: Центральний — після «Час дослідити», Торговий — з 20 рівня
+// Чи відкритий район Дубової Застави: Центральний — з 6 рівня, Торговий — з 20 рівня
 function isDistrictOpen(save, d) {
   if (!d.locked) return true;
   if (d.id === "center") return RPG.isCentralOpen(save);
@@ -898,7 +898,7 @@ function isDistrictOpen(save, d) {
   return false;
 }
 function districtLockText(d) {
-  if (d.id === "center") return "Прохід закритий. Його відкриває Артеміда, адміністратор гільдії авантюристів, після особливого завдання «Час дослідити» (з 10 рівня).";
+  if (d.id === "center") return `Варта не пускає до Мерії новачків. Повертайтеся з ${RPG.CENTRAL_MIN_LEVEL} рівня.`;
   if (d.id === "trade") return `Торгова гільдія приймає лише поважних гостей — з ${TRADE_MIN_LEVEL} рівня.`;
   if (d.id === "north") return "Варта не пускає до брами простих селян. Повертайтеся, коли матимете професію (квест «Шлях професії», з 15 рівня).";
   return "Закрито — відкриється згодом.";
