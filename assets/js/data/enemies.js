@@ -2,8 +2,7 @@
 // ДОВІДНИК ВОРОГІВ ТА ЛОКАЦІЙ
 // stats: hp, mp, attack, magic, defense, magicDefense, speed,
 //        crit (%), blockPhys (%), blockMag (%)
-// exp  — скільки досвіду дає КОЖЕН убитий ворог (стартові локації підняті 24.10.2026: ~20–60 перемог
-//        на рівень до 9-го і ~130–260 на рівнях 9–12, де Селянину доступні лише слайми)
+// exp  — скільки досвіду дає КОЖЕН убитий ворог
 //        (і від нього ж рахується штраф при загибелі героя: exp × 10)
 // gold — [мін, макс]
 // loot — chance — шанс від 0 до 1, qty — [мін, макс]
@@ -50,7 +49,7 @@
       sprite: 0,
       level: 1,
       stats: { hp: 30, mp: 0, attack: 7, defense: 1, magicDefense: 0, speed: 4, crit: 3 },
-      exp: 5,
+      exp: 2,
       gold: [0, 2],
       loot: [
         { id: "rat_tail",         chance: 0.5, qty: [1, 1] },
@@ -65,7 +64,7 @@
       sprite: 1,
       level: 2,
       stats: { hp: 45, mp: 0, attack: 10, defense: 2, magicDefense: 1, speed: 5, crit: 4 },
-      exp: 15,
+      exp: 6,
       gold: [1, 4],
       loot: [
         { id: "rat_tail",         chance: 0.55, qty: [1, 2] },
@@ -83,7 +82,7 @@
       sprite: 2,
       level: 3,
       stats: { hp: 65, mp: 0, attack: 14, defense: 3, magicDefense: 1, speed: 6, crit: 5 },
-      exp: 40,
+      exp: 20,
       gold: [3, 8],
       loot: [
         { id: "rat_tail",         chance: 0.6, qty: [1, 2] },
@@ -106,7 +105,7 @@
       sprite: 3,
       level: 4,
       stats: { hp: 110, mp: 0, attack: 20, defense: 5, magicDefense: 2, speed: 8, crit: 6, blockPhys: 3 },
-      exp: 100,
+      exp: 40,
       gold: [5, 12],
       loot: [
         { id: "wolf_pelt",        chance: 0.45, qty: [1, 1] },
@@ -129,7 +128,7 @@
       sprite: 4,
       level: 5,
       stats: { hp: 150, mp: 0, attack: 26, defense: 7, magicDefense: 3, speed: 9, crit: 8, blockPhys: 4 },
-      exp: 180,
+      exp: 60,
       gold: [8, 18],
       loot: [
         { id: "wolf_pelt",        chance: 0.5, qty: [1, 2] },
@@ -153,7 +152,7 @@
       sprite: 5,
       level: 6,
       stats: { hp: 200, mp: 0, attack: 32, defense: 9, magicDefense: 4, speed: 10, crit: 10, blockPhys: 5 },
-      exp: 320,
+      exp: 90,
       gold: [12, 25],
       loot: [
         { id: "white_pelt",       chance: 0.45, qty: [1, 1] },
@@ -180,7 +179,7 @@
       level: 6,
       stats: { hp: 170, mp: 40, attack: 22, magic: 26, defense: 7, magicDefense: 10, speed: 7, crit: 4, blockMag: 4 },
       spell: { name: "Кислотний плювок", mp: 10, mult: 1.3, chance: 0.4 },
-      exp: 400,
+      exp: 100,
       gold: [10, 22],
       loot: [
         { id: "slime_gel",        chance: 0.6, qty: [1, 2] },
@@ -200,7 +199,7 @@
       level: 7,
       stats: { hp: 220, mp: 60, attack: 25, magic: 33, defense: 8, magicDefense: 14, speed: 8, crit: 5, blockMag: 6 },
       spell: { name: "Крижаний бризок", mp: 12, mult: 1.4, chance: 0.4 },
-      exp: 750,
+      exp: 140,
       gold: [14, 28],
       loot: [
         { id: "slime_gel",        chance: 0.65, qty: [1, 2] },
@@ -220,7 +219,7 @@
       level: 8,
       stats: { hp: 270, mp: 80, attack: 29, magic: 40, defense: 9, magicDefense: 16, speed: 9, crit: 6, blockMag: 8 },
       spell: { name: "Отруйна хмара", mp: 15, mult: 1.5, chance: 0.45 },
-      exp: 2000,
+      exp: 190,
       gold: [18, 35],
       loot: [
         { id: "slime_gel",        chance: 0.7, qty: [1, 3] },
@@ -247,7 +246,7 @@
         { kind: "heal",  name: "Королівське желе", mp: 50, healPct: 0.12 },
         { kind: "stun",  name: "Липкі кайдани", mp: 30, mult: 1.0 }
       ],
-      exp: 20000,
+      exp: 1000,
       gold: [80, 150],
       loot: [
         { id: "slime_gel",        chance: 1, qty: [3, 6] },

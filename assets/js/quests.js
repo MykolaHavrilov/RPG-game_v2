@@ -10,8 +10,8 @@
 // Стан у сейві: save.quests = { offers, active, done, nextId }
 //
 // ОСОБЛИВЕ ЗАВДАННЯ «Час дослідити» (з 10 рівня головного героя) — 3 частини по черзі:
-//   1) принести 100 щурячих шкурок → 60 000 EXP
-//   2) принести по 100 вовчих іклів і вовчих шкур → 60 000 EXP, 100 середніх зілль здоров'я, 100 малих зілль мани
+//   1) принести 100 щурячих шкурок → 10 000 EXP
+//   2) принести по 100 вовчих іклів і вовчих шкур → 10 000 EXP, 100 середніх зілль здоров'я, 100 малих зілль мани
 //   3) убити 70 слаймів → відкривається Дошка оголошень біля Мерії (найм у групу)
 // Сам Центральний район (Мерія, Розпорядник Захар) відкритий з CENTRAL_MIN_LEVEL (6) рівня.
 // Стан: save.story.explore = { part: 0 (не взято) | 1..3 (поточна частина) | 4 (виконано), kills }
@@ -54,14 +54,14 @@
 
   // Шаблони: amounts — варіанти кількості; exp/gold — за 1 одиницю
   const TEMPLATES = [
-    { kind: "kill",  target: "rat",  amounts: [5, 8, 12], exp: 10,  gold: 3 },
-    { kind: "kill",  target: "wolf", amounts: [3, 5, 8],  exp: 90,  gold: 8 },
-    { kind: "bring", item: "rat_tail",  amounts: [5, 10, 15], exp: 6,   gold: 2, minLevel: 1 },
-    { kind: "bring", item: "rat_skin",  amounts: [3, 6],      exp: 15,  gold: 4, minLevel: 1 },
-    { kind: "bring", item: "wolf_pelt", amounts: [3, 5],      exp: 60,  gold: 7, minLevel: 3 },
-    { kind: "bring", item: "wolf_fang", amounts: [3, 5],      exp: 50,  gold: 6, minLevel: 3 },
-    { kind: "kill",  target: "slime", amounts: [3, 5, 8], exp: 500, gold: 10 },
-    { kind: "bring", item: "slime_gel", amounts: [3, 6],      exp: 250, gold: 6, minLevel: 6 }
+    { kind: "kill",  target: "rat",  amounts: [5, 8, 12], exp: 4,  gold: 3 },
+    { kind: "kill",  target: "wolf", amounts: [3, 5, 8],  exp: 25, gold: 8 },
+    { kind: "bring", item: "rat_tail",  amounts: [5, 10, 15], exp: 2,  gold: 2, minLevel: 1 },
+    { kind: "bring", item: "rat_skin",  amounts: [3, 6],      exp: 5,  gold: 4, minLevel: 1 },
+    { kind: "bring", item: "wolf_pelt", amounts: [3, 5],      exp: 18, gold: 7, minLevel: 3 },
+    { kind: "bring", item: "wolf_fang", amounts: [3, 5],      exp: 15, gold: 6, minLevel: 3 },
+    { kind: "kill",  target: "slime", amounts: [3, 5, 8], exp: 40, gold: 10 },
+    { kind: "bring", item: "slime_gel", amounts: [3, 6],      exp: 20, gold: 6, minLevel: 6 }
   ];
 
   function state(save) {
@@ -207,11 +207,11 @@
       { title: "Урожай на Фермі",
         text: "Фермерам треба зібрати врожай, але поля заполонили щури. Знищіть їх і принесіть як доказ 100 щурячих шкурок.",
         bring: [{ id: "rat_skin", qty: 100 }],
-        reward: { exp: 60000, items: [] } },
+        reward: { exp: 10000, items: [] } },
       { title: "Вовча загроза",
         text: "Вовки з Лісової стежки нападають на мандрівників. Вполюйте їх і принесіть по 100 вовчих іклів і вовчих шкур.",
         bring: [{ id: "wolf_fang", qty: 100 }, { id: "wolf_pelt", qty: 100 }],
-        reward: { exp: 60000, items: [{ id: "potion_hp_medium", qty: 100 }, { id: "potion_mp_small", qty: 100 }] } },
+        reward: { exp: 10000, items: [{ id: "potion_hp_medium", qty: 100 }, { id: "potion_mp_small", qty: 100 }] } },
       { title: "Слизова печера",
         text: "У Печері в лісі розплодилися слайми. Знищіть 70 слаймів (будь-яких, і Короля теж).",
         kill: { target: "slime", need: 70 },
@@ -526,6 +526,78 @@
     return { ok: true, bounty: b, levelUps };
   }
 
+  // ---------- Квест «Долоні Велеса» (з 12 рівня головного героя) ----------
+  // 1) На 12 рівні до героя підходить незнайомець і підкидає «Дивну сферу» (orb_veles) — вікно на сторінці «Локація».
+  // 2) Розпитати про сферу: Сестра Ївга (Храм) або Розпорядник Захар (Мерія) радять спитати шинкаря Остапа.
+  // 3) Остап чув від мандрівників про Велесові долоні в Храмі — радить спитати Сестру Ївгу.
+  // 4) Ївга пригадує і веде до вівтаря у внутрішньому дворі Храму: висохлий фонтан зі статуєю Велеса,
+  //    на долонях — виступ у формі ромба. З'являється «Внутрішній двір» на сторінці Храму.
+  // 5) Покласти сферу на долоні статуї: 5 секунд нічого, потім з глечика біля ніг статуї тече блакитна вода
+  //    й наповнює фонтан. Сфера лишається на статуї.
+  // Джерело Велеса: випити води — уся група отримує +200% досвіду за бої (до досвіду з бонусом групи)
+  //   на 15 хвилин реального часу (і поки гра закрита теж). Пити знову можна, коли дія скінчилась.
+  // Стан: save.story.veles = { stage: 0..5 } (5 — джерело відкрите), save.spring = { until } (поки діє)
+  const VELES = {
+    name: "Долоні Велеса",
+    minLevel: 12,
+    expBonusPct: 200,
+    durationMs: 15 * 60 * 1000,
+    waitMs: 5000,          // скільки «нічого не відбувається» після того, як сферу поклали
+    stages: {
+      1: "Дізнатися, що це за сфера: розпитати людей у Заставі чи в Храмі.",
+      2: "Спитати шинкаря Остапа — до нього заходять мандрівники й путівниці з усіх земель.",
+      3: "Остап радить спитати Сестру Ївгу в Храмі.",
+      4: "Покласти сферу на долоні статуї Велеса у внутрішньому дворі Храму."
+    }
+  };
+  function velesState(save) {
+    save.story ??= {};
+    return save.story.veles ??= { stage: 0 };
+  }
+  // Чи час незнайомцю підійти (герой досяг 12 рівня, сфери ще немає)
+  function velesStrangerDue(save) {
+    return velesState(save).stage === 0 && save.character.level >= VELES.minLevel;
+  }
+  // Незнайомець підкидає сферу. Квестовий предмет кладеться в інвентар навіть повний
+  function velesGiveOrb(save) {
+    const st = velesState(save);
+    if (st.stage !== 0) return false;
+    if (!RPG.addItem(save, "orb_veles", 1)) save.inventory.push({ id: "orb_veles", qty: 1 });
+    st.stage = 1;
+    return true;
+  }
+  // Перехід на наступний етап (з from на from+1), якщо герой саме на ньому
+  function velesAdvance(save, from) {
+    const st = velesState(save);
+    if (st.stage !== from) return false;
+    st.stage = from + 1;
+    return true;
+  }
+  // Покласти сферу на статую → { ok } (сама вода з'являється на сторінці після VELES.waitMs)
+  function velesPlaceOrb(save) {
+    const st = velesState(save);
+    if (st.stage !== 4) return { ok: false, reason: "Статуя мовчить." };
+    if (RPG.countItem(save, "orb_veles") < 1) return { ok: false, reason: "Сфери немає в інвентарі." };
+    RPG.removeItem(save, "orb_veles", 1);
+    st.stage = 5;
+    return { ok: true };
+  }
+  function springLeft(save, now = Date.now()) {
+    const until = save.spring?.until || 0;
+    return Math.max(0, until - now);
+  }
+  // Випити з джерела → { ok, minutes } (для всієї групи; діє на досвід за бої)
+  function drinkSpring(save, now = Date.now()) {
+    if (velesState(save).stage < 5) return { ok: false, reason: "Фонтан сухий." };
+    if (springLeft(save, now)) return { ok: false, reason: `Сила джерела ще з вами — близько ${Math.ceil(springLeft(save, now) / 60000)} хв.` };
+    save.spring = { until: now + VELES.durationMs };
+    return { ok: true, minutes: VELES.durationMs / 60000 };
+  }
+  // Множник досвіду за бій (1 або 3)
+  function springExpMult(save, now = Date.now()) {
+    return springLeft(save, now) ? 1 + VELES.expBonusPct / 100 : 1;
+  }
+
   // ---------- Журнал квестів (сторінка «Персонаж») ----------
   // [{ title, lines: [рядки прогресу], where, ready }]
   const GUILD_PLACE = "Артеміда, адміністратор гільдії — Дубова Застава, Південний район";
@@ -540,6 +612,9 @@
       where: GUILD_PLACE, ready: pr.complete });
     if (pr?.final) out.push({ title: `«${professionName(save)}»: завершення шляху`, special: true,
       lines: ["Усі 10 завдань виконано. Нагорода за шлях — ???"], where: GUILD_PLACE, ready: true });
+    const vs = velesState(save);
+    if (vs.stage >= 1 && vs.stage <= 4) out.push({ title: `«${VELES.name}»`, special: true,
+      lines: [VELES.stages[vs.stage]], where: vs.stage >= 3 ? "Храм" : "Дубова Застава, Шинок біля млина, Храм", ready: false });
     const gt = gateInfo(save);
     if (gt.part) out.push({ title: `«${GATE.name}» (${gt.index}/${gt.total}): ${gt.part.title}`, special: true,
       lines: gt.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: "Капітан варти — Дубова Застава, Північний район (Центральна брама)", ready: gt.complete });
@@ -560,6 +635,7 @@
     questState: state, fillOffers, questTitle, questProgress, isQuestComplete: isComplete,
     describeReward, acceptQuest, abandonQuest, turnInQuest, questOnKill,
     EXPLORE, storyState, isCentralOpen, isHiringOpen, CENTRAL_MIN_LEVEL, exploreInfo, describeExploreReward, startExplore, turnInExplore,
+    VELES, velesState, velesStrangerDue, velesGiveOrb, velesAdvance, velesPlaceOrb, springLeft, drinkSpring, springExpMult,
     PROFESSION, PROFESSION_BRANCHES, PROFESSION_QUEST_LEVEL, PROFESSION_END, PROFESSION_REFUSE,
     professionState, professionInfo, professionName, professionBranches, professionCheckpoint, startProfession, turnInProfession,
     GATE, gateState, isGateOpen, gateInfo, startGate, turnInGate

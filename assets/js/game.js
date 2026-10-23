@@ -190,6 +190,18 @@
     });
   }
 
+  // ---------- Незнайомець зі сферою (квест «Долоні Велеса», 12 рівень) ----------
+  async function meetStranger(save) {
+    if (!RPG.velesGiveOrb(save)) return;
+    await RPG.saveGame(save);
+    return showNotice("Незнайомець", [
+      "До вас підходить хтось у запиленому плащі з глибоким каптуром — обличчя не видно. Він ніби випадково зачіпає вас плечем " +
+      "і щось тихо кладе вам у торбу. «Тобі воно потрібніше», — чуєте ви шепіт, а коли обертаєтеся, незнайомця вже й слід простиг.",
+      "У торбі — важка куля з темного каменю, тепла на дотик. На одному боці — глибоке заглиблення у формі ромба.",
+      "Отримано: Дивна сфера (квестовий предмет). Розпитайте людей, що це може бути.",
+    ]);
+  }
+
   // ---------- Обірваний пергамент (Домівка) ----------
   function showParchment() {
     const P = RPG.CHRONICLE.PARCHMENT;
@@ -604,7 +616,8 @@
       const grace = RPG.graceLeft(save);
       regen.textContent = `Відновлення за 10 с: +${per.hp.toFixed(1)} HP, +${per.mp.toFixed(1)} MP` +
         (per.home ? " (з бонусом Домівки)" : "") +
-        (grace ? ` · Молитва благодаті: ще ${Math.ceil(grace / 60000)} хв (+2% HP за 5 с, +3% MP за 10 с)` : "");
+        (grace ? ` · Молитва благодаті: ще ${Math.ceil(grace / 60000)} хв (+2% HP за 5 с, +3% MP за 10 с)` : "") +
+        (RPG.springLeft && RPG.springLeft(save) ? ` · Джерело Велеса: +${RPG.VELES.expBonusPct}% досвіду, ще ${Math.ceil(RPG.springLeft(save) / 60000)} хв` : "");
     }
     if (!save.memberIndex) renderPartyList(save);
   }
@@ -936,6 +949,7 @@
       enterError = r.reason;
     }
     if (locParam || distParam) history.replaceState(null, "", "game.html");
+    if (RPG.velesStrangerDue(save)) setTimeout(() => meetStranger(save).then(() => renderAll()), 300);
     if (save.fieldLoot && save.fieldLoot.loc !== save.location.map) setTimeout(() => showFieldLoot(save), 0);
     const locId = save.location.map;
     const locData = RPG.getLocation(locId);
@@ -1113,9 +1127,60 @@
         `Сюди повертаються загиблі. Відроджені мають ${Math.round(RPG.RESPAWN_HP_PCT * 100)}% здоров'я та 0% мани — ` +
         "відновіться зіллям або вирушайте відпочити в Домівку."));
       renderNpc(place, "nun");
+      if (RPG.velesState(save).stage >= 4) renderCourtyard(place);
       const row = el("div", "row");
       row.append(link("Мапа", "maps.html"));
       place.append(row);
+    }
+
+    // --- Внутрішній двір Храму: статуя Велеса й джерело (квест «Долоні Велеса») ---
+    let springWaking = false;      // сферу щойно поклали — 5 секунд «нічого не відбувається»
+    function renderCourtyard(box) {
+      const V = RPG.VELES;
+      const st = RPG.velesState(save);
+      const card = el("div", "stack explore-card");
+      card.append(el("h3", null, "Внутрішній двір Храму"));
+      if (springWaking) {
+        card.append(el("p", null, "Ви кладете сферу на долоні статуї. Камінь лягає в ромбовидний виступ, мов там і був…"));
+        card.append(el("p", "rt-magic", "Нічого не відбувається."));
+      } else if (st.stage < 5) {
+        card.append(el("p", null, "Посеред двору — висохлий кам'яний фонтан. Над ним — статуя Велеса, що береже мудрість поколінь, " +
+          "з глечиком біля ніг. На розкритих долонях статуї — невеликий виступ у формі ромба."));
+        const put = button("Покласти сферу на долоні статуї", "wf wf-button", async () => {
+          const r = RPG.velesPlaceOrb(save);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          springWaking = true;
+          npcNode.nun = "start"; npcResult.nun = null;     // Ївга мовчить, поки джерело прокидається
+          renderAll();
+          setTimeout(() => {
+            springWaking = false;
+            showMsg(msg, "Раптом з глечика біля ніг статуї починає сочитися блакитна вода. Вона тече все швидше, дзюрчить по каменю — " +
+              "і висохлий фонтан наповнюється сяйливою блакиттю. Джерело Велеса прокинулося!");
+            if (RPG.audio?.jingle) RPG.audio.jingle("levelup");
+            renderAll();
+          }, V.waitMs);
+        });
+        put.disabled = RPG.countItem(save, "orb_veles") < 1;
+        card.append(put);
+      } else {
+        card.append(el("p", null, "Над фонтаном височіє статуя Велеса зі сферою на долонях. З глечика біля його ніг тече блакитна вода, " +
+          "і чаша фонтана повна до країв. Це чарівне джерело: хто нап'ється — тому кожен бій дає втричі більше досвіду " +
+          `(+${V.expBonusPct}% до досвіду групи) протягом ${V.durationMs / 60000} хвилин.`));
+        const left = RPG.springLeft(save);
+        if (left) card.append(el("p", "rt-magic", `Сила джерела ще з вами — близько ${Math.ceil(left / 60000)} хв.`));
+        const drink = button("Випити з джерела", "wf wf-button", async () => {
+          const r = RPG.drinkSpring(save);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          showMsg(msg, `Вода холодна й солодка, як весняний дощ. Уся група відчуває, як світ стає яснішим: +${V.expBonusPct}% досвіду ` +
+            `за бої на ${r.minutes} хвилин.`);
+          renderAll();
+        });
+        drink.disabled = !!left;
+        card.append(drink);
+      }
+      box.append(card);
     }
 
     // ---------- Розмови з NPC (data/npcs.js) ----------
@@ -1165,6 +1230,33 @@
         location.href = "game.html";
         return { text: "Варта відчиняє хвіртку в брамі…" };
       },
+      // Квест «Долоні Велеса» (quests.js → VELES)
+      async veles_ask(npcId) {
+        if (!RPG.velesAdvance(save, 1)) return { text: "«Не розумію, про що ти.»", error: true };
+        await RPG.saveGame(save);
+        return { text: npcId === "steward"
+          ? "Захар крутить сферу в пальцях, підносить до вікна й хитає головою. «У наших записах такого нема. Але знаєш що — " +
+            "спитай Остапа в шинку біля млина. До нього хто тільки не заходить: путівники, путівниці, купці з усіх земель. " +
+            "Хтось та й бачив подібне.»"
+          : "Сестра Ївга обережно бере сферу, проводить пальцем по ромбовидному заглибленню й довго мовчить. «Щось знайоме… " +
+            "та не пригадаю. Спитай Остапа в шинку біля млина — до нього заходять мандрівники й путівниці з далеких країв. " +
+            "Може, хтось із них щось підкаже.»" };
+      },
+      async veles_ostap() {
+        if (!RPG.velesAdvance(save, 2)) return { text: "«Щось я не второпаю, мандрівнику.»", error: true };
+        await RPG.saveGame(save);
+        return { text: "Остап відставляє кухоль і стишує голос. «Ромб, кажеш? Була тут торік одна путівниця з півдня, сива вся, " +
+          "хоч і молода на лице. Розповідала, що колись у Храмі Перуна під вівтарем било джерело, і стерегли його Велесові долоні. " +
+          "А потім вода пішла, і про те забули. Сходи до сестри Ївги — вона в Храмі найдовше, мо' пригадає.»" };
+      },
+      async veles_nun() {
+        if (!RPG.velesAdvance(save, 3)) return { text: "«Про що ти, дитино?»", error: true };
+        await RPG.saveGame(save);
+        return { text: "Ївга завмирає, і її очі ширшають. «Велесові долоні… Ну звісно! Як я могла забути. Ходімо.» " +
+          "Вона веде вас за вівтар, у внутрішній двір Храму. Посеред двору — висохлий кам'яний фонтан, а над ним статуя Велеса, " +
+          "що береже мудрість поколінь, з глечиком біля ніг. Ви придивляєтеся: на його розкритих долонях — невеликий виступ у формі ромба.",
+          to: "veles_yard" };
+      },
       async chronicle() {
         showChronicle(save);
         return { text: "Захар обережно розгортає перед вами книгу. Від пергаменту пахне димом і старим дубом." };
@@ -1202,7 +1294,7 @@
         replies.append(button("➤ " + label, "wf wf-link npc-reply", async () => {
           npcResult[npcId] = null;
           if (r.action) {
-            const out = await NPC_ACTIONS[r.action]();
+            const out = await NPC_ACTIONS[r.action](npcId);
             npcResult[npcId] = out;
             npcNode[npcId] = out.to || r.to || "start";
           } else {
@@ -2503,15 +2595,17 @@
         // Досвід (рішення 2б): +10% за кожного героя групи понад першого,
         // і вся сума ділиться порівну між тими, хто вижив
         const survivors = team.filter((ms, k) => !result.heroes[k].dead);
-        const pool = Math.round(totalExp * (1 + 0.1 * (team.length - 1)));
+        const spring = RPG.springExpMult(save);          // Джерело Велеса: ×3 до досвіду групи
+        const pool = Math.round(totalExp * (1 + 0.1 * (team.length - 1)) * spring);
         const expEach = Math.floor(pool / Math.max(1, survivors.length));
         for (const ms of survivors) {
           const ups = RPG.addExp(ms, expEach);
           if (ups.length) levelLines.push(`${ms.character.name}: новий рівень ${ups[ups.length - 1]}!`);
         }
+        const springTxt = spring > 1 ? `, Джерело Велеса +${RPG.VELES.expBonusPct}%` : "";
         summary.unshift(group
-          ? `+${expEach} EXP кожному, хто вижив (усього ${pool}, бонус групи +${(team.length - 1) * 10}%)`
-          : `+${totalExp} EXP`);
+          ? `+${expEach} EXP кожному, хто вижив (усього ${pool}, бонус групи +${(team.length - 1) * 10}%${springTxt})`
+          : `+${expEach} EXP${spring > 1 ? ` (Джерело Велеса +${RPG.VELES.expBonusPct}%)` : ""}`);
         if (gold) summary.splice(1, 0, `+${gold} золота`);
         if (Object.keys(filtered).length) summary.push(`Фільтр викинув: ${Object.entries(filtered).map(([k, n]) => n > 1 ? `${k} ×${n}` : k).join(", ")}`);
         if (Object.keys(lost).length) summary.push(`Не вмістилось в інвентар: ${Object.entries(lost).map(([k, n]) => `${k} ×${n}`).join(", ")}`);
@@ -2622,6 +2716,8 @@
       // Данж перейшов до бою з босом (або завершився) — після джингла грає відповідна тема
       if (RPG.audio && dun) setTimeout(playLocationMusic, 5500);
       if (!fighters().length) startBtn.disabled = true;
+      // Герой досяг 12 рівня — підходить незнайомець зі сферою (квест «Долоні Велеса»)
+      if (RPG.velesStrangerDue(save)) setTimeout(() => meetStranger(save).then(renderAll), 800);
       // Інвентар заповнився (або щось уже пропало) — окреме повідомлення, щоб не пропустити
       if (result.win && (Object.keys(lost).length || (freeBefore > 0 && !RPG.invFree(save)))) {
         showNotice("Інвентар заповнено!", [

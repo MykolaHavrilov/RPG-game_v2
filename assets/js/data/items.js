@@ -570,6 +570,13 @@ const ITEMS = {
     type: "quest", quest: true, pocket: "keys", price: 0, noShop: true,
     description: "Ключ, обплетений павутинням. Відчиняє данж «Гніздо Королеви» (Ліс павутини). Одна спроба — один ключ."
   },
+  // Квест «Долоні Велеса» (quests.js → VELES): незнайомець підкидає героєві на 12 рівні
+  orb_veles: {
+    name: "Дивна сфера", iconFile: "orb_t1",
+    type: "quest", quest: true, price: 0, noShop: true,
+    description: "Важка куля з темного каменю, тепла на дотик. На одному боці — глибоке заглиблення у формі ромба. " +
+      "Її підкинув незнайомець у запиленому плащі й зник у натовпі."
+  },
   key_dark_throne: {
     name: "Ключ «Трон Володаря»",
     type: "quest", quest: true, pocket: "keys", price: 0, noShop: true,
@@ -616,6 +623,8 @@ const ICON_FILE_BASE = RPG.asset("assets/images/items/icon_");
 
 // Стиль іконки предмета (окремий файл або клітинка спрайт-листа); null — іконки немає (буде заглушка)
 function itemIconStyle(id) {
+  const file = ITEMS[id]?.iconFile;                 // квестовий предмет може брати іконку іншої речі
+  if (file && ICON_FILES.has(file)) id = file;
   if (ICON_FILES.has(id)) {
     return { backgroundImage: `url("${ICON_FILE_BASE}${id}.webp")`, backgroundSize: "100% 100%",
              backgroundPosition: "0 0", backgroundRepeat: "no-repeat" };
