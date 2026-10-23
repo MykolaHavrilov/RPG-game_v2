@@ -28,6 +28,14 @@
 // Звичайні звірі спорядження не мають (GS 0) — окрім боїв 1–2 у данжі (dungeon.js):
 //   там будь-який ворог отримує речі з GS, рівним GS групи героїв.
 //
+// ЗБРОЯ ГУМАНОЇДІВ (data/enemies.js → weapons): разом зі спорядженням ворог випадково
+//   обирає зброю зі свого списку. Вона визначає дальність, як у героя (skills.js → actionRange):
+//   лук — 3; посох у чаклуна (магія > атаки) — 2, а якщо природна range більша — вона;
+//   меч, сокира, кинджал, кулаки (none) — 1. Чаклун — магія > атаки, або є spell чи skills.
+//   З луком прийом ворога — «Прицільний постріл» (MONSTER_MOVES[3]), інакше власний;
+//   у журналі — дієслово зброї («стріляє з лука в», «рубає мечем»…).
+//   Без спорядження (GS групи 0) — природна range з data/enemies.js.
+//
 // Речі монстрів існують лише всередині бою: без картинок, без назв,
 // ніколи не потрапляють у здобич і не зберігаються в сейві.
 //
@@ -142,6 +150,23 @@
 
   function add(obj, key, v) { obj[key] = (obj[key] || 0) + v; }
 
+  // Зброя гуманоїда
+  const WEAPON_NAMES = { sword: "меч", axe: "сокира", dagger: "кинджал", bow: "лук", staff: "посох", none: "без зброї" };
+  const WEAPON_VERBS = { sword: "рубає мечем", axe: "рубає сокирою", dagger: "б'є кинджалом", bow: "стріляє з лука в", staff: "б'є посохом" };
+  // Чаклун: магія сильніша за атаку, або є заклинання (spell) чи навички боса (skills)
+  const isCaster = e => (e.stats.magic || 0) > (e.stats.attack || 0) || !!e.spell || !!e.skills?.length;
+  function rollMonsterWeapon(e) {
+    if (!e?.humanoid) return null;
+    const pool = e.weapons?.length ? e.weapons : [isCaster(e) ? "staff" : "sword"];
+    return pick(pool);
+  }
+  // Дальність ворога з такою зброєю
+  function weaponRange(e, weapon) {
+    if (!weapon || weapon === "none") return 1;
+    if (weapon === "staff" && isCaster(e)) return Math.max(RPG.actionRange("staff", true), e.range || 1);
+    return RPG.actionRange(weapon, false);
+  }
+
   // Одна річ монстра: { slot, gs, stats }
   function rollPiece(slot, gs, caster, withMp) {
     const stats = {};
@@ -175,7 +200,8 @@
     const stats = {};
     for (const p of pieces) for (const k in p.stats) add(stats, k, p.stats[k]);
     const gs = Math.round(target);
-    return { gs, partyGs: pGs, leaderGs: lGs, power: e.boss || forced ? power : 1, humanoid: !!e.humanoid, pieces, stats };
+    return { gs, partyGs: pGs, leaderGs: lGs, power: e.boss || forced ? power : 1, humanoid: !!e.humanoid, pieces, stats,
+             weapon: rollMonsterWeapon(e) };
   }
 
   // Додати спорядження до специфікацій ворогів [{ id, champion }] під групу героїв.
@@ -235,10 +261,20 @@
     const base = RPG.getEnemy(spec.id, spec.champion);
     if (!base) return null;
     if (!spec.gear) return { ...base, gs: 0 };
-    return { ...base, stats: applyGear(base, spec.gear), gs: spec.gear.gs };
+    const out = { ...base, stats: applyGear(base, spec.gear), gs: spec.gear.gs };
+    const w = spec.gear.weapon;
+    if (w) {
+      out.weapon = w;
+      out.weaponName = WEAPON_NAMES[w] || w;
+      out.range = weaponRange(base, w);
+      if (w === "bow" && (base.range || 1) !== 3) out.move = null;   // з луком — «Прицільний постріл» (MONSTER_MOVES[3])
+      if (WEAPON_VERBS[w]) out.verb = WEAPON_VERBS[w];
+    }
+    return out;
   }
 
   Object.assign(RPG, {
-    BOSS_GS_DIV, BOSS_POWER, BOSS_POWER_MEAN, bossPower, leaderGs, isHumanoid, partyGs, rollMonsterGear, equipFoes, enemyFromSpec
+    BOSS_GS_DIV, BOSS_POWER, BOSS_POWER_MEAN, bossPower, leaderGs, isHumanoid, partyGs, rollMonsterGear, equipFoes, enemyFromSpec,
+    MONSTER_WEAPON_NAMES: WEAPON_NAMES, monsterWeaponRange: weaponRange
   });
 })(window.RPG);

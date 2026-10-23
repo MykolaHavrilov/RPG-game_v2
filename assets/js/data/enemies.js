@@ -21,6 +21,10 @@
 //         (бос має випадкові речі з середнім GS = GS першого героя / 2 — monstergear.js)
 // humanoid — гуманоїд (руки, ноги, голова): перед боєм вдягає приховане спорядження
 //         під GS групи героїв (monstergear.js); ці речі ніколи не випадають
+// weapons — (лише гуманоїди) з якої зброї ворог обирає перед боєм, випадково з однаковою вагою
+//         (повтор у списку = частіше): sword, axe, dagger, bow, staff або none (кулаки/кігті).
+//         Зброя визначає дальність, як у героя: лук — 3, посох у чаклуна — 2 (або природна
+//         range, якщо вона більша), решта — 1; range ворога тоді не діє (monstergear.js)
 // spawnWeight — множник шансу зустрічі (1 — звичайно, 0.1 — у 10 разів рідше)
 // ============================================================
 
@@ -384,6 +388,7 @@
     drowner: {
       name: "Утопленик",
       humanoid: true,
+      weapons: ["none", "none", "dagger", "axe"],
       range: 1, move: { name: "Мертва хватка", mult: 1.53, chance: 0.25 },
       verb: "дряпає",
       level: 13,
@@ -445,9 +450,10 @@
         { id: "earring_t2", chance: 0.004, qty: [1, 1] }
       ]
     },
-    skeleton_archer: {            // id лишається старий (сейви, квести); це скелет-мечник
-      name: "Скелет-мечник",
+    skeleton_archer: {            // id лишається старий (сейви, квести); скелет-воїн: меч, сокира або лук (weapons)
+      name: "Скелет-воїн",
       humanoid: true,
+      weapons: ["sword", "sword", "axe", "bow"],
       range: 1, move: { name: "Удар іржавого меча", mult: 1.54, chance: 0.25 },
       verb: "рубає",
       level: 14,
@@ -512,6 +518,7 @@
     ghoul: {
       name: "Гуль",
       humanoid: true,
+      weapons: ["none", "none", "dagger"],
       range: 1, move: { name: "Трупні пазурі", mult: 1.56, chance: 0.25 },
       verb: "шматує",
       level: 16,
@@ -643,6 +650,7 @@
     werewolf: {
       name: "Вовкулака",
       humanoid: true,
+      weapons: ["none"],
       range: 1, move: { name: "Розшматувати", mult: 1.58, chance: 0.25 },
       verb: "роздирає",
       level: 18,
@@ -738,6 +746,7 @@
     cultist: {
       name: "Культист",
       humanoid: true,
+      weapons: ["staff", "staff", "dagger", "bow"],
       range: 2, move: { name: "Ритуальний ніж", mult: 1.60, chance: 0.25 },
       verb: "б'є ножем",
       level: 20,
@@ -771,6 +780,7 @@
     witch: {
       name: "Лісова відьма",
       humanoid: true,
+      weapons: ["staff"],
       range: 3, move: { name: "Удар патерицею", mult: 1.61, chance: 0.25 },
       verb: "вдаряє патерицею",
       level: 21,
@@ -866,6 +876,7 @@
     black_rider: {
       name: "Чорний вершник",
       humanoid: true,
+      weapons: ["sword", "axe", "bow"],
       range: 1, move: { name: "Наскок вершника", mult: 1.64, chance: 0.25 },
       verb: "рубає",
       level: 24,
@@ -898,6 +909,7 @@
     forest_lord: {
       name: "Володар Темного лісу",
       humanoid: true,
+      weapons: ["staff", "sword", "axe"],
       range: 2, move: { name: "Гнів лісу", mult: 1.65, chance: 0.25 },
       verb: "б'є",
       level: 25,

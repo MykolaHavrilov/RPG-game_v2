@@ -1732,6 +1732,8 @@
     }
     function curEnemy(i = 0) { return RPG.enemyFromSpec(foes[i]); }
     const gsText = e => (e.gs ? ` · GS ${e.gs}` : "");
+    // Зброя гуманоїда і його дальність (monstergear.js)
+    const weaponText = e => (e.weaponName ? ` · ${e.weaponName} (дальн. ${RPG.enemyRange(e)})` : "");
     const anyChampion = () => foes.some(f => f.champion);
     if (combat) nextEnemy();
 
@@ -1763,7 +1765,7 @@
         const face = el("span", "party-face");
         Object.assign(face.style, RPG.enemySpriteStyle(f.id));
         const info = el("div", "party-info");
-        info.append(el("strong", null, `${e.name} · рів. ${e.level}${gsText(e)}${f.champion ? " · чемпіон" : ""}${e.boss ? " · бос" : ""}`));
+        info.append(el("strong", null, `${e.name} · рів. ${e.level}${gsText(e)}${f.champion ? " · чемпіон" : ""}${e.boss ? " · бос" : ""}${weaponText(e)}`));
         const hp = miniBar("bar-hp", "HP", "foe-hp-" + i);
         setBar(hp, e.stats.hp, e.stats.hp);
         info.append(hp);
@@ -1845,7 +1847,7 @@
       t.setAttribute("aria-label", label);
     }
     const heroTokenFor = ms => fieldToken("hero", ms.character.name, RPG.heroSpriteStyle(ms.character.classId));
-    const foeTokenFor = (f, e) => fieldToken("enemy", e.name, RPG.enemySpriteStyle(f.id),
+    const foeTokenFor = (f, e) => fieldToken("enemy", e.name + weaponText(e), RPG.enemySpriteStyle(f.id),
       (f.champion ? "is-champion" : "") + (e.boss ? " is-boss" : ""));
 
     // Поле над журналом: як стоятимуть герої й вороги в наступному бою.
