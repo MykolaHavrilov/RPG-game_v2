@@ -1649,45 +1649,90 @@
       box.append(card);
     }
 
-    // --- Квест «Шлях професії» (з 15 рівня Селянина) ---
+    // --- Квест «Шлях професії» (з 12 рівня Селянина; 3 гілки по 10 завдань; професія — на 15 рівні) ---
     function renderProfession(box) {
-      const P = RPG.PROFESSION;
       const info = RPG.professionInfo(save);
+      const name = RPG.professionName(save);
       if (!info) {
         if (save.character.classId === RPG.DEFAULT_CLASS) {
-          box.append(el("p", "note", `Квест «${P.name}» — зміна професії — Артеміда дає Селянину з ${RPG.PROFESSION_LEVEL} рівня.`));
+          box.append(el("p", "note", `Квест «${name}» — зміна професії — Артеміда дає Селянину з ${RPG.PROFESSION_QUEST_LEVEL} рівня.`));
         }
         return;
       }
       const card = el("div", "stack explore-card");
-      card.append(el("h3", null, `Квест: «${P.name}»`));
+      card.append(el("h3", null, `Квест: «${name}»`));
+      const levelTxt = lv => lv.length ? ` Новий рівень: ${lv[lv.length - 1]}!` : "";
       if (info.done) {
         card.append(el("p", null, `Ваша професія: ${RPG.getClass(save.character.classId).name}.`));
       } else if (info.canStart) {
-        card.append(el("p", "note", "«Ти переріс селянське життя. Пройди два випробування — і я скажу, ким тобі судилося стати. " +
+        card.append(el("p", "note", "«Ти переріс селянське життя. Пройди десять випробувань — і на 15 рівні я скажу, ким тобі судилося стати. " +
           "Яким шляхом ти підеш, залежить від того, що ти в собі розвивав.»"));
-        card.append(button("Взяти квест", "wf wf-button", async () => {
-          const r = RPG.startProfession(save);
+        if (!info.branches.length) card.append(el("p", "rt-magic", RPG.PROFESSION_REFUSE));
+        const take = async branch => {
+          const r = RPG.startProfession(save, branch);
+          if (r.choose) {
+            const pick = el("div", "stack");
+            pick.append(el("p", null, "«Перед тобою кілька шляхів. Обери, яким підеш, — назад дороги не буде.»"));
+            for (const id of r.choose) {
+              const B = RPG.PROFESSION_BRANCHES[id];
+              pick.append(button(B.name, "wf wf-button", () => take(id)));
+              pick.append(el("p", null, "Професії: " + B.classes.map(c => RPG.getClass(c).name).join(", ") + "."));
+            }
+            takeBtn.replaceWith(pick);
+            return;
+          }
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
           await RPG.saveGame(save);
-          showMsg(msg, `Взято квест «${P.name}». Частина 1: ${P.parts[0].title}.`);
+          const B = RPG.PROFESSION_BRANCHES[r.branch];
+          showMsg(msg, `Взято квест «${B.name}». ${B.intro} Завдання 1: ${B.parts[0].title}.`);
           renderAll();
-        }));
+        };
+        const takeBtn = button("Взяти квест", "wf wf-button", () => take(null));
+        card.append(takeBtn);
+      } else if (info.final) {
+        card.append(el("p", null, "Усі десять випробувань пройдено. «Ти довів, на що здатен. Час дізнатися, ким ти станеш.»"));
+        card.append(el("p", null, "Нагорода за шлях: ???"));
+        const finish = async classId => {
+          const r = RPG.turnInProfession(save, classId);
+          if (r.choose) {
+            if (r.choose.length === 1) return finish(r.choose[0]);
+            const pick = el("div", "stack");
+            pick.append(el("p", null, "«Перед тобою кілька шляхів — обери свій. Маг сам вирішує, якій стихії служити.» " +
+              "Вибір не можна буде змінити."));
+            for (const id of r.choose) {
+              const c = RPG.getClass(id);
+              const w = (c.weapons || []).map(t => RPG.WEAPON_TYPES[t]?.name || t).join(" / ");
+              pick.append(button(`${c.name} — ${w}`, "wf wf-button", () => finish(id)));
+              pick.append(el("p", null, c.description));
+            }
+            b.replaceWith(pick);
+            return;
+          }
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          const c = RPG.getClass(r.classId);
+          showMsg(msg, `Нагорода за шлях: ${r.exp ? fmtNum(r.exp) + " EXP (15 рівень) і " : ""}нова професія — ${c.name}! ${c.description} ` +
+            `Рівень професії почався з 1, а бонуси Селянина лишилися. Тренер Брут навчить новим навичкам.` +
+            (r.change?.removed?.length ? " Зброю, якою ця професія не користується, знято в інвентар." : ""));
+          renderAll();
+        };
+        const b = button("Завершити шлях і отримати професію", "wf wf-button", () => finish(null));
+        card.append(b);
       } else {
-        card.append(el("p", null, `Частина ${info.index} з ${info.total}: ${info.part.title}`));
+        card.append(el("p", null, `Завдання ${info.index} з ${info.total}: ${info.part.title}`));
         card.append(el("p", "note", info.part.text));
         for (const pr of info.progress) {
           card.append(el("div", pr.have >= pr.need ? "rt-magic" : null, `${pr.label}: ${pr.have} / ${pr.need}`));
         }
-        const last = info.index >= info.total;
-        const b = button(last ? "Завершити й отримати професію" : "Здати частину", "wf wf-button", async () => {
+        card.append(el("div", null, "Нагорода: досвід — скільки, дізнаєтесь при здачі."));
+        const b = button("Здати завдання", "wf wf-button", async () => {
           const r = RPG.turnInProfession(save);
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
           await RPG.saveGame(save);
-          showMsg(msg, r.finished
-            ? `Ваша нова професія — ${RPG.getClass(r.classId).name}! ${RPG.getClass(r.classId).description} ` +
-              `Рівень професії почався з 1, а бонуси Селянина лишилися. Тренер Брут навчить новим навичкам.`
-            : `Частину виконано! Далі: ${P.parts[RPG.professionState(save).part - 1].title}.`);
+          const next = RPG.professionInfo(save);
+          showMsg(msg, `Завдання виконано! Нагорода: ${fmtNum(r.exp)} EXP.${levelTxt(r.levelUps)} ` +
+            (r.allDone ? "Усі десять випробувань пройдено — поверніться до Артеміди по нагороду за шлях."
+                       : `Далі: ${next.part.title}.`));
           renderAll();
         });
         b.disabled = !info.complete;

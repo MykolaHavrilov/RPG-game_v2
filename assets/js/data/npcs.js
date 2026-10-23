@@ -162,6 +162,9 @@
           replies: [
             { text: "Хочу почати навчання заново — перерозподілити свої вміння.", to: "reset",
               show: save => save.character.level >= STEWARD_MIN_LEVEL },
+            { text: "Мені не дають квест на професію. Що не так з моїми силами?", to: "profession",
+              show: (save, ctx) => { const ms = RPG.memberSave(save, ctx.member || 0);
+                return ms.character.classId === RPG.DEFAULT_CLASS && ms.character.level >= RPG.PROFESSION_QUEST_LEVEL; } },
             { text: "Що це за книга у вас на столі?", to: "book" },
             { text: "Чим займається Мерія?", to: "about" },
             { text: "До побачення.", to: "bye" }
@@ -180,6 +183,37 @@
             { text: (save, ctx) => `Згоден, ось ${fmt(RPG.attrResetPrice(RPG.memberSave(save, ctx.member || 0)))} золота`, action: "reset",
               show: (save, ctx) => RPG.investedAttrs(RPG.memberSave(save, ctx.member || 0)).sum > 0 },
             { text: "Я ще подумаю.", to: "start" }
+          ]
+        },
+        // Порада щодо професій: які вклади атрибутів потрібні і чого бракує (data/classes.js → requires.attrs)
+        profession: {
+          text: (save, ctx) => {
+            const ms = RPG.memberSave(save, ctx.member || 0);
+            const have = RPG.investedAttrPoints(ms);
+            const A = RPG.ATTRS;
+            const haveTxt = Object.keys(A).map(k => `${A[k]} ${have[k] || 0}`).join(", ");
+            const seen = new Set(), lines = [];
+            for (const [id, c] of Object.entries(RPG.CLASSES)) {
+              const need = c.requires?.attrs;
+              if (c.requires?.quest !== "profession" || !need) continue;
+              const key = JSON.stringify(need);
+              const mages = id.startsWith("mage_");
+              if (mages && seen.has(key)) continue;
+              seen.add(key);
+              const name = mages ? "Маг (стихію обираєш сам)" : c.name;
+              const lack = RPG.professionLack(ms, id);
+              const needTxt = Object.entries(need).map(([k, v]) => `${A[k]} ${v}`).join(", ");
+              const lackTxt = Object.keys(lack).length
+                ? " — бракує: " + Object.entries(lack).map(([k, v]) => `${A[k]} +${v}`).join(", ") : " — підходиш";
+              lines.push(`${name}: ${needTxt}${lackTxt}`);
+            }
+            return `Захар розгортає твій запис. «Шлях обирають не роки, а те, у що ти сам вкладав сили. Твої вклади: ${haveTxt}. ` +
+              `Ось що потрібно для кожного шляху:» ` + lines.join("; ") + ". «Якщо сили розкидані не туди — я можу переписати записи, " +
+              "і ти розподілиш очки заново.»";
+          },
+          replies: [
+            { text: "Перерозподілити вміння.", to: "reset", show: save => save.character.level >= STEWARD_MIN_LEVEL },
+            { text: "Дякую, зрозумів.", to: "start" }
           ]
         },
         book: {

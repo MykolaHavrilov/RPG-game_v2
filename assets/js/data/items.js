@@ -122,7 +122,7 @@ const OFFHAND_RULES = {
   staff:  ["orb", "knife"],
   none:   ["shield", "quiver", "orb", "knife"]
 };
-const OFF_TYPE_NAMES = { shield: "щит", quiver: "колчан", orb: "сферу", knife: "малий кинджал" };
+const OFF_TYPE_NAMES = { shield: "щит", quiver: "колчан", orb: "сферу", knife: "малий кинджал", axe: "другу сокиру" };
 const MAIN_WITH_NAMES = {
   sword: "З мечем", axe: "Із сокирою", dagger: "З кинджалом",
   bow: "З луком", staff: "З посохом", none: "З вільною правою рукою"
@@ -652,7 +652,7 @@ function shopBuyPrice(id)  { return Math.max(1, Math.floor((ITEMS[id]?.price || 
 
 Object.assign(RPG, {
   SLOTS, SLOT_GROUPS, slotsFor, ITEM_RENAMES, STAT_NAMES, ITEMS, getItem, itemIconStyle, spriteStyle, ICON_SHEETS, isEquippable,
-  OFFHAND_RULES, offHandAllowed, offHandRuleText, ITEM_SETS, equippedSetCounts,
+  OFFHAND_RULES, OFF_TYPE_NAMES, offHandAllowed, offHandRuleText, ITEM_SETS, equippedSetCounts,
   SHOP_SELL_RATE, SHOP_BUY_RATE, shopSellPrice, shopBuyPrice
 });
 })(window.RPG);

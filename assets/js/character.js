@@ -121,8 +121,10 @@ function calcStats(save) {
     const ref = save.equipment[slot];
     const st = RPG.itemStats(ref);
     const legendary = RPG.rarityOf(ref) === "legendary";
+    const offWeapon = slot === "offHand" && ITEMS[RPG.refId(ref)]?.weaponType;
     for (const key in st) {
       if (key in RPG.ATTRS) continue;
+      if (offWeapon && key === "attack") continue;   // атака другої сокири — окремим ударом (dualWield)
       if (legendary && RPG.LEGEND_OVERCAP.includes(key)) legendOver[key] = (legendOver[key] || 0) + st[key];
       else stats[key] = (stats[key] || 0) + st[key];
     }
@@ -516,12 +518,16 @@ function changeClass(save, newClassId, opts = {}) {
   const removed = [];
   for (const slot in save.equipment) {
     const ref = save.equipment[slot];
-    if (!canEquip(save, RPG.refId(ref)).ok) {
+    const id = RPG.refId(ref);
+    const bad = !canEquip(save, id).ok || (slot === "offHand" && ITEMS[id]?.weaponType && offHandProblem(save, "axe"));
+    if (bad) {
       delete save.equipment[slot];
       addRefToList(save.inventory, ref);
       removed.push(ref);
     }
   }
+  const off = fixHands(save);
+  if (off) removed.push(off);
 
   fullHeal(save);
   return { ok: true, removed, changeBonus: { ...(CLASSES[newClassId].changeBonus || {}) } };
@@ -731,6 +737,10 @@ function canEquip(save, id) {
     const names = item.classes.map(c => CLASSES[c]?.name || c).join(", ");
     return { ok: false, reason: `Лише для професій: ${names}.` };
   }
+  // Професія дозволяє лише свою зброю (data/classes.js → weapons, offHand)
+  if (item.weaponType && !RPG.classAllowsWeapon(save.character.classId, item.weaponType)) {
+    return { ok: false, reason: `Професія «${getClass(save.character.classId).name}» не може користуватися цією зброєю.` };
+  }
   // Зброя 2–3 виду — лише з достатнім володінням
   if (item.weaponType && item.tier > 1 && RPG.TIER_MASTERY) {
     const need = RPG.TIER_MASTERY[item.tier];
@@ -741,12 +751,45 @@ function canEquip(save, id) {
   }
   // Ліва рука: що можна тримати, залежить від зброї в правій (OFFHAND_RULES у data/items.js)
   if (item.slot === "offHand") {
-    const mainType = ITEMS[RPG.refId(save.equipment.mainHand)]?.weaponType || "none";
-    if (!RPG.offHandAllowed(mainType, item.offType)) {
-      return { ok: false, reason: RPG.offHandRuleText(mainType) };
-    }
+    const why = offHandProblem(save, item.offType);
+    if (why) return { ok: false, reason: why };
   }
   return { ok: true };
+}
+
+// Тип речі в лівій руці: offType, а для другої сокири Берсерка — "axe"
+function offTypeOf(ref) {
+  const item = ITEMS[RPG.refId(ref)];
+  return item?.offType || item?.weaponType || null;
+}
+// Чому річ offType не можна тримати в лівій руці (null — можна)
+function offHandProblem(save, offType) {
+  const cls = getClass(save.character.classId);
+  if (cls.offHand) {
+    if (!cls.offHand.includes(offType)) {
+      const names = cls.offHand.map(t => RPG.OFF_TYPE_NAMES?.[t] || t).join(" або ");
+      return `Професія «${cls.name}» у лівій руці може тримати лише ${names}.`;
+    }
+    if (offType === "axe" && ITEMS[RPG.refId(save.equipment.mainHand)]?.weaponType !== "axe") {
+      return "Другу сокиру можна взяти, лише коли в правій руці теж сокира.";
+    }
+    return null;
+  }
+  const mainType = ITEMS[RPG.refId(save.equipment.mainHand)]?.weaponType || "none";
+  return RPG.offHandAllowed(mainType, offType) ? null : RPG.offHandRuleText(mainType);
+}
+// Чи може професія взяти сокиру в ліву руку (Берсерк)
+function canDualWield(save, id) {
+  return ITEMS[id]?.weaponType === "axe" && RPG.classAllowsOffHand(save.character.classId, "axe") &&
+         !!getClass(save.character.classId).offHand;
+}
+// Друга сокира Берсерка: { mainAtk, offAtk, name } або null
+function dualWieldInfo(save) {
+  const off = save.equipment?.offHand;
+  const offItem = ITEMS[RPG.refId(off)];
+  const main = save.equipment?.mainHand;
+  if (!offItem?.weaponType || ITEMS[RPG.refId(main)]?.weaponType !== offItem.weaponType) return null;
+  return { mainAtk: RPG.itemStats(main).attack || 0, offAtk: RPG.itemStats(off).attack || 0, name: offItem.name };
 }
 
 // Якщо річ у лівій руці не пасує до зброї в правій — знімає її в інвентар.
@@ -754,9 +797,13 @@ function canEquip(save, id) {
 function fixHands(save) {
   const off = save.equipment.offHand;
   if (!off) return null;
-  const mainType = ITEMS[RPG.refId(save.equipment.mainHand)]?.weaponType || "none";
-  const offType = ITEMS[RPG.refId(off)]?.offType;
-  if (RPG.offHandAllowed(mainType, offType)) return null;
+  // Права рука звільнилась, а в лівій — сокира: перекладаємо її в праву
+  if (!save.equipment.mainHand && ITEMS[RPG.refId(off)]?.weaponType) {
+    save.equipment.mainHand = off;
+    delete save.equipment.offHand;
+    return null;
+  }
+  if (!offHandProblem(save, offTypeOf(off))) return null;
   delete save.equipment.offHand;
   addRefToList(save.inventory, off);
   return off;
@@ -764,6 +811,10 @@ function fixHands(save) {
 
 // У який слот персонажа піде річ (кільця/сережки — у вільний з двох)
 function equipSlotFor(save, id) {
+  // Берсерк: друга сокира йде в ліву руку, якщо в правій уже сокира, а ліва вільна
+  if (canDualWield(save, id) && ITEMS[RPG.refId(save.equipment.mainHand)]?.weaponType === "axe" && !save.equipment.offHand) {
+    return "offHand";
+  }
   const group = RPG.slotsFor(ITEMS[id]?.slot);
   return group.find(s => !save.equipment[s]) || group[0];
 }
@@ -984,7 +1035,7 @@ Object.assign(RPG, {
   countInList, addToList, addRefToList, removeFromList, countItem, addItem, removeItem,
   isAtHome, moveToChest, takeFromChest,
   CHEST_DEFAULTS, CHEST_STORAGES, DEFAULT_CHEST, chestConf, chestStackMax, chestList, chestHere, chestPlaces, chestFree,
-  canEquip, fixHands, equipSlotFor, equipItem, unequipItem, previewEquip, useItem,
+  canEquip, fixHands, offTypeOf, offHandProblem, canDualWield, dualWieldInfo, equipSlotFor, equipItem, unequipItem, previewEquip, useItem,
   currentShop, buyItem, sellItem, applyReward
 });
 })(window.RPG);

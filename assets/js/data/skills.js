@@ -23,6 +23,20 @@
 //        якщо всі вороги вже походили — лікує себе). Див. battle.js → heroHeal.
 //       "passive" — постійний бонус, поки навичку вивчено (effects у %, crit/dodge — у пунктах).
 // weapon — тип зброї або масив типів; для пасивних — null.
+// Додаткові поля (battle.js):
+//   turns: [n, n10]   — бaф діє рівно n ходів, а на 10 рівні навички — n10 (замість 3 + рівень/4)
+//   area: "near" (для buff) — посилення отримують і союзники на відстані ≤ 1 клітини
+//   area: "guard" (для buff) — на себе або на союзника, якого б'ють 2+ ворогів
+//   spread: "adjacent" — удари hits по черзі між усіма ворогами в сусідніх клітинах (≤ 1) від героя
+//   spread: "target"   — удари hits по черзі між ціллю та ворогами в радіусі 1 від неї
+//   splash: 1          — та сама шкода ще й ворогам у радіусі 1 від цілі
+//   vsDefDown: k       — множник шкоди, якщо в цілі вже знижений захист (Залп мисливця)
+//   vsUndead: pct      — +pct% шкоди нежиті (data/enemies.js → undead: true)
+//   freeze: [шанс%, +за рівень] — шанс заморозити ворога на 2 ходи (не ходить і невразливий)
+//   shadow: { pct, turns } — перехід за спину найслабшого ворога (до 3 кл.) і отруйний удар
+//            100% атаки + отрута pct% макс. HP ворога на turns ходів
+//   extra: [15, 12, 9] (для heal) — ще 3 випадкові союзники отримують ці % (+ ріст рівня навички)
+//   group: true (для passive) — бонус діє на всю групу в бою
 //
 // ДИСТАНЦІЯ В БОЮ (battle.js): відстань до ворога 1 (0–1), 2 (1–2), 3 (2–3).
 //   Ближній бій (меч, кинджал, сокира, посох без магії, кулаки) — дістає на 1.
@@ -159,19 +173,22 @@
     warrior_crush: { cls: "warrior", weapon: ["sword", "axe"], kind: "attack", name: "Нищівний удар", mp: 6, req: 1,
                      mult: [1.8, 0.07], desc: "Важкий удар, що трощить усе на шляху." },
     warrior_cry:   { cls: "warrior", weapon: ["sword", "axe"], kind: "buff", name: "Бойовий клич", mp: 6, req: 3,
-                     effects: { attackPct: [15, 2], defensePct: [5, 1] }, desc: "Клич додає сили й стійкості." },
+                     area: "near", turns: [4, 5],
+                     effects: { attackPct: [15, 2], defensePct: [5, 1] }, desc: "Клич додає сили й стійкості воїну та союзникам поруч (до 1 клітини)." },
     warrior_tough: { cls: "warrior", weapon: null, kind: "passive", name: "Загартування", req: 0,
                      effects: { hpPct: [4, 1.2] }, desc: "Більше здоров'я назавжди." },
     // Лицар
     knight_bash:   { cls: "knight", weapon: "sword", kind: "attack", name: "Удар щитом", mp: 5, req: 1,
                      mult: [1.2, 0.05], debuff: { attackPct: [15, 2] }, desc: "Оглушливий удар — атака ворога слабшає." },
     knight_stand:  { cls: "knight", weapon: "sword", kind: "buff", name: "Непохитність", mp: 6, req: 3,
-                     effects: { defensePct: [25, 3], magicDefensePct: [10, 2] }, desc: "Лицар стає стіною." },
+                     area: "near", turns: [4, 5],
+                     effects: { defensePct: [25, 3], magicDefensePct: [10, 2] }, desc: "Лицар стає стіною — для себе й союзників поруч (до 1 клітини)." },
     knight_armor:  { cls: "knight", weapon: null, kind: "passive", name: "Важка броня", req: 0,
                      effects: { defensePct: [5, 1.5] }, desc: "Більше захисту назавжди." },
     // Берсерк
     berserker_whirl: { cls: "berserker", weapon: "axe", kind: "attack", name: "Вихор сокир", mp: 8, req: 1,
-                       hits: 3, mult: [0.7, 0.03], desc: "Три шалені удари поспіль." },
+                       hits: 5, mult: [0.6, 0.03], spread: "adjacent",
+                       desc: "П'ять ударів по колу: по одному кожному ворогу в сусідніх клітинах, далі знову. Якщо ворог один — усі п'ять у нього." },
     berserker_blood: { cls: "berserker", weapon: "axe", kind: "buff", name: "Кривава лють", mp: 6, req: 3,
                        effects: { attackPct: [25, 3], defensePct: [-15, 0] }, desc: "Атака різко зростає, захист падає." },
     berserker_thirst:{ cls: "berserker", weapon: null, kind: "passive", name: "Жага бою", req: 0,
@@ -180,30 +197,33 @@
     rogue_deadly:  { cls: "rogue", weapon: "dagger", kind: "attack", name: "Смертельний удар", mp: 6, req: 1,
                      mult: [1.5, 0.06], critBonus: [35, 3], desc: "Удар у вразливе місце з величезним шансом криту." },
     rogue_shadow:  { cls: "rogue", weapon: "dagger", kind: "buff", name: "Тінь", mp: 5, req: 3,
-                     effects: { dodge: [10, 1.5] }, desc: "Розбійник зливається з тінню." },
+                     effects: { dodge: [10, 1.5] }, shadow: { pct: 3, turns: 6 },
+                     desc: "Розбійник зливається з тінню, з'являється за спиною найслабшого ворога (до 3 клітин) і б'є отруйним клинком." },
     rogue_fingers: { cls: "rogue", weapon: null, kind: "passive", name: "Спритні пальці", req: 0,
                      effects: { crit: [3, 0.6] }, desc: "Шанс криту назавжди." },
     // Мисливець
     hunter_volley: { cls: "hunter", weapon: "bow", kind: "attack", name: "Залп", mp: 8, req: 1,
-                     hits: 3, mult: [0.6, 0.03], desc: "Три стріли майже одночасно." },
+                     hits: 3, mult: [0.6, 0.03], vsDefDown: 2,
+                     desc: "Три стріли майже одночасно. По ворогу зі зниженим захистом — удвічі сильніше." },
     hunter_pierce: { cls: "hunter", weapon: "bow", kind: "attack", name: "Пробивна стріла", mp: 6, req: 3,
                      mult: [1.2, 0.05], debuff: { defensePct: [12, 3] }, desc: "Стріла пробиває броню — захист ворога падає до кінця бою." },
     hunter_eye:    { cls: "hunter", weapon: null, kind: "passive", name: "Зіркість мисливця", req: 0,
                      effects: { attackPct: [4, 1.2] }, desc: "Атака назавжди." },
     // Маг вогню
     fire_arrow:    { cls: "mage_fire", school: "fire", weapon: "staff", kind: "attack", magic: true, name: "Вогняна стріла", mp: 7, req: 1,
-                     mult: [1.7, 0.07], desc: "Швидке вогняне заклинання." },
+                     mult: [1.7, 0.07], dot: [6, 2], desc: "Швидке вогняне заклинання, що підпалює ворога на 3 ходи." },
     fire_blast:    { cls: "mage_fire", school: "fire", weapon: "staff", kind: "attack", magic: true, name: "Полум'яний вибух", mp: 14, req: 5,
-                     mult: [2.4, 0.09], dot: [5, 3], desc: "Вибух підпалює ворога на 3 ходи." },
+                     mult: [2.4, 0.09], splash: 1, desc: "Вибух б'є ціль і всіх ворогів у радіусі 1 клітини від неї." },
     fire_aura:     { cls: "mage_fire", school: "fire", weapon: "staff", kind: "buff", name: "Вогняна аура", mp: 8, req: 3,
                      effects: { magicPct: [15, 2] }, desc: "Сила магії зростає." },
     fire_heat:     { cls: "mage_fire", school: "fire", weapon: null, kind: "passive", name: "Внутрішній жар", req: 0,
                      effects: { magicPct: [4, 1.2] }, desc: "Сила магії назавжди." },
     // Маг води
     water_spear:   { cls: "mage_water", school: "water", weapon: "staff", kind: "attack", magic: true, name: "Крижаний спис", mp: 7, req: 1,
-                     mult: [1.5, 0.06], debuff: { attackPct: [15, 2] }, desc: "Холод сковує — атака ворога слабшає." },
+                     mult: [1.5, 0.06], debuff: { attackPct: [15, 2] }, freeze: [1, 0.75],
+                     desc: "Холод сковує — атака ворога слабшає. Є шанс заморозити ворога на 2 ходи: він не ходить, але й удари його не беруть." },
     water_heal:    { cls: "mage_water", school: "water", weapon: "staff", kind: "heal", name: "Цілюща хвиля", mp: 10, req: 3,
-                     healPct: [18, 2], desc: "Вода загоює рани." },
+                     healPct: [18, 2], extra: [15, 12, 9], desc: "Вода загоює рани мага і ще трьох випадкових союзників (слабше)." },
     water_shield:  { cls: "mage_water", school: "water", weapon: "staff", kind: "buff", name: "Водяний щит", mp: 8, req: 5,
                      effects: { defensePct: [15, 2], magicDefensePct: [25, 3] }, desc: "Водяна завіса гасить удари й чари." },
     water_flow:    { cls: "mage_water", school: "water", weapon: null, kind: "passive", name: "Плинність", req: 0,
@@ -212,7 +232,8 @@
     wind_blade:    { cls: "mage_wind", school: "wind", weapon: "staff", kind: "attack", magic: true, name: "Повітряне лезо", mp: 7, req: 1,
                      hits: 2, mult: [0.85, 0.04], desc: "Два леза стисненого повітря." },
     wind_storm:    { cls: "mage_wind", school: "wind", weapon: "staff", kind: "attack", magic: true, name: "Буревій", mp: 14, req: 5,
-                     hits: 3, mult: [0.7, 0.03], desc: "Шквал ударів вітру." },
+                     hits: 5, mult: [0.7, 0.03], spread: "target",
+                     desc: "П'ять ударів вітру по черзі між ціллю та ворогами в радіусі 1 клітини від неї." },
     wind_tail:     { cls: "mage_wind", school: "wind", weapon: "staff", kind: "buff", name: "Попутний вітер", mp: 7, req: 3,
                      effects: { speedPct: [15, 2], dodge: [5, 1] }, desc: "Швидкість і ухилення зростають." },
     wind_light:    { cls: "mage_wind", school: "wind", weapon: null, kind: "passive", name: "Легкість", req: 0,
@@ -223,7 +244,8 @@
     earth_quake:   { cls: "mage_earth", school: "earth", weapon: "staff", kind: "attack", magic: true, name: "Землетрус", mp: 12, req: 5,
                      mult: [1.3, 0.05], debuff: { defensePct: [15, 3] }, desc: "Земля тріскається — захист ворога падає до кінця бою." },
     earth_skin:    { cls: "mage_earth", school: "earth", weapon: "staff", kind: "buff", name: "Кам'яна шкіра", mp: 8, req: 3,
-                     effects: { defensePct: [30, 3] }, desc: "Шкіра твердне, мов камінь." },
+                     area: "guard", effects: { defensePct: [30, 3] },
+                     desc: "Шкіра твердне, мов камінь. Накладається на союзника, якого б'ють 2 чи більше ворогів, інакше — на себе." },
     earth_firm:    { cls: "mage_earth", school: "earth", weapon: null, kind: "passive", name: "Твердість землі", req: 0,
                      effects: { hpPct: [5, 1.2], defensePct: [2, 0.6] }, desc: "Здоров'я й захист назавжди." },
     // Паладин
@@ -232,10 +254,10 @@
     paladin_bless: { cls: "paladin", weapon: "sword", kind: "heal", name: "Благословення", mp: 9, req: 3,
                      healPct: [15, 2], area: "near", desc: "Світло лікує паладина й союзників поруч (до 1 клітини)." },
     paladin_faith: { cls: "paladin", weapon: null, kind: "passive", name: "Віра", req: 0,
-                     effects: { magicDefensePct: [6, 1.5] }, desc: "Магічний захист назавжди." },
+                     group: true, effects: { magicDefensePct: [6, 1.5] }, desc: "Магічний захист назавжди — для всієї групи в бою." },
     // Жрець
     priest_light:  { cls: "priest", weapon: "staff", kind: "attack", magic: true, name: "Промінь світла", mp: 7, req: 1,
-                     mult: [1.5, 0.06], desc: "Сліпучий промінь." },
+                     mult: [1.5, 0.06], vsUndead: 50, desc: "Сліпучий промінь. Нежить отримує на 50% більше шкоди." },
     priest_prayer: { cls: "priest", weapon: "staff", kind: "heal", name: "Молитва зцілення", mp: 12, req: 3,
                      healPct: [25, 3], area: "wounded", desc: "Сильне лікування найпораненішого героя групи. Якщо всі здорові — жрець чекає першого удару ворога і одразу лікує." },
     priest_grace:  { cls: "priest", weapon: null, kind: "passive", name: "Благодать", req: 0,
@@ -246,7 +268,7 @@
     monk_meditate: { cls: "monk", weapon: "staff", kind: "heal", name: "Медитація", mp: 8, req: 3,
                      healPct: [12, 2], area: "group", desc: "Спокій відновлює сили всієї групи, незалежно від відстані." },
     monk_inner:    { cls: "monk", weapon: null, kind: "passive", name: "Внутрішня сила", req: 0,
-                     effects: { attackPct: [3, 1], dodge: [1.5, 0.4] }, desc: "Атака й ухилення назавжди." }
+                     group: true, effects: { attackPct: [3, 1], dodge: [1.5, 0.4] }, desc: "Атака й ухилення назавжди — для всієї групи в бою." }
   };
 
   const SCHOOLS = {
@@ -276,7 +298,10 @@
     return Math.round((pair[0] + pair[1] * (s - 1)) * 100) / 100;
   }
   // Скільки ходів діє баф/послаблення
-  function skillTurns(s) { return 3 + Math.floor(s / 4); }
+  function skillTurns(s, sk) {
+    if (sk?.turns) return s >= SKILL_MAX ? sk.turns[1] : sk.turns[0];
+    return 3 + Math.floor(s / 4);
+  }
 
   function skillCost(next) { return 10 + 6 * next * next; }
 
@@ -373,18 +398,26 @@
       if (sk.dot) parts.push(`отрута ${skillValue(sk.dot, s)} шкоди × 3 ходи`);
       if (sk.debuff?.defensePct) parts.push(`захист ворога −${skillValue(sk.debuff.defensePct, s)}%`);
       if (sk.debuff?.attackPct) parts.push(`атака ворога −${skillValue(sk.debuff.attackPct, s)}% на ${skillTurns(s)} ходи`);
+      if (sk.spread === "adjacent") parts.push("по колу між ворогами поруч");
+      if (sk.spread === "target") parts.push("по черзі між ціллю й ворогами біля неї");
+      if (sk.splash) parts.push(`та сама шкода ворогам у радіусі ${sk.splash} від цілі`);
+      if (sk.vsDefDown) parts.push(`×${sk.vsDefDown} по ворогу зі зниженим захистом`);
+      if (sk.vsUndead) parts.push(`+${sk.vsUndead}% по нежиті`);
+      if (sk.freeze) parts.push(`${skillValue(sk.freeze, s)}% шанс заморозки на 2 ходи`);
     } else if (sk.kind === "heal") {
       const who = { near: " (собі й союзникам поруч)", group: " (усій групі)", wounded: " (найпоранішому)" }[sk.area] || "";
       parts.push(`лікує ${skillValue(sk.healPct, s)}% здоров'я${who}`);
+      if (sk.extra) parts.push(`ще 3 випадковим союзникам: ${sk.extra.map(v => Math.round((v + sk.healPct[1] * (s - 1)) * 100) / 100 + "%").join(" / ")}`);
     } else {
       for (const [k, pair] of Object.entries(sk.effects)) {
         const v = skillValue(pair, s);
         const unit = ["crit", "dodge"].includes(k) ? " п.п." : "%";
         parts.push(`${EFFECT_NAMES[k]} ${v > 0 ? "+" : ""}${v}${unit}`);
       }
-      if (sk.kind === "buff") parts.push(`${skillTurns(s)} ходи`);
+      if (sk.shadow) parts.push(`перехід за спину найслабшого ворога (до 3 кл.): удар 100% + отрута ${sk.shadow.pct}% його макс. HP × ${sk.shadow.turns} ходів`);
+      if (sk.kind === "buff") parts.push(`${skillTurns(s, sk)} ходи` + (sk.area === "near" ? ", собі й союзникам поруч" : sk.area === "guard" ? ", на союзника під ударами 2+ ворогів або на себе" : ""));
     }
-    if (sk.kind === "passive") return `${parts.join(", ")} · постійно`;
+    if (sk.kind === "passive") return `${parts.join(", ")} · постійно${sk.group ? ", уся група" : ""}`;
     const range = sk.kind === "attack"
       ? ` · дальність ${actionRange(Array.isArray(sk.weapon) ? sk.weapon[0] : sk.weapon, sk.magic)}` : "";
     return `${parts.join(", ")} · ${sk.mp} MP${range}`;
@@ -394,6 +427,6 @@
     WEAPON_TYPES, MASTERY_MAX, TIER_MASTERY, MASTERY_BONUS, SKILLS, SKILL_MAX,
     masteryCap, masteryCost, getMastery, weaponTypeOf, masteryBonus, trainMastery,
     skillValue, skillTurns, skillCost, skillLevel, skillsForWeapon, skillCap, learnSkill, describeSkill,
-    SCHOOLS, skillWeaponOk, actionRange, trainerSkills, skillMastery, passiveBonus
+    SCHOOLS, skillWeaponOk, actionRange, trainerSkills, skillMastery, passiveBonus, EFFECT_NAMES
   });
 })(window.RPG);
