@@ -706,3 +706,111 @@ main > a.location { display: flex; margin-bottom: 10px; }
   padding: 8px 10px; border: 1px solid rgba(201, 163, 90, .35); border-radius: 6px; }
 .key-count { white-space: nowrap; color: var(--gold); }
 .key-row.is-full .key-count { color: #ffb04d; }
+
+/* ---------- Поле бою 3 × 8 (game.js → renderField, вікно розстановки) ----------
+   c 1–3 — зона групи (синя), c 4–5 — проміжок для маневру, c 6–8 — зона ворогів (червона).
+   Клітинки квадратні: поле 8 × 3. Іконки стоять абсолютно й плавно переїжджають між клітинками. */
+.bfield {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  width: 100%;
+  aspect-ratio: 8 / 3;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, .35);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.bf-cell { border: 1px solid rgba(255, 255, 255, .06); }
+.bf-cell.bf-hero  { background: rgba(90, 150, 230, .10); }
+.bf-cell.bf-gap   { background: rgba(255, 255, 255, .015); }
+.bf-cell.bf-enemy { background: rgba(220, 85, 70, .10); }
+.bf-cell.bf-hero[data-c="2"]  { border-right: 2px solid rgba(120, 170, 255, .45); }
+.bf-cell.bf-enemy[data-c="5"] { border-left: 2px solid rgba(255, 120, 110, .45); }
+
+.bf-unit {
+  position: absolute;
+  z-index: 2;
+  width: 12.5%;
+  height: 33.333%;
+  padding: 2px 3px 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  transition: left .35s ease, top .35s ease, opacity .3s, filter .3s;
+}
+.bf-face {
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: 1;
+  max-width: 100%;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, .25);
+  background-repeat: no-repeat;
+}
+.bf-unit.is-hero .bf-face  { box-shadow: 0 0 0 1px rgba(120, 170, 255, .55); }
+.bf-unit.is-enemy .bf-face { box-shadow: 0 0 0 1px rgba(255, 120, 110, .55); }
+.bf-unit.is-champion .bf-face { box-shadow: 0 0 0 2px #f2c14e, 0 0 8px rgba(242, 193, 78, .6); }
+.bf-unit.is-boss .bf-face { box-shadow: 0 0 0 2px #c0392b, 0 0 8px rgba(192, 57, 43, .6); }
+.bf-bars { display: grid; gap: 1px; width: 90%; flex: 0 0 auto; }
+.bf-bar { display: block; height: 4px; border-radius: 2px; background: rgba(0, 0, 0, .6); overflow: hidden; }
+.bf-bar i { display: block; height: 100%; width: 100%; transition: width .3s ease; }
+.bf-bar-hp i { background: linear-gradient(90deg, #b3261e, #e5483b); }
+.bf-bar-mp i { background: linear-gradient(90deg, #1f5fbf, #3d8ce6); }
+.bf-unit.is-dead { opacity: .35; filter: grayscale(1); }
+.bf-unit.is-acting { z-index: 3; }
+.bf-unit.is-acting .bf-face { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bf-unit.is-target .bf-face { outline: 2px solid #e5483b; outline-offset: 1px; }
+.bf-unit .fx-num { top: 10%; font-size: 1rem; }
+.bf-unit .fx-crit { font-size: 1.35rem; }
+
+/* Вікно розстановки */
+.formation-dialog {
+  width: min(720px, calc(100vw - 24px));
+  max-width: none;
+  padding: 16px;
+  color: var(--pop-text, var(--text));
+  background: var(--pop-bg, #1b1712);
+  border: 1px solid var(--pop-border, var(--border-color));
+  border-radius: var(--radius);
+  box-shadow: var(--pop-shadow, 0 20px 60px rgba(0, 0, 0, .7));
+}
+.formation-dialog::backdrop { background: rgba(0, 0, 0, .65); }
+.formation-dialog h3 { margin: 0 36px 6px 0; color: var(--gold); font-family: var(--font-head); }
+.formation-dialog > .note { margin: 0 0 10px; }
+.formation-dialog .dialog-actions { flex-wrap: wrap; margin-top: 10px; }
+.bfield.is-setup .bf-cell.bf-hero { cursor: pointer; }
+.bfield.is-setup.has-pick .bf-cell.bf-hero { background: rgba(90, 150, 230, .2); }
+.bfield.is-setup .bf-cell.bf-hero.is-over { background: rgba(201, 163, 90, .45); }
+.bfield.is-setup .bf-unit.is-hero { cursor: grab; touch-action: none; }
+.bf-unit.is-picked .bf-face { outline: 2px solid var(--accent); outline-offset: 1px; box-shadow: 0 0 10px rgba(201, 163, 90, .8); }
+.bf-unit.is-dragging { opacity: .35; }
+.bf-unit .bf-name { display: none; }
+.bf-tray {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  min-height: 84px; margin-top: 10px; padding: 8px;
+  border: 1px dashed var(--border-color); border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, .03);
+}
+.bf-unit.in-tray {
+  position: relative; left: auto; top: auto;
+  width: 72px; height: auto; padding: 4px;
+  cursor: grab; touch-action: none;
+  border-radius: var(--radius-sm); background: rgba(0, 0, 0, .25);
+}
+.bf-unit.in-tray .bf-face { width: 56px; height: 56px; flex: 0 0 56px; }
+.bf-unit.in-tray .bf-name { display: block; font-size: .7rem; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
+.bf-unit.bf-ghost {
+  position: fixed; z-index: 1000; pointer-events: none;
+  transform: translate(-50%, -50%); opacity: .9; transition: none;
+}
+.bf-hint { margin: 8px 0 0; min-height: 1.3em; font-size: .9rem; color: var(--gold); }
+.bf-tray-empty { font-size: .85rem; opacity: .75; }
+@media (prefers-reduced-motion: reduce) {
+  .bf-unit, .bf-bar i { transition: none; }
+}

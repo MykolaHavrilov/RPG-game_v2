@@ -115,6 +115,7 @@
     const t = save.travel;
     if (!t || now < t.end) return null;
     delete save.travel;
+    delete save.formationAt;              // нове прибуття — розстановку героїв обирають знову (game.js)
     if (t.region === "city") {
       save.location.map = "city";
       save.location.district = t.to;

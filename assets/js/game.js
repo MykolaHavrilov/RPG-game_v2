@@ -1738,6 +1738,7 @@
     // Ворог(и): великий портрет — перший; якщо їх кілька — список з HP / MP кожного
     function renderEnemy() {
       if (champWarn) { champWarn = false; setTimeout(showChampionWarning, 50); }
+      if (!fighting) renderField();
       const enemy = curEnemy(0);
       const champ = foes[0].champion;
       $("enemy-img").closest("figure").classList.toggle("is-champion", champ);
@@ -1774,6 +1775,279 @@
         row.append(face, info);
         list.append(row);
       });
+    }
+
+    // ---------- Поле бою 3 × 8 (battle.js → BATTLE_FIELD, placeHeroes, placeFoes) ----------
+    // c 0–2 — зона групи (3×3), c 3–4 — проміжок для маневру, c 5–7 — зона ворогів.
+    // Розстановку героїв обирає гравець (вікно розстановки) і вона зберігається в save.formation:
+    // { main: { r, c }, <id напарника>: { r, c } }. save.formationAt — на якій локації її вже
+    // підтвердили після прибуття (travel.js скидає при новому прибутті); інакше вікно
+    // з'являється перед першим боєм.
+    const FIELD = RPG.BATTLE_FIELD;
+    const fieldBox = $("bfield");
+    const fieldTokens = { hero: [], enemy: [] };
+    const memberKey = ms => (ms.memberIndex ? (save.party[ms.memberIndex - 1]?.id || "m" + ms.memberIndex) : "main");
+    function formationOf(team) {
+      const f = save.formation || {};
+      return RPG.placeHeroes(team, team.map(ms => f[memberKey(ms)]));
+    }
+    function storeFormation(team, pos) {
+      save.formation = {};
+      team.forEach((ms, i) => { if (pos[i]) save.formation[memberKey(ms)] = { r: pos[i].r, c: pos[i].c }; });
+      save.formationAt = locId;
+    }
+    const placedHere = () => save.formationAt === locId;
+
+    // Сітка поля: 24 клітинки з підсвіткою зон
+    function fieldGrid(box, extra = "") {
+      box.innerHTML = "";
+      box.className = "bfield" + (extra ? " " + extra : "");
+      for (let r = 0; r < FIELD.rows; r++) {
+        for (let c = 0; c < FIELD.cols; c++) {
+          const zone = FIELD.heroCols.includes(c) ? "hero" : FIELD.enemyCols.includes(c) ? "enemy" : "gap";
+          const cell = el("div", "bf-cell bf-" + zone);
+          cell.dataset.r = r;
+          cell.dataset.c = c;
+          cell.style.gridRow = r + 1;
+          cell.style.gridColumn = c + 1;
+          box.append(cell);
+        }
+      }
+    }
+    // Іконка учасника: портрет + маленькі смужки HP / MP
+    function fieldToken(kind, name, sprite, extra = "") {
+      const t = el("div", "bf-unit is-" + kind + (extra ? " " + extra : ""));
+      t.dataset.name = name;
+      const face = el("span", "bf-face");
+      Object.assign(face.style, sprite);
+      const bars = el("span", "bf-bars");
+      for (const cls of ["bf-bar-hp", "bf-bar-mp"]) {
+        const b = el("span", "bf-bar " + cls);
+        b.append(el("i"));
+        bars.append(b);
+      }
+      t.append(face, bars);
+      return t;
+    }
+    function tokenPos(t, p) {
+      if (!p) return;
+      t.style.left = (p.c * 100 / FIELD.cols) + "%";
+      t.style.top = (p.r * 100 / FIELD.rows) + "%";
+    }
+    function tokenBars(t, hp, maxHp, mp, maxMp) {
+      const [h, m] = t.querySelectorAll(".bf-bar i");
+      h.style.width = Math.max(0, Math.min(100, hp / Math.max(1, maxHp) * 100)) + "%";
+      m.parentElement.hidden = !maxMp;
+      if (maxMp) m.style.width = Math.max(0, Math.min(100, mp / maxMp * 100)) + "%";
+      t.classList.toggle("is-dead", hp <= 0);
+      const label = `${t.dataset.name} — HP ${Math.max(0, Math.round(hp))} / ${Math.round(maxHp)}` + (maxMp ? `, MP ${Math.round(mp)} / ${Math.round(maxMp)}` : "");
+      t.title = label;
+      t.setAttribute("aria-label", label);
+    }
+    const heroTokenFor = ms => fieldToken("hero", ms.character.name, RPG.heroSpriteStyle(ms.character.classId));
+    const foeTokenFor = (f, e) => fieldToken("enemy", e.name, RPG.enemySpriteStyle(f.id),
+      (f.champion ? "is-champion" : "") + (e.boss ? " is-boss" : ""));
+
+    // Поле над журналом: як стоятимуть герої й вороги в наступному бою.
+    // heroPos / foePos / team / maxStats — для показу бою (інакше — поточна розстановка)
+    function renderField(opts = {}) {
+      if (!fieldBox) return;
+      const team = opts.team || fighters();
+      const heroPos = opts.heroPos || formationOf(team);
+      const foePos = opts.foePos || RPG.placeFoes(foes);
+      fieldGrid(fieldBox);
+      fieldTokens.hero = team.map((ms, k) => {
+        const t = heroTokenFor(ms);
+        const st = opts.maxStats?.[k] || RPG.calcStats(ms);
+        tokenPos(t, heroPos[k]);
+        tokenBars(t, ms.character.hp, st.hp, ms.character.mp, st.mp);
+        fieldBox.append(t);
+        return t;
+      });
+      fieldTokens.enemy = foes.map((f, i) => {
+        const e = curEnemy(i);
+        const t = foeTokenFor(f, e);
+        tokenPos(t, foePos[i]);
+        tokenBars(t, e.stats.hp, e.stats.hp, e.stats.mp || 0, e.stats.mp || 0);
+        fieldBox.append(t);
+        return t;
+      });
+    }
+    // Подія бою на полі: позиції, смужки, хто діє, по кому влучили
+    function fieldEvent(ev, prev, team, maxStats) {
+      (ev.heroes || []).forEach((h, k) => {
+        const t = fieldTokens.hero[k];
+        if (!t) return;
+        tokenPos(t, h.pos);
+        tokenBars(t, h.hp, maxStats[k].hp, h.mp, maxStats[k].mp);
+        const was = prev?.heroes?.[k];
+        if (was && was.hp !== h.hp) RPG.fx.hit(t, h.hp - was.hp, ev.crit ? "crit" : "");
+      });
+      (ev.enemies || []).forEach((st, i) => {
+        const t = fieldTokens.enemy[i];
+        if (!t) return;
+        const e = curEnemy(i);
+        tokenPos(t, st.pos);
+        tokenBars(t, st.hp, e.stats.hp, st.mp, e.stats.mp || 0);
+        const was = prev?.enemies?.[i];
+        if (was && was.hp !== st.hp) RPG.fx.hit(t, st.hp - was.hp, ev.crit ? "crit" : "");
+      });
+      fieldBox.querySelectorAll(".is-acting, .is-target").forEach(n => n.classList.remove("is-acting", "is-target"));
+      const pick = r => (r ? fieldTokens[r.side]?.[r.i] : null);
+      const a = pick(ev.actor), tg = pick(ev.target);
+      if (a) { a.classList.add("is-acting"); RPG.fx.act(a); }
+      if (tg && tg !== a) tg.classList.add("is-target");
+    }
+
+    // ---------- Вікно розстановки героїв ----------
+    // Перетягнути портрет на клітинку своєї зони або натиснути героя, потім клітинку.
+    // onDone() — що робити після «Готово» (наприклад, почати бій)
+    function openFormation(onDone = null) {
+      const team = fighters();
+      if (!team.length) { showMsg(msg, "Усі герої групи полягли — розставляти нікого.", true); return; }
+      const f = save.formation || {};
+      // Хто вже має збережене місце — стоїть на ньому; інші чекають унизу
+      const auto = RPG.placeHeroes(team, team.map(ms => f[memberKey(ms)]));
+      let pos = team.map((ms, i) => (f[memberKey(ms)] ? auto[i] : null));
+      let selected = null;
+
+      let dlg = $("formation-dialog");
+      if (!dlg) {
+        dlg = el("dialog", "formation-dialog");
+        dlg.id = "formation-dialog";
+        document.body.append(dlg);
+      }
+      dlg.innerHTML = "";
+      const close = button("×", "notice-close", () => dlg.close());
+      close.setAttribute("aria-label", "Закрити");
+      const field = el("div", "bfield");
+      const tray = el("div", "bf-tray");
+      tray.setAttribute("aria-label", "Герої, яких ще не розставлено");
+      const hint = el("p", "bf-hint");
+      const btnAuto = button("Розставити автоматично", "wf wf-link", () => {
+        pos = RPG.placeHeroes(team, pos.map(p => p || undefined));
+        selected = null;
+        draw();
+      });
+      const btnOk = button(onDone ? "До бою!" : "Готово", "wf wf-button", async () => {
+        if (pos.some(p => !p)) return;
+        storeFormation(team, pos);
+        await RPG.saveGame(save);
+        dlg.close();
+        renderField();
+        if (onDone) onDone();
+        else showMsg(msg, "Розстановку збережено.");
+      });
+      const row = el("div", "row dialog-actions");
+      row.append(btnOk, btnAuto, button("Скасувати", "wf wf-link", () => dlg.close()));
+      dlg.append(close, el("h3", null, "Розстановка героїв"),
+        el("p", "note", "Ваша зона — ліві 3×3 клітинки. Перетягніть героя на клітинку або натисніть на героя, а потім на клітинку. " +
+          "Посередині — 2 стовпці для маневру, праворуч стоять вороги. Дальність: ближній бій — 1 клітинка, посох (заклинання) — 2, лук — 3."),
+        field, tray, hint, row);
+
+      function placeAt(i, p) {
+        const j = pos.findIndex((q, k) => k !== i && q && q.r === p.r && q.c === p.c);
+        if (j >= 0) pos[j] = pos[i] ? { ...pos[i] } : null;   // обмін місцями (або той іде вниз)
+        pos[i] = { r: p.r, c: p.c };
+      }
+      function tokenClick(i) {
+        if (selected !== null && selected !== i && pos[i]) { placeAt(selected, pos[i]); selected = null; }
+        else selected = selected === i ? null : i;
+        draw();
+      }
+      function cellClick(cell) {
+        const p = { r: +cell.dataset.r, c: +cell.dataset.c };
+        if (selected === null) return;
+        placeAt(selected, p);
+        selected = null;
+        draw();
+      }
+      // Перетягування мишею й пальцем (pointer events); короткий дотик без руху — це клік
+      function bindDrag(node, i) {
+        node.tabIndex = 0;
+        node.setAttribute("role", "button");
+        node.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); tokenClick(i); } });
+        node.addEventListener("pointerdown", ev => {
+          if (ev.button > 0) return;
+          ev.preventDefault();
+          const sx = ev.clientX, sy = ev.clientY;
+          let ghost = null, over = null;
+          try { node.setPointerCapture(ev.pointerId); } catch (e) { /* без захоплення теж працює */ }
+          const cellAt = (x, y) => document.elementFromPoint(x, y)?.closest(".bf-cell.bf-hero");
+          const move = e => {
+            if (!ghost && Math.hypot(e.clientX - sx, e.clientY - sy) < 6) return;
+            if (!ghost) {
+              ghost = node.cloneNode(true);
+              ghost.className = "bf-unit is-hero bf-ghost";
+              ghost.style.width = node.offsetWidth + "px";
+              ghost.style.height = node.offsetHeight + "px";
+              document.body.append(ghost);
+              node.classList.add("is-dragging");
+            }
+            ghost.style.left = e.clientX + "px";
+            ghost.style.top = e.clientY + "px";
+            const c = cellAt(e.clientX, e.clientY);
+            if (c !== over) { over?.classList.remove("is-over"); over = c; over?.classList.add("is-over"); }
+          };
+          const end = (e, cancel) => {
+            node.removeEventListener("pointermove", move);
+            node.removeEventListener("pointerup", up);
+            node.removeEventListener("pointercancel", cancelUp);
+            over?.classList.remove("is-over");
+            node.classList.remove("is-dragging");
+            if (!ghost) { if (!cancel) tokenClick(i); return; }
+            ghost.remove();
+            if (cancel) return;
+            const cell = cellAt(e.clientX, e.clientY);
+            if (cell) placeAt(i, { r: +cell.dataset.r, c: +cell.dataset.c });
+            else if (document.elementFromPoint(e.clientX, e.clientY)?.closest(".bf-tray")) pos[i] = null;
+            selected = null;
+            draw();
+          };
+          const up = e => end(e, false);
+          const cancelUp = e => end(e, true);
+          node.addEventListener("pointermove", move);
+          node.addEventListener("pointerup", up);
+          node.addEventListener("pointercancel", cancelUp);
+        });
+      }
+
+      function draw() {
+        fieldGrid(field, "is-setup" + (selected !== null ? " has-pick" : ""));
+        field.querySelectorAll(".bf-cell.bf-hero").forEach(cell => {
+          cell.addEventListener("click", () => cellClick(cell));
+        });
+        RPG.placeFoes(foes).forEach((p, i) => {
+          const f = foes[i], e = curEnemy(i);
+          const t = foeTokenFor(f, e);
+          tokenPos(t, p);
+          tokenBars(t, e.stats.hp, e.stats.hp, e.stats.mp || 0, e.stats.mp || 0);
+          field.append(t);
+        });
+        tray.innerHTML = "";
+        team.forEach((ms, i) => {
+          const st = RPG.calcStats(ms);
+          const t = heroTokenFor(ms);
+          tokenBars(t, ms.character.hp, st.hp, ms.character.mp, st.mp);
+          const w = RPG.ITEMS[RPG.refId(ms.equipment.mainHand)];
+          const reach = RPG.actionRange(w?.weaponType || null, w?.weaponType === "staff");
+          t.append(el("span", "bf-name", `${ms.character.name} · ${reach}`));
+          t.title += ` · дальність ${reach}`;
+          if (i === selected) t.classList.add("is-picked");
+          bindDrag(t, i);
+          if (pos[i]) { tokenPos(t, pos[i]); field.append(t); }
+          else { t.classList.add("in-tray"); tray.append(t); }
+        });
+        tray.classList.toggle("is-empty", !tray.children.length);
+        if (!tray.children.length) tray.append(el("span", "bf-tray-empty", "Усі герої на полі. Перетягніть сюди, щоб прибрати з клітинки."));
+        const left = pos.filter(p => !p).length;
+        btnOk.disabled = left > 0;
+        hint.textContent = left
+          ? `Ще не розставлено: ${left}. ${selected !== null ? "Тепер натисніть клітинку своєї зони." : ""}`
+          : selected !== null ? "Натисніть клітинку своєї зони або іншого героя, щоб помінятися місцями." : "Усі на місцях — можна в бій.";
+      }
+      draw();
+      if (!dlg.open) dlg.showModal();
     }
 
     function renderQueue() {
@@ -1832,6 +2106,7 @@
       drawHero();
       renderQuickSlots();
       if (combat) renderQueue();
+      if (combat && !fighting) renderField();
       else renderPlace();
     }
 
@@ -1949,6 +2224,9 @@
       document.body.classList.toggle("is-fighting", on);
       drawHero();          // на час бою — портрет головного героя, після — знову обраного
       renderQuickSlots();
+      if (!on) renderField();   // поле — під наступний бій
+      const fb = $("formation-btn");
+      if (fb) fb.disabled = on;
     }
 
     async function startBattle() {
@@ -1965,7 +2243,7 @@
       const maxStats = team.map(ms => RPG.calcStats(ms));
       RPG.equipFoes(foes, team);   // GS групи міг змінитися (перевдягнулись) — речі ворогів під нього
       renderEnemy();
-      const result = RPG.simulatePartyBattle(team, foes);
+      const result = RPG.simulatePartyBattle(team, foes, { heroPos: formationOf(team) });
       const group = team.length > 1;
 
       // Результат застосовуємо і зберігаємо ОДРАЗУ — щоб не можна було
@@ -2062,16 +2340,23 @@
       const stepByStep = RPG.getSettings().battleView !== "result";
       setArena(`${team.map(ms => ms.character.name).join(", ")} проти: ${foesText()}`, [], "fight");
       lastSnap = null;
+      // Поле бою: розстановка цього бою, смужки — зі стану на початку
+      renderField({ team, heroPos: result.heroPos, foePos: result.foePos, maxStats });
+      fieldEvent(result.events[0], null, team, maxStats);
       if (stepByStep) {
+        let prevEv = null;
         for (const ev of result.events) {
           addLogLine(ev);
           applyEventToBars(ev, team, maxStats);
           battleFx(ev, team);
+          fieldEvent(ev, prevEv, team, maxStats);
+          prevEv = ev;
           await sleep(ev.who === "info" ? 400 : 550);
         }
       } else {
         result.events.forEach(addLogLine);
         applyEventToBars(result.events[result.events.length - 1], team, maxStats);
+        fieldEvent(result.events[result.events.length - 1], null, team, maxStats);
       }
 
       // Підсумок
@@ -2156,7 +2441,9 @@
     });
 
     if (combat) {
-      startBtn.addEventListener("click", startBattle);
+      // Після прибуття на локацію перед першим боєм — вікно розстановки героїв
+      startBtn.addEventListener("click", () => { if (fighting) return; if (placedHere()) startBattle(); else openFormation(startBattle); });
+      $("formation-btn")?.addEventListener("click", () => { if (!fighting) openFormation(); });
       rerollBtn.addEventListener("click", () => {
         if (fighting || mode === "dungeon") return;
         nextEnemy();

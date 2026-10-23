@@ -72,12 +72,15 @@
           <!-- Локація з данжем: «Обстеження» / данж (game.js → renderMode, dungeon.js) -->
           <div class="row mode-tabs" id="mode-tabs" hidden></div>
           <div class="panel stack dungeon-panel" id="dungeon-panel" hidden></div>
+          <!-- Поле бою 3×8: герої (ліві 3×3), проміжок 2×3, вороги (праві 3×3) — game.js → renderField -->
+          <div class="bfield" id="bfield" aria-label="Поле бою"></div>
           <!-- Журнал бою: тут і готовність до бою, і хід бою, і нагорода (game.js → setArena / addLogLine) -->
           <ol class="log" id="battle-log" aria-label="Журнал бою" aria-live="polite"></ol>
           <!-- Одразу під журналом: почати бій / пропустити суперника -->
           <div class="row actions">
             <button class="wf wf-button" id="start-btn" type="button">Почати бій</button>
             <button class="wf wf-link" id="reroll-btn" type="button">Шукати іншого ворога</button>
+            <button class="wf wf-link" id="formation-btn" type="button">Розстановка</button>
             <button class="wf wf-link" id="leave-btn" type="button" hidden>Покинути данж</button>
           </div>
 

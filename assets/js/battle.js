@@ -14,12 +14,19 @@
 //   Приклад: герой 1 — 200, герой 2 — 100, ворог 1 — 80, ворог 2 — 100:
 //   герой 1 → герой 2 → ворог 2 → герой 1 (вдруге) → ворог 1.
 //
-// ДИСТАНЦІЯ
-//   Бій починається з відстані 3. Відстань між героєм і ворогом: 1 (0–1), 2 (1–2), 3 (2–3).
+// ПОЛЕ БОЮ 3 × 8 (FIELD)
+//   3 клітинки завширшки (рядки r = 0…2), 8 завдовжки (стовпці c = 0…7):
+//   c 0–2 — зона групи гравця (3×3), c 3–4 — проміжок для маневру (2×3), c 5–7 — зона ворогів (3×3).
+//   Героїв розставляє гравець (game.js → вікно розстановки, save.formation),
+//   ворогів — автоматично (placeFoes): ближній бій — у передній стовпець, далекий — глибше.
+//   В одній клітинці — лише один учасник.
+//   Відстань = більша з різниць по рядках і стовпцях (діагональ теж 1 клітинка).
+//   Передні ряди стоять на відстані 3: c 2 ↔ c 5.
 //   Дальність дії: ближній бій (меч, кинджал, сокира, посох без заклинання, кулаки) — 1,
 //   заклинання з посохом — 2, лук — 3. Вороги: data/enemies.js → range (1 / 2 / 3).
-//   Хто не дістає жодного суперника — замість удару підходить на 1 ближче
-//   (дія з черги не витрачається). Б'ють першого суперника, до якого дістають.
+//   Хто не дістає жодного суперника — замість удару робить крок на 1 клітинку до найближчого
+//   (на будь-яку вільну сусідню, і по діагоналі; дія з черги не витрачається).
+//   Б'ють найближчого суперника серед тих, до кого дістають.
 //
 // ФОРМУЛИ
 //   Шкода = атака × (0.85…1.15) × 100 / (100 + захист цілі)
@@ -37,7 +44,60 @@
   const SPELL_COST = 4;
   const SPELL_MULT = 1.6;
   const CRIT_MULT = 1.5;
-  const START_DISTANCE = 3;
+  const START_DISTANCE = 3;      // між передніми рядами (c 2 і c 5)
+  const FIELD = { rows: 3, cols: 8, heroCols: [0, 1, 2], gapCols: [3, 4], enemyCols: [5, 6, 7] };
+  const ROW_ORDER = [1, 0, 2];   // спершу середній рядок, потім краї
+
+  const inField = p => p && p.r >= 0 && p.r < FIELD.rows && p.c >= 0 && p.c < FIELD.cols;
+  const cellDist = (a, b) => Math.max(Math.abs(a.r - b.r), Math.abs(a.c - b.c));
+  const stepDist = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
+  const keyOf = p => p.r + ":" + p.c;
+
+  // Стовпець «за замовчуванням» для героя: ближній бій — передній (c 2), посох і лук — c 1
+  function heroPrefCol(ms) {
+    const t = RPG.ITEMS[RPG.refId(ms.equipment?.mainHand)]?.weaponType;
+    return t === "bow" || t === "staff" ? 1 : 2;
+  }
+
+  // Розстановка героїв: saved — [{ r, c }] у порядку members (може бути неповна чи з помилками).
+  // Повертає позиції в зоні групи без повторів; кому місця не дісталось — ставить автоматично.
+  function placeHeroes(members, saved = []) {
+    const used = new Set(), out = [];
+    members.forEach((ms, i) => {
+      const p = saved[i];
+      if (inField(p) && FIELD.heroCols.includes(p.c) && !used.has(keyOf(p))) {
+        out[i] = { r: p.r, c: p.c };
+        used.add(keyOf(p));
+      }
+    });
+    members.forEach((ms, i) => {
+      if (out[i]) return;
+      const pref = heroPrefCol(ms);
+      const cols = [pref, ...[2, 1, 0].filter(c => c !== pref)];
+      for (const c of cols) {
+        const r = ROW_ORDER.find(r => !used.has(r + ":" + c));
+        if (r !== undefined) { out[i] = { r, c }; used.add(r + ":" + c); break; }
+      }
+    });
+    return out;
+  }
+
+  // Автоматична розстановка ворогів: дальність 1 — c 5, 2 — c 6, 3 — c 7;
+  // якщо стовпець зайнятий — глибше, а тоді ближче до центру поля
+  function placeFoes(specs) {
+    const used = new Set();
+    return specs.map(spec => {
+      const e = RPG.enemyFromSpec ? RPG.enemyFromSpec(spec) : RPG.getEnemy(spec.id, spec.champion);
+      const range = RPG.enemyRange ? RPG.enemyRange(e) : 1;
+      const pref = FIELD.enemyCols[Math.min(2, Math.max(0, range - 1))];
+      const cols = [pref, ...FIELD.enemyCols.filter(c => c > pref), ...FIELD.enemyCols.filter(c => c < pref).reverse()];
+      for (const c of cols) {
+        const r = ROW_ORDER.find(r => !used.has(r + ":" + c));
+        if (r !== undefined) { used.add(r + ":" + c); return { r, c }; }
+      }
+      return { r: 1, c: 7 };
+    });
+  }
 
   const variance = () => 0.85 + Math.random() * 0.3;   // ±15%
   const mitigate = (damage, defense) => damage * 100 / (100 + Math.max(0, defense || 0));
@@ -66,7 +126,7 @@
       base: RPG.calcStats(ms), weapon: heroWeapon(ms),
       skillLevels: { ...(ms.character.skills || {}) }, queue, qi: 0,
       hp: Math.floor(ms.character.hp), mp: Math.floor(ms.character.mp), buffs: {}, stun: 0,
-      pos: 0
+      pos: { r: 1, c: 2 }
     };
   }
 
@@ -79,7 +139,7 @@
       dot: null, defDown: 0, atkDown: { pct: 0, turns: 0 },
       range: RPG.enemyRange ? RPG.enemyRange(enemy) : 1,
       move: RPG.enemyMove ? RPG.enemyMove(enemy) : null,
-      pos: START_DISTANCE
+      pos: { r: 1, c: 5 }
     };
   }
 
@@ -101,7 +161,7 @@
   }
 
   const speedOf = u => Math.max(0.5, u.side === "hero" ? heroNow(u).speed : (u.enemy.stats.speed || 1));
-  const dist = (H, E) => Math.max(1, E.pos - H.pos);
+  const dist = (A, B) => cellDist(A.pos, B.pos);
   const enemyDefense = E => E.enemy.stats.defense * (1 - E.defDown / 100);
   const enemyMagDef = E => E.enemy.stats.magicDefense ?? Math.floor(E.enemy.stats.defense / 2);
   const atkDownOf = E => (E.atkDown.turns > 0 ? E.atkDown.pct : 0);
@@ -271,18 +331,30 @@
   }
 
   // members — «вигляди» героїв (party.js → memberSave), живі; enemySpecs — [{ id, champion }]
+  // opts.heroPos — [{ r, c }] розстановка героїв (у порядку members); без неї — автоматична.
+  // Вороги стають за placeFoes(enemySpecs).
   // Повертає { win, draw, rounds, heroes: [{ hp, mp, dead }], enemies: [{ id, champion, name, exp }],
-  //            events, enemyIds, heroHp, heroMp, champion }
+  //            events, enemyIds, heroHp, heroMp, champion, heroPos, foePos }
   // кожна подія: { who: "hero" | "enemy" | "info" | "round", text, crit,
-  //               heroes: [{hp, mp, pos}], enemies: [{hp, mp, pos}], heroHp, heroMp, enemyHp, enemyMp }
-  function simulatePartyBattle(members, enemySpecs) {
+  //               heroes: [{hp, mp, pos: {r, c}}], enemies: [{hp, mp, pos: {r, c}}],
+  //               actor: { side: "hero" | "enemy", i } | null, target: { side, i } | null,
+  //               heroHp, heroMp, enemyHp, enemyMp }
+  function simulatePartyBattle(members, enemySpecs, opts = {}) {
     const heroes = members.map(makeHero);
     const labels = enemyLabels(enemySpecs);
     const foes = enemySpecs.map((spec, i) => makeEnemy(spec, labels[i]));
+    const heroPos = placeHeroes(members, opts.heroPos || []);
+    const foePos = placeFoes(enemySpecs);
+    heroes.forEach((h, i) => { h.pos = { ...heroPos[i] }; h.idx = i; });
+    foes.forEach((f, i) => { f.pos = { ...foePos[i] }; f.idx = i; });
     const events = [];
+    const cur = { actor: null, target: null };   // хто діє і по кому (для поля бою на сторінці)
+    const ref = u => (u ? { side: u.side, i: u.idx } : null);
     const push = ev => events.push(Object.assign(ev, {
-      heroes: heroes.map(h => ({ hp: h.hp, mp: h.mp, pos: h.pos })),
-      enemies: foes.map(f => ({ hp: f.hp, mp: f.mp, pos: f.pos })),
+      heroes: heroes.map(h => ({ hp: h.hp, mp: h.mp, pos: { ...h.pos } })),
+      enemies: foes.map(f => ({ hp: f.hp, mp: f.mp, pos: { ...f.pos } })),
+      actor: ev.actor !== undefined ? ev.actor : ref(cur.actor),
+      target: ev.target !== undefined ? ev.target : ref(cur.target),
       heroHp: heroes[0].hp, heroMp: heroes[0].mp, enemyHp: foes[0].hp, enemyMp: foes[0].mp
     }));
     const aliveH = () => heroes.filter(h => h.hp > 0);
@@ -291,9 +363,44 @@
     const minDist = () => Math.min(...aliveH().flatMap(h => aliveE().map(e => dist(h, e))));
     const multi = heroes.length > 1;
 
+    // Найближчий з тих, до кого дістає (reach); при рівній відстані — перший за списком
+    function nearestInReach(U, list, reach) {
+      let best = null, bd = Infinity;
+      for (const T of list) {
+        const d = dist(U, T);
+        if (d <= reach && d < bd) { best = T; bd = d; }
+      }
+      return best;
+    }
+    // Крок на 1 клітинку до найближчого суперника. Повертає нову відстань або null (немає куди)
+    function stepToward(U, targets) {
+      const busy = new Set([...aliveH(), ...aliveE()].filter(x => x !== U).map(x => keyOf(x.pos)));
+      const score = p => {
+        let d = Infinity, m = Infinity;
+        for (const T of targets) {
+          const cd = cellDist(p, T.pos), sd = stepDist(p, T.pos);
+          if (cd < d || (cd === d && sd < m)) { d = cd; m = sd; }
+        }
+        return [d, m];
+      };
+      const [d0, m0] = score(U.pos);
+      let best = null, bs = [d0, m0];
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        const p = { r: U.pos.r + dr, c: U.pos.c + dc };
+        if (!inField(p) || busy.has(keyOf(p))) continue;
+        const sc = score(p);
+        // лише якщо стало ближче (або так само за клітинками, але менше кроків) — без ходіння по колу
+        if (sc[0] < bs[0] || (sc[0] === bs[0] && sc[1] < bs[1])) { best = p; bs = sc; }
+      }
+      if (!best) return null;
+      U.pos = best;
+      return bs[0];
+    }
+
     const heroNames = heroes.map(h => h.name).join(", ");
     const foeNames = foes.map(f => `«${f.enemy.name}» (рівень ${f.enemy.level})${f.enemy.boss ? " — БОС" : ""}`).join(", ");
-    push({ who: "info", text: `Бій починається: ${heroNames} проти ${foeNames}. Відстань — ${START_DISTANCE}.` });
+    push({ who: "info", text: `Бій починається: ${heroNames} проти ${foeNames}. До найближчого ворога — ${minDist()} кл.` });
 
     // Хто вже походив у поточному раунді (для «Молитви зцілення» жерця)
     let roundActed = new Set();
@@ -304,11 +411,11 @@
     function heroHeal(H, act) {
       const area = act.sk.area || "self";
       let targets = [H];
-      if (area === "near") targets = aliveH().filter(a => Math.abs(a.pos - H.pos) <= 1);
+      if (area === "near") targets = aliveH().filter(a => dist(a, H) <= 1);
       else if (area === "group") targets = aliveH();
       else if (area === "wounded") {
         const w = mostWounded();
-        if (w) targets = [w];
+        if (w) { targets = [w]; cur.target = w; }
         else if (aliveE().some(E => !roundActed.has(E))) {
           // Усі здорові, а вороги ще не ходили — чекаємо першого удару
           H.healWait = act;
@@ -333,7 +440,7 @@
         if (H.mp < act.sk.mp || H.stun > 0) continue;
         H.mp -= act.sk.mp;
         H.qi++;
-        push(castHeal(H, act.sk, act.lvl, [w]));
+        push(Object.assign(castHeal(H, act.sk, act.lvl, [w]), { actor: ref(H), target: ref(w) }));
       }
     }
 
@@ -353,18 +460,14 @@
         return;
       }
       const reach = rangeOf(act, H);
-      const target = aliveE().find(E => dist(H, E) <= reach);
+      const target = nearestInReach(H, aliveE(), reach);
       if (!target) {
-        const limit = Math.min(...aliveE().map(e => e.pos)) - 1;
-        if (H.pos < limit) {
-          H.pos++;
-          const d = Math.min(...aliveE().map(e => dist(H, e)));
-          push({ who: "hero", move: true, text: `${H.name} підходить ближче (до ворога ${d})`, crit: false });
-        } else {
-          push({ who: "hero", move: true, text: `${H.name} чекає, поки ворог наблизиться`, crit: false });
-        }
+        const d = stepToward(H, aliveE());
+        if (d !== null) push({ who: "hero", move: true, text: `${H.name} просувається вперед (до ворога ${d} кл.)`, crit: false });
+        else push({ who: "hero", move: true, text: `${H.name} чекає — шлях уперед зайнятий`, crit: false });
         return;
       }
+      cur.target = target;
       H.qi++;
       if (act.type === "skill") { H.mp -= act.sk.mp; push(skillAttack(H, target, act.sk, act.lvl)); }
       else if (act.type === "spell") push(spellAttack(H, target));
@@ -381,8 +484,9 @@
         if (E.hp <= 0) { if (foes.length > 1) push({ who: "info", text: `«${E.name}» переможений.` }); return; }
       }
       E.turn++;
-      const inReach = () => aliveH().find(H => dist(H, E) <= E.range);
+      const inReach = () => nearestInReach(E, aliveH(), E.range);
       const hit = (H, ev) => {
+        cur.target = H;
         push(ev);
         if (H.hp <= 0 && multi && aliveH().length) push({ who: "info", text: `${H.name} падає без сил…` });
         answerWaitingHealers();
@@ -412,12 +516,8 @@
 
       const H = inReach();
       if (!H) {
-        const limit = Math.max(...aliveH().map(h => h.pos)) + 1;
-        if (E.pos > limit) {
-          E.pos--;
-          const d = Math.min(...aliveH().map(h => dist(h, E)));
-          push({ who: "enemy", move: true, text: `${E.name} наближається (відстань ${d})`, crit: false });
-        }
+        const d = stepToward(E, aliveH());
+        if (d !== null) push({ who: "enemy", move: true, text: `${E.name} наближається (до героя ${d} кл.)`, crit: false });
         return;
       }
       const sp = E.enemy.spell;
@@ -430,15 +530,17 @@
     let round = 0;
     while (going() && round < MAX_ROUNDS) {
       round++;
-      push({ who: "round", text: `Раунд ${round} · відстань ${minDist()}` });
+      push({ who: "round", text: `Раунд ${round} · до найближчого ворога ${minDist()} кл.` });
       const acted = new Set();
       roundActed = acted;
       for (const slot of roundSchedule([...aliveH(), ...aliveE()])) {
         if (!going()) break;
         const u = slot.u;
         if (u.hp <= 0) continue;
+        cur.actor = u; cur.target = null;
         if (u.side === "hero") heroTurn(u);
         else enemyTurn(u, !acted.has(u));
+        cur.actor = cur.target = null;
         acted.add(u);
       }
       // Кінець раунду — бафи й послаблення слабшають; жрець, що так і не дочекався удару, перестає чекати
@@ -467,7 +569,8 @@
       enemies: foes.map(f => ({ id: f.id, champion: f.champion, name: f.enemy.name, exp: f.enemy.exp })),
       enemyIds: foes.map(f => f.id),
       heroHp: heroes[0].hp, heroMp: heroes[0].mp,
-      champion: foes.some(f => f.champion)
+      champion: foes.some(f => f.champion),
+      heroPos, foePos
     };
   }
 
@@ -512,5 +615,6 @@
     return specs;
   }
 
-  Object.assign(RPG, { simulateBattle, simulatePartyBattle, rollEnemyGroup, enemyGroupCap, enemyGroupRange, roundSchedule, BATTLE_START_DISTANCE: START_DISTANCE });
+  Object.assign(RPG, { simulateBattle, simulatePartyBattle, rollEnemyGroup, enemyGroupCap, enemyGroupRange, roundSchedule, BATTLE_START_DISTANCE: START_DISTANCE,
+    BATTLE_FIELD: FIELD, placeHeroes, placeFoes });
 })(window.RPG);
