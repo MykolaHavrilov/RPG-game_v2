@@ -2,7 +2,7 @@
 // HTML / JS / CSS: спершу мережа (щоб оновлення гри підтягувались одразу),
 // а без інтернету — з кешу. Картинки: спершу кеш.
 // Після великих змін можна збільшити номер версії — старий кеш видалиться.
-const CACHE = "rpg-game-v71";
+const CACHE = "rpg-game-v72";
 const PRECACHE = [
   "./",
   "./assets/css/game.css",
@@ -19,6 +19,14 @@ const PRECACHE = [
   "./assets/icons/icon-maskable-512.png",
   "./assets/images/ENEMIES_1.webp",
   "./assets/images/Heroes_start.webp",
+  "./assets/images/book/book_flip_many_next.webp",
+  "./assets/images/book/book_flip_many_prev.webp",
+  "./assets/images/book/book_flip_next.webp",
+  "./assets/images/book/book_flip_prev.webp",
+  "./assets/images/book/book_open.webp",
+  "./assets/images/book/book_restore.webp",
+  "./assets/images/book/book_spread.webp",
+  "./assets/images/book/book_spread_torn.webp",
   "./assets/images/heroes/hero_peasant.webp",
   "./assets/images/items/icon_axe_t1.webp",
   "./assets/images/items/icon_axe_t2.webp",

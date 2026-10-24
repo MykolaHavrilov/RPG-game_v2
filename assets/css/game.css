@@ -892,6 +892,118 @@ main > a.location { display: flex; margin-bottom: 10px; }
   .chronicle-close { top: -8px; right: -8px; }
 }
 
+/* ---------- 2.5D-книга з рендерів Blender (assets/images/book/, game.js → showChronicle) ----------
+   Картинка розвороту 1600×1000; видима частина (вікно) — 78% × 90% картинки, тому підкладка .book-plate
+   більша за вікно й зсунута. Текст тече двома колонками (= ліва й права сторінки) і гортається розворотами;
+   колонки нахилено перспективою так само, як сторінки на картинці. Розміри колонок і шрифту рахує game.js. */
+.book-plate, .book-anim-layer { display: none; }
+.book-anim-layer.is-active { display: block; position: absolute; inset: 0; z-index: 4; cursor: pointer; }
+.book-anim { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.chronicle-book.is-opening > :not(.book-plate):not(.book-anim-layer) { visibility: hidden; }
+.chronicle-book.is-opening { background: none; border-color: transparent; border-image: none; box-shadow: none; }
+.chronicle-dialog .chronicle-close { z-index: 6; }  /* хрестик — над анімаціями книги */
+.chronicle-epigraph { margin: 10px 4px 16px; font-style: italic; text-align: center; color: #6b4a28; line-height: 1.45; }
+
+@media (min-width: 701px) {
+  .chronicle-dialog.is-3d {
+    width: min(1400px, calc(100vw - 24px), calc((100vh - 40px) * 1.3867));
+    width: min(1400px, calc(100vw - 24px), calc((100dvh - 40px) * 1.3867));
+    height: auto; aspect-ratio: 1248 / 900;
+  }
+  .is-3d .chronicle-book {
+    display: block; height: 100%; overflow: visible; border: 0; border-image: none; border-radius: 0;
+    box-shadow: none; background: none; color: #26140a;
+  }
+  .is-3d .book-plate {
+    display: block; position: absolute; left: -14.1%; top: -7.78%; width: 128.2%; height: 111.1%;
+    background: center / 100% 100% no-repeat; pointer-events: none;
+    filter: drop-shadow(0 20px 40px rgba(0, 0, 0, .55));
+  }
+  .is-3d .book-anim-layer.is-active { inset: auto; left: -14.1%; top: -7.78%; width: 128.2%; height: 111.1%; }
+  .is-3d .chronicle-book.is-opening .book-plate { visibility: hidden; }
+
+  /* обидві сторінки: від лівого до правого поля розвороту */
+  .is-3d .book-spread {
+    position: absolute; left: 6.67%; top: .9%; width: 86.67%; height: 88%; z-index: 1;
+    transform-origin: 50% 100%; transition: opacity .22s ease;
+  }
+  .is-3d .book-flow {
+    height: 100%; overflow: hidden; column-fill: auto;
+    font-family: var(--font-head); font-weight: 600; line-height: 1.42; color: #26140a;
+    text-shadow: 0 0 .5px rgba(38, 20, 10, .35);
+  }
+  .is-3d .book-flow > *:first-child, .is-3d .book-flow .chronicle-entry:first-child { margin-top: 0; }
+  .is-3d .book-flow .chronicle-p { margin: 0 0 .6em; text-indent: 1.4em; text-align: justify; hyphens: auto; orphans: 2; widows: 2; }
+  .is-3d .book-flow .chronicle-p.is-initial { text-indent: 0; }
+  .is-3d .book-flow .chronicle-p.is-initial::first-letter { font-size: 3.1em; padding: .08em .1em 0 0; color: #7a1f14; }
+  .is-3d .book-flow .chronicle-title {
+    margin: .2em 0 .5em; font-size: 1.55em; line-height: 1.2; color: #5a140c;
+    text-shadow: 0 1px 0 rgba(255, 230, 180, .3); break-after: avoid;
+  }
+  .is-3d .book-flow .chronicle-title::after {
+    content: "❦"; display: block; margin-top: .25em; font-family: var(--font-head); font-size: .6em; color: #7a1f14;
+  }
+  .is-3d .book-flow .chronicle-region { margin: -.4em 0 .9em; font-weight: 500; color: #4e3016; break-after: avoid; }
+  .is-3d .book-flow .chronicle-sub { font-size: 1.15em; color: #4a160c; break-after: avoid; }
+  .is-3d .book-flow .chronicle-date, .is-3d .book-flow .chronicle-note { font-size: .88em; font-weight: 500; color: #4e3016; }
+  .is-3d .book-flow .chronicle-roster { font-size: .92em; color: #3a210c; break-inside: avoid; }
+  .is-3d .book-flow .chronicle-entry { margin: 1em 0; padding-top: .7em; border-top-color: rgba(70, 35, 12, .35); }
+  .is-3d .book-flow .chronicle-mark { font-size: .9em; break-inside: avoid; }
+  .is-3d .book-flow .chronicle-blank { font-weight: 500; color: rgba(58, 33, 12, .6); }
+  .is-3d .book-flow .chronicle-end, .is-3d .book-flow .chronicle-ending { break-inside: avoid; }
+  /* зміст — перший розворот */
+  .is-3d .book-flow .chronicle-cover {
+    margin: 1.2em 0 .4em; padding: 0 0 .6em; font-size: 1.55em; line-height: 1.25; color: #5a140c;
+    border-bottom: 1px solid rgba(90, 20, 12, .4);
+  }
+  .is-3d .book-flow .chronicle-epigraph { font-size: .95em; font-weight: 500; color: #4e3016; }
+  .is-3d .book-flow .chronicle-toc-list { display: flex; flex-direction: column; gap: .15em; }
+  .is-3d .book-flow .chronicle-toc-item { font-size: 1.05em; font-weight: 700; color: #3a210c; padding: .35em .5em; }
+  .is-3d .book-flow .chronicle-toc-item.is-sealed { font-weight: 500; color: rgba(58, 33, 12, .5); }
+  /* вирвана сторінка: зліва — назва й примітка, справа текст іде після обгорілих корінців */
+  .is-3d .book-flow .chronicle-torn {
+    margin: 2.5em .5em 0; font-weight: 500; color: #4e3016; background: none;
+    border-color: rgba(70, 30, 10, .45);
+  }
+  .is-3d .book-col-break { break-before: column; height: 0; }
+  .is-3d .book-flow .book-vignette {
+    margin-top: 38%; text-align: center; font-size: 3.2em; line-height: 1; color: rgba(122, 31, 20, .55);
+  }
+  .is-3d .book-flow .book-vignette-text { margin: .6em 1.5em 0; text-align: center; font-style: italic; font-weight: 500; color: #4e3016; }
+  .is-3d .book-torn-spacer { float: left; width: calc(var(--book-colw, 400px) * .15); height: var(--book-colh, 400px); }
+  /* відновлені абзаци: чорнило проступає золотом (без жовтих плашок) */
+  .is-3d .book-flow .chronicle-p.is-restored { animation: chronicle-ink 3.4s ease-out both; background: none; }
+  @keyframes chronicle-ink {
+    0%   { color: rgba(255, 200, 90, 0); text-shadow: 0 0 14px rgba(255, 190, 70, 0); }
+    30%  { color: #f6c25a; text-shadow: 0 0 10px rgba(255, 190, 70, .95), 0 0 2px #fff2c8; }
+    100% { color: #26140a; text-shadow: 0 0 .5px rgba(38, 20, 10, .35); }
+  }
+
+  /* низ сторінок: номери, гортання, зміст */
+  .is-3d .book-foot {
+    position: absolute; top: 89.6%; height: 4.4%; width: 36%; z-index: 2;
+    display: flex; align-items: center; gap: .6em; transition: opacity .22s ease;
+    font-family: var(--font-head); font-weight: 700; color: #4e3016;
+  }
+  .is-3d .book-foot.is-left { left: 8.5%; }
+  .is-3d .book-foot.is-right { left: 55.5%; justify-content: flex-end; }
+  .is-3d .book-num { flex: 1; text-align: center; font-size: .95rem; letter-spacing: .05em; }
+  .is-3d .book-turn, .is-3d .book-tocbtn {
+    border: 0; background: none; cursor: pointer; padding: .1em .45em; border-radius: 4px;
+    font-family: var(--font-head); font-weight: 700; color: #5a140c;
+  }
+  .is-3d .book-turn { font-size: 1.5rem; line-height: 1; }
+  .is-3d .book-tocbtn { font-size: .95rem; }
+  .is-3d .book-turn:hover, .is-3d .book-tocbtn:hover,
+  .is-3d .book-turn:focus-visible, .is-3d .book-tocbtn:focus-visible { background: rgba(90, 20, 12, .14); outline: none; }
+  .is-3d .book-turn:disabled { opacity: .25; cursor: default; background: none; }
+  .is-3d .chronicle-book.is-turning > .book-spread, .is-3d .chronicle-book.is-turning > .book-foot { opacity: 0; }
+  .is-3d .chronicle-close { top: 1%; right: 1%; }
+}
+@media (max-width: 700px) {
+  .book-anim-layer.is-active { background: rgba(5, 3, 2, .6); }
+}
+
 /* ---------- Обірваний пергамент (Домівка, game.js → showParchment) ---------- */
 .parchment-hint { margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(201, 163, 90, .3); }
 .parchment-dialog {

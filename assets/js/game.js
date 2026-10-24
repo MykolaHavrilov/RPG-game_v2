@@ -248,88 +248,337 @@
   }
 
   // ---------- Книга «Предки Минулих та Майбутніх часів» (data/chronicle.js) ----------
-  // Вікно-книга з пергаменту: зміст ліворуч (на телефоні — зверху), сторінка праворуч.
-  function showChronicle(save, startKey = "prologue", opts = {}) {
+  // 2.5D-книга з рендерів Blender (assets/images/book/): на широкому екрані — розворот,
+  // зміст на лівій сторінці, текст глави — на правій; анімації відкриття, гортання й відновлення.
+  // На телефоні (≤700px) — пергаментна книга як раніше: зміст зверху, сторінка знизу
+  // (програються лише анімації відкриття й відновлення).
+  const BOOK = {
+    dir: "assets/images/book/",
+    spread: "book_spread.webp",            // розворот (чисті сторінки)
+    torn: "book_spread_torn.webp",         // розворот з обгорілими корінцями вирваної сторінки
+    // [файл, тривалість у мс] — анімації програються один раз і зупиняються на останньому кадрі
+    anims: {
+      open: ["book_open.webp", 2700],
+      next: ["book_flip_next.webp", 1350],
+      prev: ["book_flip_prev.webp", 1350],
+      manyNext: ["book_flip_many_next.webp", 2020],
+      manyPrev: ["book_flip_many_prev.webp", 2020],
+      restore: ["book_restore.webp", 4710]
+    }
+  };
+
+  const bookMotionOff = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const bookWide = () => !window.matchMedia("(max-width: 700px)").matches;
+  const bookBlobs = {};
+  // URL, з якого анімація гарантовано стартує з першого кадру (кожен показ — новий URL)
+  async function bookAnimUrl(file) {
+    const url = RPG.asset(BOOK.dir + file);
+    if (location.protocol !== "file:") {
+      try {
+        if (!bookBlobs[file]) {
+          const r = await fetch(url);
+          if (!r.ok) throw new Error(r.status);
+          bookBlobs[file] = await r.blob();
+        }
+        return URL.createObjectURL(bookBlobs[file]);
+      } catch (e) { /* без мережі й кешу — звичайне посилання */ }
+    }
+    return url + (url.includes("?") ? "&" : "?") + "play=" + Date.now();
+  }
+  // Програти анімацію в шарі layer. onShow — коли з'явився перший кадр.
+  // Повертає <img> на останньому кадрі (прибрати його — справа викликача) або null.
+  function playBookAnim(layer, name, onShow) {
+    const [file, ms] = BOOK.anims[name];
+    return new Promise(resolve => {
+      if (bookMotionOff()) return resolve(null);
+      const img = new Image();
+      img.className = "book-anim";
+      img.alt = "";
+      let done = false, timer = 0, shown = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        layer.classList.remove("is-active");
+        layer.removeEventListener("click", finish);
+        resolve(shown ? img : null);
+      };
+      img.onload = () => {
+        if (done) return;
+        shown = true;
+        layer.append(img);
+        layer.classList.add("is-active");
+        if (onShow) onShow(img);
+        timer = setTimeout(finish, ms);
+      };
+      img.onerror = finish;
+      layer.addEventListener("click", finish);          // клік — пропустити анімацію
+      timer = setTimeout(finish, 6000);                 // повільне завантаження — не чекаємо
+      bookAnimUrl(file).then(src => { img.src = src; });
+    });
+  }
+  function dropBookAnim(img) {
+    if (!img) return;
+    if (img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+    img.remove();
+  }
+
+  // Вміст розділу книги: "toc" — зміст, "prologue" — Пролог, інакше — глава (id з CHAPTERS).
+  // go(key) — перехід на розділ (для кнопок змісту), glow — золоте сяйво відновлених абзаців.
+  function chronicleSection(save, key, { go, glow = false, torn = false, paged = false } = {}) {
     const C = RPG.CHRONICLE;
+    const frag = document.createDocumentFragment();
+    const add = (...nodes) => nodes.forEach(n => frag.append(n));
+    if (key === "toc") {
+      add(el("div", "chronicle-cover", C.TITLE));
+      add(el("p", "chronicle-epigraph",
+        "Ніхто не пише в ній чорнилом: щойно герой здолає великого ворога, сторінки наповнюються самі."));
+      const list = el("nav", "chronicle-toc-list");
+      for (const c of RPG.chronicleContents(save)) {
+        if (!c.open) { list.append(el("span", "chronicle-toc-item is-sealed", `${c.title} — запечатано`)); continue; }
+        list.append(button(c.title, "chronicle-toc-item", () => go(c.key)));
+      }
+      add(list);
+      // Права сторінка змісту — віньєтка (лише в книзі-розвороті)
+      if (paged) add(el("div", "book-col-break"), el("div", "book-vignette", "❦"),
+        el("p", "book-vignette-text", "Так нащадки знатимуть, хто проливав кров, щоб зупинити кров Іггдрасиля."));
+      return frag;
+    }
+    if (key === "prologue") {
+      const pr = RPG.prologueFor(save);
+      add(el("h2", "chronicle-title", C.PROLOGUE.title));
+      if (pr.torn) {
+        add(el("p", "chronicle-torn", "Перших сторінок Прологу бракує — їх вирвано, лишилися тільки обгорілі корінці."));
+        // У книзі-розвороті корінці вирваної сторінки — на правій сторінці: текст продовжується вже після них
+        if (paged && torn) add(el("div", "book-col-break"), el("div", "book-torn-spacer"));
+      }
+      pr.paras.forEach((p, i) => {
+        const restored = glow && i < C.PARCHMENT.paras.length;
+        add(el("p", "chronicle-p" + (i === 0 && !pr.torn ? " is-initial" : "") + (restored ? " is-restored" : ""), p));
+      });
+      return frag;
+    }
+    const ch = C.CHAPTERS.find(c => c.id === key);
+    add(el("h2", "chronicle-title", ch.title), el("p", "chronicle-region", ch.region));
+    add(el("p", "chronicle-p is-initial", ch.intro));
+    ch.bosses.forEach(b => {
+      const e = RPG.chronicleEntry(save, b.dungeon);
+      const sec = el("section", "chronicle-entry");
+      if (!e) {
+        sec.append(el("p", "chronicle-blank", "Ця сторінка ще чиста. Її напише перемога, якої поки не було…"));
+        add(sec);
+        return;
+      }
+      const t = RPG.chronicleBossEntry(b.dungeon, e);
+      sec.append(el("h3", "chronicle-sub", t.title), el("p", "chronicle-date", t.date));
+      const roster = el("ul", "chronicle-roster");
+      t.roster.forEach(r => roster.append(el("li", null, r)));
+      sec.append(roster);
+      t.lines.forEach(l => sec.append(el("p", "chronicle-p", l)));
+      if (t.wins > 1) sec.append(el("p", "chronicle-note", `Відтоді цей данж пройдено ще ${t.wins - 1} раз(ів).`));
+      sec.append(el("p", "chronicle-mark" + (b.final ? " is-final" : ""), `✦ ${b.mark} ✦`));
+      add(sec);
+    });
+    if (ch.bosses.every(b => RPG.chronicleEntry(save, b.dungeon))) {
+      add(el("p", "chronicle-p chronicle-ending", ch.ending), el("p", "chronicle-end", "— Кінець глави —"));
+    }
+    return frag;
+  }
+
+  function showChronicle(save, startKey = "prologue", opts = {}) {
     document.querySelector(".chronicle-dialog")?.remove();
-    const dlg = el("dialog", "chronicle-dialog");
+    const wide = bookWide();
+    const dlg = el("dialog", "chronicle-dialog" + (wide ? " is-3d" : ""));
+    dlg.lang = "uk";
     const close = button("×", "notice-close chronicle-close", () => dlg.close());
     close.setAttribute("aria-label", "Закрити книгу");
     const book = el("div", "chronicle-book");
-    const toc = el("nav", "chronicle-toc");
-    const page = el("article", "chronicle-page");
-    book.append(toc, page);
+    const plate = el("div", "book-plate");          // картинка розвороту
+    const layer = el("div", "book-anim-layer");     // анімації поверх книги
+    book.append(plate);
     dlg.append(close, book);
-    let key = startKey;
+    const restoring = !!opts.restoring;
+    let busy = false;
+    const reveal = wide ? initPaged() : initScroll();
+    book.append(layer);
 
-    const openKeys = () => RPG.chronicleContents(save).filter(c => c.open).map(c => c.key);
-
-    function drawToc() {
-      toc.innerHTML = "";
-      toc.append(el("div", "chronicle-cover", C.TITLE));
-      for (const c of RPG.chronicleContents(save)) {
-        if (!c.open) { toc.append(el("span", "chronicle-toc-item is-sealed", `${c.title} — запечатано`)); continue; }
-        const b = button(c.title, "chronicle-toc-item" + (c.key === key ? " is-current" : ""), () => { key = c.key; draw(); });
-        toc.append(b);
-      }
-    }
-
-    function drawPage() {
-      page.innerHTML = "";
-      if (key === "prologue") {
-        const pr = RPG.prologueFor(save);
-        page.append(el("h2", "chronicle-title", C.PROLOGUE.title));
-        if (pr.torn) page.append(el("p", "chronicle-torn", "Перших сторінок Прологу бракує — їх вирвано, лишилися тільки обгорілі корінці."));
-        const restoring = opts.restoring;
-        opts.restoring = false;          // сяйво — лише при першому показі
-        pr.paras.forEach((p, i) => {
-          const restored = restoring && i < C.PARCHMENT.paras.length;
-          page.append(el("p", "chronicle-p" + (i === 0 && !pr.torn ? " is-initial" : "") + (restored ? " is-restored" : ""), p));
-        });
-      } else {
-        const ch = C.CHAPTERS.find(c => c.id === key);
-        page.append(el("h2", "chronicle-title", ch.title), el("p", "chronicle-region", ch.region));
-        page.append(el("p", "chronicle-p is-initial", ch.intro));
-        ch.bosses.forEach((b, i) => {
-          const e = RPG.chronicleEntry(save, b.dungeon);
-          const sec = el("section", "chronicle-entry");
-          if (!e) {
-            sec.append(el("p", "chronicle-blank", "Ця сторінка ще чиста. Її напише перемога, якої поки не було…"));
-            page.append(sec);
-            return;
-          }
-          const t = RPG.chronicleBossEntry(b.dungeon, e);
-          sec.append(el("h3", "chronicle-sub", t.title), el("p", "chronicle-date", t.date));
-          const roster = el("ul", "chronicle-roster");
-          t.roster.forEach(r => roster.append(el("li", null, r)));
-          sec.append(roster);
-          t.lines.forEach(l => sec.append(el("p", "chronicle-p", l)));
-          if (t.wins > 1) sec.append(el("p", "chronicle-note", `Відтоді цей данж пройдено ще ${t.wins - 1} раз(ів).`));
-          sec.append(el("p", "chronicle-mark" + (b.final ? " is-final" : ""), `✦ ${b.mark} ✦`));
-          page.append(sec);
-        });
-        if (ch.bosses.every(b => RPG.chronicleEntry(save, b.dungeon))) {
-          page.append(el("p", "chronicle-p chronicle-ending", ch.ending), el("p", "chronicle-end", "— Кінець глави —"));
+    // ---------- Телефон: зміст зверху, сторінка з прокруткою (як раніше) ----------
+    function initScroll() {
+      const toc = el("nav", "chronicle-toc");
+      const page = el("article", "chronicle-page");
+      book.append(toc, page);
+      let key = startKey, glow = restoring;
+      const keys = () => RPG.chronicleContents(save).filter(c => c.open).map(c => c.key);
+      const go = k => { key = k; draw(); };
+      function draw() {
+        toc.innerHTML = "";
+        toc.append(el("div", "chronicle-cover", RPG.CHRONICLE.TITLE));
+        for (const c of RPG.chronicleContents(save)) {
+          if (!c.open) { toc.append(el("span", "chronicle-toc-item is-sealed", `${c.title} — запечатано`)); continue; }
+          toc.append(button(c.title, "chronicle-toc-item" + (c.key === key ? " is-current" : ""), () => go(c.key)));
         }
+        page.innerHTML = "";
+        page.append(chronicleSection(save, key, { go, glow }));
+        glow = false;
+        const ks = keys(), i = ks.indexOf(key);
+        const nav = el("div", "row chronicle-nav");
+        const prev = button("◂ Попередня", "wf wf-link", () => go(ks[i - 1]));
+        const next = button("Наступна ▸", "wf wf-link", () => go(ks[i + 1]));
+        prev.disabled = i <= 0;
+        next.disabled = i >= ks.length - 1;
+        nav.append(prev, next);
+        page.append(nav);
+        page.scrollTop = 0;
       }
-      // Гортання
-      const keys = openKeys();
-      const i = keys.indexOf(key);
-      const nav = el("div", "row chronicle-nav");
-      const prev = button("◂ Попередня", "wf wf-link", () => { key = keys[i - 1]; draw(); });
-      const next = button("Наступна ▸", "wf wf-link", () => { key = keys[i + 1]; draw(); });
-      prev.disabled = i <= 0;
-      next.disabled = i >= keys.length - 1;
-      nav.append(prev, next);
-      page.append(nav);
-      page.scrollTop = 0;
+      return draw;
     }
 
-    function draw() { drawToc(); drawPage(); }
+    // ---------- Широкий екран: розворот, текст тече по двох сторінках, гортання розворотами ----------
+    // Розділи: зміст + відкриті Пролог і глави. Кожен розділ починається з нового розвороту.
+    function initPaged() {
+      const spread = el("div", "book-spread");     // обидві сторінки (з перспективою під картинку)
+      const flow = el("div", "book-flow");         // колонки = сторінки
+      spread.append(flow);
+      const footL = el("div", "book-foot is-left"), footR = el("div", "book-foot is-right");
+      const prevB = button("◂", "book-turn", () => turn(-1));
+      const nextB = button("▸", "book-turn", () => turn(1));
+      prevB.setAttribute("aria-label", "Попередній розворот");
+      nextB.setAttribute("aria-label", "Наступний розворот");
+      const tocB = button("Зміст", "book-tocbtn", () => jump("toc", 0));
+      const numL = el("span", "book-num"), numR = el("span", "book-num");
+      footL.append(prevB, numL, tocB);
+      footR.append(numR, nextB);
+      book.append(spread, footL, footR);
+
+      const sections = () => ["toc", ...RPG.chronicleContents(save).filter(c => c.open).map(c => c.key)];
+      let secs = sections();
+      let key = secs.includes(startKey) ? startKey : "prologue";
+      let sp = 0;                                  // розворот усередині розділу
+      let counts = {};                             // розділ → кількість розворотів
+      let glow = restoring;
+      let geo = null;
+      const isTornSpread = () => key === "prologue" && sp === 0 && RPG.prologueFor(save).torn;
+
+      function measure() {
+        const w = book.clientWidth, h = book.clientHeight;
+        if (!w || !h) return false;
+        // Перспектива: верх сторінок на картинці вужчий за низ (≈0.936) — нахиляємо текст так само
+        const sh = h * 0.88;
+        spread.style.transform = `perspective(${(sh * 2.5).toFixed(1)}px) rotateX(9.85deg)`;
+        const W = spread.clientWidth;
+        const colW = W * (39.49 / 86.67), gap = W - 2 * colW;
+        const fs = Math.max(13, Math.min(19, w * 0.0152));
+        flow.style.columnCount = "2";              // (не column-width: при точному збігу ширин браузер дає 1 колонку)
+        flow.style.columnGap = gap + "px";
+        flow.style.fontSize = fs + "px";
+        geo = { W, colW, gap, H: flow.clientHeight };
+        dlg.style.setProperty("--book-colh", geo.H + "px");
+        dlg.style.setProperty("--book-colw", colW + "px");
+        return true;
+      }
+      function fill(k) {
+        flow.innerHTML = "";
+        flow.append(chronicleSection(save, k, { go: kk => jump(kk, 0), glow: k === "prologue" && glow, torn: true, paged: true }));
+        flow.scrollLeft = 0;
+        const cols = Math.max(1, Math.round((flow.scrollWidth + geo.gap) / (geo.colW + geo.gap)));
+        return Math.ceil(cols / 2);
+      }
+      function layout() {
+        if (!measure()) return;
+        secs = sections();
+        counts = {};
+        for (const k of secs) counts[k] = fill(k);
+        sp = Math.min(sp, counts[key] - 1);
+        show();
+      }
+      // Номер сторінки по всій книзі (зміст без номерів, Пролог починається зі сторінки 1)
+      function pageNo() {
+        let n = 0;
+        for (const k of secs) {
+          if (k === key) break;
+          if (k !== "toc") n += counts[k] * 2;
+        }
+        return key === "toc" ? 0 : n + sp * 2 + 1;
+      }
+      function show() {
+        fill(key);
+        if (key === "prologue") glow = false;
+        flow.scrollLeft = sp * (geo.W + geo.gap);
+        const p = pageNo();
+        numL.textContent = p ? String(p) : "";
+        numR.textContent = p ? String(p + 1) : "";
+        const gi = globalIndex(key, sp);
+        prevB.disabled = gi <= 0;
+        nextB.disabled = gi >= totalSpreads() - 1;
+        tocB.hidden = key === "toc";
+        plate.style.backgroundImage = `url("${RPG.asset(BOOK.dir + (isTornSpread() ? BOOK.torn : BOOK.spread))}")`;
+      }
+      const totalSpreads = () => secs.reduce((a, k) => a + (counts[k] || 1), 0);
+      function globalIndex(k, s) {
+        let n = 0;
+        for (const kk of secs) { if (kk === k) return n + s; n += counts[kk] || 1; }
+        return n;
+      }
+      function fromGlobal(g) {
+        for (const k of secs) { const c = counts[k] || 1; if (g < c) return [k, g]; g -= c; }
+        const last = secs[secs.length - 1];
+        return [last, (counts[last] || 1) - 1];
+      }
+      async function jump(k, s) {
+        if (busy) return;
+        const from = globalIndex(key, sp), to = globalIndex(k, s);
+        if (from === to) return;
+        if (bookMotionOff()) { key = k; sp = s; show(); return; }
+        busy = true;
+        book.classList.add("is-turning");
+        const fwd = to > from, many = Math.abs(to - from) > 1;
+        const img = await playBookAnim(layer, many ? (fwd ? "manyNext" : "manyPrev") : (fwd ? "next" : "prev"),
+          () => { plate.style.backgroundImage = `url("${RPG.asset(BOOK.dir + BOOK.spread)}")`; });
+        key = k; sp = s;
+        show();
+        dropBookAnim(img);
+        book.classList.remove("is-turning");
+        busy = false;
+      }
+      function turn(d) {
+        const g = globalIndex(key, sp) + d;
+        if (g < 0 || g >= totalSpreads()) return;
+        const [k, s] = fromGlobal(g);
+        jump(k, s);
+      }
+      dlg.addEventListener("keydown", e => {
+        if (e.key === "ArrowRight") { e.preventDefault(); turn(1); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); turn(-1); }
+      });
+      let rz = 0;
+      const ro = new ResizeObserver(() => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { if (!busy) layout(); }); });
+      dlg.addEventListener("close", () => ro.disconnect());
+      return () => { layout(); ro.observe(book); };
+    }
+
+    // Відкриття книги (і, якщо віддали пергамент, — зрощення сторінки), потім текст
+    async function intro() {
+      if (bookMotionOff()) { reveal(); return; }
+      busy = true;
+      book.classList.add("is-opening");
+      if (wide) plate.style.backgroundImage = `url("${RPG.asset(BOOK.dir + (restoring ? BOOK.torn : BOOK.spread))}")`;
+      let img = await playBookAnim(layer, "open");
+      if (restoring && dlg.isConnected) {
+        const prevImg = img;
+        img = await playBookAnim(layer, "restore", () => dropBookAnim(prevImg));
+        if (!img) dropBookAnim(prevImg);
+      }
+      if (!dlg.isConnected) return;
+      busy = false;
+      book.classList.remove("is-opening");
+      reveal();
+      dropBookAnim(img);
+    }
+
     dlg.addEventListener("close", () => dlg.remove());
     document.body.append(dlg);
-    draw();
     dlg.showModal();
+    intro();
   }
 
   // ---------- Здобич на полі бою (save.fieldLoot) ----------
