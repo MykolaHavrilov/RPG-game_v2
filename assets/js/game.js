@@ -569,7 +569,7 @@
       const face = el("span", "party-face");
       Object.assign(face.style, RPG.heroSpriteStyle(ms.character.classId));
       const info = el("div", "party-info");
-      info.append(el("strong", null, `${ms.character.name} · рів. ${ms.character.level}${dead ? " · полеглий" : ""}`));
+      info.append(el("strong", null, `${ms.character.name} · рів. ${ms.character.level}${dead ? (RPG.heroGender(ms) === "f" ? " · полегла" : " · полеглий") : ""}`));
       const hp = miniBar("bar-hp", "HP", "party-hp-" + i), mp = miniBar("bar-mp", "MP", "party-mp-" + i);
       setBar(hp, ms.character.hp, st.hp);
       setBar(mp, ms.character.mp, st.mp);
@@ -1576,13 +1576,14 @@
         const r = el("div", "shop-row");
         const dead = RPG.isMemberDead(ms);
         r.append(el("span", "shop-name", `${ms.character.name} — ${RPG.getClass(ms.character.classId).name}, рівень ${ms.character.level}` +
-          (i === 0 ? " · головний герой" : "") + (dead ? " · полеглий" : "")));
+          (i === 0 ? (RPG.heroGender(ms) === "f" ? " · головна героїня" : " · головний герой") : "") +
+          (dead ? (RPG.heroGender(ms) === "f" ? " · полегла" : " · полеглий") : "")));
         if (i > 0) {
           r.append(button("Відпустити", "wf wf-secondary", async () => {
-            if (!confirm(`Відпустити ${ms.character.name}? Його речі перейдуть у спільний інвентар, внесок не повертається.`)) return;
+            if (!confirm(`Відпустити ${ms.character.name}? ${RPG.gw(ms, "Його", "Її")} речі перейдуть у спільний інвентар, внесок не повертається.`)) return;
             const res = RPG.dismissMember(save, i);
             await RPG.saveGame(save);
-            showMsg(msg, res.ok ? `${res.name} покидає групу. Його речі — в інвентарі.` : res.reason, !res.ok);
+            showMsg(msg, res.ok ? `${res.name} покидає групу. ${RPG.gw(ms, "Його", "Її")} речі — в інвентарі.` : res.reason, !res.ok);
             renderAll();
           }));
         }

@@ -129,6 +129,7 @@
     if (!queue.length) queue.push("attack");
     return {
       side: "hero", ms, name: ms.character.name, classId: ms.character.classId,
+      g: RPG.heroGender ? RPG.heroGender(ms) : "m",      // стать — для тексту журналу бою
       base: RPG.calcStats(ms), weapon: heroWeapon(ms),
       skillLevels: { ...(ms.character.skills || {}) }, queue, qi: 0,
       hp: Math.floor(ms.character.hp), mp: Math.floor(ms.character.mp), buffs: {}, stun: 0,
@@ -606,7 +607,7 @@
     function heroTurn(H) {
       if (H.stun > 0) {
         H.stun--;
-        push({ who: "hero", text: `${H.name} застряг у слизу й пропускає хід`, crit: false, sound: "squish" });
+        push({ who: "hero", text: `${H.name} ${H.g === "f" ? "застрягла" : "застряг"} у слизу й пропускає хід`, crit: false, sound: "squish" });
         return;
       }
       const act = resolveAction(H);
@@ -675,7 +676,7 @@
           const H = inReach();
           if (H) {
             const ev = enemyMagicHit(E, H, sk.name, sk.mp, sk.mult || 1);
-            if (sk.kind === "stun" && H.hp > 0) { H.stun = 1; ev.text += `, ${H.name} застряг у слизу й пропустить хід`; }
+            if (sk.kind === "stun" && H.hp > 0) { H.stun = 1; ev.text += `, ${H.name} ${H.g === "f" ? "застрягла" : "застряг"} у слизу й пропустить хід`; }
             hit(H, ev);
             return;
           }
@@ -729,7 +730,7 @@
     const many = foes.length > 1;
     if (win) push({ who: "info", text: `${many ? "Усіх ворогів" : `«${foes[0].enemy.name}»`} переможено за ${round} раунд(ів).` });
     else if (draw) push({ who: "info", text: `${many ? "Вороги втекли" : `«${foes[0].enemy.name}» втік`} із бою.` });
-    else push({ who: "info", text: multi ? "Уся група загинула…" : `${heroes[0].name} загинув…` });
+    else push({ who: "info", text: multi ? "Уся група загинула…" : `${heroes[0].name} ${heroes[0].g === "f" ? "загинула" : "загинув"}…` });
 
     return {
       win, draw, rounds: round, events,
