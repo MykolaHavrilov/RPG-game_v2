@@ -44,9 +44,20 @@ function maxItemLoss(level) {
   return RPG.randInt(3, 4);          // 30+ — від 3 до 4
 }
 
+// ---------- Стать героя (поки впливає лише на текст розмов і літопису) ----------
+// save.character.gender = "m" | "f". Старі сейви без поля: жіноче ім'я зі списку найму → "f", інакше "m".
+const FEMALE_NAMES = new Set(["Олена", "Мирослава", "Дарина", "Соломія", "Ярина", "Оксана", "Христина", "Леся", "Устина", "Злата"]);
+function heroGender(ms) {
+  const c = ms?.character || {};
+  if (c.gender === "m" || c.gender === "f") return c.gender;
+  return FEMALE_NAMES.has(String(c.name || "").trim()) ? "f" : "m";
+}
+// Слово за статтю: gw(save, "готовий", "готова")
+function gw(ms, m, f) { return heroGender(ms) === "f" ? f : m; }
+
 // ---------- Створення нового персонажа ----------
 
-function createNewSave(name, classId = DEFAULT_CLASS) {
+function createNewSave(name, classId = DEFAULT_CLASS, gender = null) {
   const cls = getClass(classId);
   name = String(name || "");
   const save = {
@@ -56,6 +67,7 @@ function createNewSave(name, classId = DEFAULT_CLASS) {
     savedAt: Date.now(),
     character: {
       name: name.trim() || "Герой",
+      gender: gender === "f" ? "f" : gender === "m" ? "m" : (FEMALE_NAMES.has(name.trim()) ? "f" : "m"),
       classId,              // поточна професія
       level: 1,             // рівень у поточній професії
       exp: 0,               // досвід у поточній професії (накопичується)
@@ -1028,7 +1040,7 @@ Object.assign(RPG, {
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
-  createNewSave, calcStats, clampHpMp, fullHeal,
+  createNewSave, calcStats, clampHpMp, fullHeal, FEMALE_NAMES, heroGender, gw,
   regenPerTick, applyRegen, msToNextRegen,
   addExp, removeExp, deathExpPenalty, DEATH_MAX_PCT, expProgress, applyDeath, markFallen, pray,
   getClassChanges, changeClass,

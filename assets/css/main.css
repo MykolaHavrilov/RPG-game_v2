@@ -698,3 +698,8 @@ a, button, input, label, select, [tabindex] { touch-action: manipulation; -webki
 /* Вступ на екрані «Нова гра» */
 .intro-panel .intro-title { font-family: "Ruslan Display", var(--font-head); font-weight: 400; color: var(--gold); text-align: center; margin: 0; }
 .intro-panel .intro-p { margin: 0; line-height: 1.55; font-style: italic; }
+/* Вибір статі (Нова гра) */
+.gender-pick { display: flex; gap: 18px; flex-wrap: wrap; margin: 0; padding: 8px 12px 10px; border: 1px solid var(--link-border); border-radius: var(--radius); }
+.gender-pick legend { padding: 0 6px; color: var(--text-dim); }
+.gender-pick label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.gender-pick input { accent-color: var(--accent); }

@@ -920,3 +920,17 @@ main > a.location { display: flex; margin-bottom: 10px; }
   .parchment-sheet { padding: 20px 16px 48px; font-size: 1.04rem; }
 }
 .parchment-text, .board-closed { margin: 0; font-style: italic; line-height: 1.5; }
+/* Книга без вирваних сторінок і магічне відновлення (game.js → showChronicle) */
+.chronicle-torn {
+  margin: 4px 0 14px; padding: 8px 12px; text-align: center; font-style: italic; color: #6b4a28;
+  border-top: 2px dashed rgba(90, 45, 15, .45); border-bottom: 2px dashed rgba(90, 45, 15, .45);
+  background: repeating-linear-gradient(90deg, rgba(60, 30, 10, .06) 0 6px, transparent 6px 12px);
+}
+.chronicle-p.is-restored { animation: chronicle-restore 3.2s ease-out both; border-radius: 4px; }
+@keyframes chronicle-restore {
+  0%   { opacity: 0; filter: blur(3px); background: rgba(255, 214, 120, .75); box-shadow: 0 0 26px 10px rgba(255, 200, 90, .8); }
+  45%  { opacity: 1; filter: blur(0); background: rgba(255, 214, 120, .45); box-shadow: 0 0 18px 6px rgba(255, 200, 90, .55); }
+  100% { background: transparent; box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) { .chronicle-p.is-restored { animation: none; } }
+.parchment-keep { margin: 8px 0 0; text-align: center; font-size: .95rem; color: #7a5530; }

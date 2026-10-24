@@ -213,6 +213,7 @@
     sheet.append(el("h2", "chronicle-title", P.title));
     P.paras.forEach((p, i) => sheet.append(el("p", "chronicle-p" + (i === 0 ? " is-initial" : "") + (i === P.paras.length - 1 ? " is-cut" : ""), p)));
     sheet.append(el("p", "parchment-torn", P.torn));
+    sheet.append(el("p", "parchment-keep", "Ви обережно згортаєте клапоть і ховаєте в торбу."));
     dlg.append(close, sheet);
     dlg.addEventListener("close", () => dlg.remove());
     document.body.append(dlg);
@@ -221,7 +222,7 @@
 
   // ---------- Книга «Предки Минулих та Майбутніх часів» (data/chronicle.js) ----------
   // Вікно-книга з пергаменту: зміст ліворуч (на телефоні — зверху), сторінка праворуч.
-  function showChronicle(save, startKey = "prologue") {
+  function showChronicle(save, startKey = "prologue", opts = {}) {
     const C = RPG.CHRONICLE;
     document.querySelector(".chronicle-dialog")?.remove();
     const dlg = el("dialog", "chronicle-dialog");
@@ -249,8 +250,15 @@
     function drawPage() {
       page.innerHTML = "";
       if (key === "prologue") {
+        const pr = RPG.prologueFor(save);
         page.append(el("h2", "chronicle-title", C.PROLOGUE.title));
-        C.PROLOGUE.paras.forEach((p, i) => page.append(el("p", i === 0 ? "chronicle-p is-initial" : "chronicle-p", p)));
+        if (pr.torn) page.append(el("p", "chronicle-torn", "Перших сторінок Прологу бракує — їх вирвано, лишилися тільки обгорілі корінці."));
+        const restoring = opts.restoring;
+        opts.restoring = false;          // сяйво — лише при першому показі
+        pr.paras.forEach((p, i) => {
+          const restored = restoring && i < C.PARCHMENT.paras.length;
+          page.append(el("p", "chronicle-p" + (i === 0 && !pr.torn ? " is-initial" : "") + (restored ? " is-restored" : ""), p));
+        });
       } else {
         const ch = C.CHAPTERS.find(c => c.id === key);
         page.append(el("h2", "chronicle-title", ch.title), el("p", "chronicle-region", ch.region));
@@ -766,11 +774,16 @@
     const form = $("new-game-form");
     const msg = $("msg");
     const intro = $("intro-panel");
-    if (intro && RPG.CHRONICLE) {
+    const gender = () => form.elements.gender?.value === "f" ? "f" : "m";
+    function drawIntro() {
+      if (!intro || !RPG.CHRONICLE) return;
+      intro.innerHTML = "";
       intro.append(el("h2", "intro-title", "Кров Іггдрасиля"));
-      RPG.CHRONICLE.INTRO.forEach(p => intro.append(el("p", "intro-p", p)));
+      RPG.CHRONICLE.intro(gender()).forEach(p => intro.append(el("p", "intro-p", p)));
       intro.hidden = false;
     }
+    drawIntro();
+    form.querySelectorAll("input[name=gender]").forEach(r => r.addEventListener("change", drawIntro));
     form.addEventListener("submit", async event => {
       event.preventDefault();
       const name = form.elements.name.value.trim();
@@ -778,7 +791,7 @@
       const btn = form.querySelector("button[type=submit]");
       btn.disabled = true;
       try {
-        const save = RPG.createNewSave(name);
+        const save = RPG.createNewSave(name, undefined, gender());
         await RPG.saveGame(save);
         RPG.setCurrentSlot(save.id);
         location.href = "game.html";
@@ -1084,17 +1097,16 @@
       row.append(link("Інвентар і скриня", "inventory.html"), link("Вирушити (Мапа)", "maps.html"));
       place.append(row);
       // Обірваний пергамент — шматок Прологу з книги «Предки…» (data/chronicle.js → PARCHMENT)
-      if (RPG.CHRONICLE) {
+      // Після прочитання пергамент іде в торбу (save.story.parchment = "have") — кнопка зникає
+      if (RPG.CHRONICLE && !RPG.parchmentState(save)) {
         const P = RPG.CHRONICLE.PARCHMENT;
         const box = el("div", "stack parchment-hint");
         box.append(el("p", "parchment-text", P.hint));
-        box.append(button(save.story?.parchment ? "Перечитати пергамент" : "Прочитати пергамент", "wf wf-link", async () => {
+        box.append(button("Прочитати пергамент", "wf wf-link", async () => {
+          (save.story ??= {}).parchment = "have";
+          await RPG.saveGame(save).catch(e => console.error(e));
           showParchment();
-          if (!save.story?.parchment) {
-            (save.story ??= {}).parchment = true;
-            await RPG.saveGame(save).catch(e => console.error(e));
-            renderPlace();
-          }
+          renderPlace();
         }));
         place.append(box);
       }
@@ -1246,7 +1258,7 @@
             "Може, хтось із них щось підкаже.»" };
       },
       async veles_ostap() {
-        if (!RPG.velesAdvance(save, 2)) return { text: "«Щось я не второпаю, мандрівнику.»", error: true };
+        if (!RPG.velesAdvance(save, 2)) return { text: `«Щось я не второпаю, ${RPG.gw(save, "мандрівнику", "мандрівнице")}.»`, error: true };
         await RPG.saveGame(save);
         return { text: "Остап відставляє кухоль і стишує голос. «Ромб, кажеш? Була тут торік одна путівниця з півдня, сива вся, " +
           "хоч і молода на лице. Розповідала, що колись у Храмі Перуна під вівтарем било джерело, і стерегли його Велесові долоні. " +
@@ -1259,6 +1271,16 @@
           "Вона веде вас за вівтар, у внутрішній двір Храму. Посеред двору — висохлий кам'яний фонтан, а над ним статуя Велеса, " +
           "що береже мудрість поколінь, з глечиком біля ніг. Ви придивляєтеся: на його розкритих долонях — невеликий виступ у формі ромба.",
           to: "veles_yard" };
+      },
+      // Віддати Захару обірваний пергамент — книга відновлюється
+      async parchment_give() {
+        if (RPG.parchmentState(save) !== "have") return { text: "«У вас нічого такого немає.»", error: true };
+        save.story.parchment = "given";
+        await RPG.saveGame(save);
+        showChronicle(save, "prologue", { restoring: true });
+        return { text: "Захар прикладає обгорілий клапоть до місця, де бракує сторінок. Пергамент тепліє, краї зростаються, " +
+          "і по них пробігає золоте сяйво. Коли світло згасає, сторінка вже вшита назад — ніби ніколи й не була вирвана. " +
+          `«Велес бачить… — шепоче Захар. — Книга знову ціла. Дякую ${RPG.gw(save, "тобі, друже", "тобі, подруго")}».` };
       },
       async chronicle() {
         showChronicle(save);
@@ -1712,7 +1734,7 @@
         card.append(el("p", "note", E.finale));
         card.append(link("До Центрального району (Мерія)", "game.html?district=center"));
       } else if (info.canStart) {
-        card.append(el("p", "note", `«Ви вже досвідчений авантюрист. Час дослідити світ далі — але спершу допоможіть нам. ` +
+        card.append(el("p", "note", `«Ви вже ${RPG.gw(save, "досвідчений авантюрист", "досвідчена авантюристка")}. Час дослідити світ далі — але спершу допоможіть нам. ` +
           `Завдання з ${info.total} частин, кожна відкривається після попередньої.»`));
         card.append(button("Взяти завдання", "wf wf-button", async () => {
           const r = RPG.startExplore(save);

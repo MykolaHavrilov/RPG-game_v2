@@ -22,14 +22,19 @@
   const TITLE = "Предки Минулих та Майбутніх часів";
 
   // ---------- Вступ (екран «Нова гра») ----------
-  const INTRO = [
-    "Ти народився на Окраїні — у краю чорноземів і столітніх дубів, де біля кожної хати ще тліє Перунове вогнище. " +
-    "Орав землю, пас коней, слухав, як старі на призьбі шепочуть про загублену північ.",
-    "А тоді настала ніч, коли небо над твоєю Домівкою розкололося навпіл. Блискавка вдарила в старий дуб біля порога — " +
-    "і крізь грім ти почув Голос: «Встань. Світове Дерево стікає кров'ю. Хелла гризе його коріння, а боги Асгарду " +
-    "лишилися без землі й без війська. Я, Перун, кличу тебе — іди на північ і поверни їм загублене».",
-    "Ти прокинувся з присмаком попелу на губах і дерев'яним мечем у руці. На ранок ти вже був у дорозі."
-  ];
+  // intro(gender) → абзаци; gender: "m" | "f"
+  const intro = gender => {
+    const f = gender === "f", g = (m, w) => f ? w : m;
+    return [
+      `Ти ${g("народився", "народилася")} на Окраїні — у краю чорноземів і столітніх дубів, де біля кожної хати ще тліє Перунове вогнище. ` +
+      `${g("Орав землю, пас коней, слухав", "Жала жито, пасла коней, слухала")}, як старі на призьбі шепочуть про загублену північ.`,
+      "А тоді настала ніч, коли небо над твоєю Домівкою розкололося навпіл. Блискавка вдарила в старий дуб біля порога — " +
+      `і крізь грім ти ${g("почув", "почула")} Голос: «Встань. Світове Дерево стікає кров'ю. Хелла гризе його коріння, а боги Асгарду ` +
+      "лишилися без землі й без війська. Я, Перун, кличу тебе — іди на північ і поверни їм загублене».",
+      `Ти ${g("прокинувся", "прокинулася")} з присмаком попелу на губах і дерев'яним мечем у руці. На ранок ти вже ${g("був", "була")} у дорозі.`
+    ];
+  };
+  const INTRO = intro("m");
 
   // ---------- Пролог ----------
   const PROLOGUE = {
@@ -79,6 +84,20 @@
     torn: "…далі сторінку вирвано. На звороті ледь видно вицвілий напис: «Предки Мин… та Майбут… часів»."
   };
 
+  // Стан пергаменту: save.story.parchment = undefined (не знайдено) | "have" (прочитано, у торбі) | "given" (віддано Захару).
+  // Старі сейви з true = "have". Поки пергамент не повернуто, у книзі бракує початку Прологу.
+  function parchmentState(save) {
+    const p = save.story?.parchment;
+    return p === true ? "have" : (p === "have" || p === "given") ? p : null;
+  }
+  const bookRestored = save => parchmentState(save) === "given";
+  // Абзаци Прологу для книги: { torn, paras }
+  function prologueFor(save) {
+    if (bookRestored(save)) return { torn: false, paras: PROLOGUE.paras };
+    const cut = PROLOGUE.paras[3].replace(/^.*?постукав у /, "…");     // книга продовжує там, де обривається пергамент
+    return { torn: true, paras: [cut, ...PROLOGUE.paras.slice(4)] };
+  }
+
   // ---------- Глави ----------
   const CHAPTERS = [
     {
@@ -111,22 +130,23 @@
   const SEALED = ["Глава III", "Глава IV", "Глава V"];
 
   // ---------- Розповіді про битви з босами ----------
-  // fn(h) → рядок; h = { names, blow, fallen, survivors, rounds, many }
+  // fn(h) → рядок; h = { names, blow, fallen, survivors, rounds, many, g1(m, f), gb(m, f) }
+  //   g1 — слово за статтю єдиного героя, gb — за статтю того, хто завдав останнього удару
   const list = arr => arr.length < 2 ? arr.join("") : arr.slice(0, -1).join(", ") + " і " + arr.at(-1);
   const BOSS_TALES = {
     cave_secret: h =>
-      `Три зали, повні слизу, лишилися позаду, коли ${h.many ? `${list(h.names)} ступили` : `${h.names[0]} ступив(-ла)`} до трону з каменю й нечистот. ` +
+      `Три зали, повні слизу, лишилися позаду, коли ${h.many ? `${list(h.names)} ступили` : `${h.names[0]} ${h.g1("ступив", "ступила")}`} до трону з каменю й нечистот. ` +
       "Король слайм здійнявся назустріч — величезний, з тьмяним золотом у глибині драглистого тіла, — і хвиля отруйного слизу накрила підземелля. " +
-      `Бій тривав ${h.rounds} раунд(ів). Останній удар завдав(-ла) ${h.blow} — і Король розплився калюжею, що вже не могла зібратися докупи.`,
+      `Бій тривав ${h.rounds} раунд(ів). Останній удар ${h.gb("завдав", "завдала")} ${h.blow} — і Король розплився калюжею, що вже не могла зібратися докупи.`,
     web_nest: h =>
-      `Кокон завбільшки з будинок тріщав під ногами. ${h.many ? `${list(h.names)} пробивалися` : `${h.names[0]} пробивався(-лась)`} крізь мисливців і ткачів, ` +
+      `Кокон завбільшки з будинок тріщав під ногами. ${h.many ? `${list(h.names)} пробивалися` : `${h.names[0]} ${h.g1("пробивався", "пробивалася")}`} крізь мисливців і ткачів, ` +
       "аж поки з темряви не опустилася Королева павуків — багатоока, з отрутою, що капала з іклів. Павутина стягувала руки, отрута палила кров, " +
-      `але за ${h.rounds} раунд(ів) ${h.blow} розсік(-ла) серце гнізда. Королева впала, і нитки павутини над лісом обвисли, мов мертве волосся.`,
+      `але за ${h.rounds} раунд(ів) ${h.blow} ${h.gb("розсік", "розсікла")} серце гнізда. Королева впала, і нитки павутини над лісом обвисли, мов мертве волосся.`,
     dark_throne: h =>
-      `Коло каменів розступилося, і ${h.many ? `${list(h.names)} увійшли` : `${h.names[0]} увійшов(-ла)`} до мертвого дерева, ` +
+      `Коло каменів розступилося, і ${h.many ? `${list(h.names)} увійшли` : `${h.names[0]} ${h.g1("увійшов", "увійшла")}`} до мертвого дерева, ` +
       "де на троні з коріння чекав Володар Темного лісу — вірний слуга Хелли, вдягнений у кору й тінь. Лісовики й чорні вершники полягли першими, " +
       `а тоді сам Володар підвівся, і земля під ногами застогнала. Битва тривала ${h.rounds} раунд(ів). ` +
-      `Останній удар, що скинув Володаря з трону, завдав(-ла) ${h.blow}.`
+      `Останній удар, що скинув Володаря з трону, ${h.gb("завдав", "завдала")} ${h.blow}.`
   };
 
   // ---------- Стан ----------
@@ -159,6 +179,7 @@
       name: ms.character.name,
       cls: RPG.getClass(ms.character.classId)?.name || "",
       level: ms.character.level,
+      g: RPG.heroGender ? RPG.heroGender(ms) : "m",
       fallen: !!result.heroes[k]?.dead
     }));
     st[dungeonId] = {
@@ -180,16 +201,21 @@
     const d = RPG.DUNGEONS[dungeonId];
     const fallen = e.heroes.filter(h => h.fallen).map(h => h.name);
     const survivors = e.heroes.filter(h => !h.fallen).map(h => h.name);
-    const h = { names: e.heroes.map(x => x.name), blow: e.blow, fallen, survivors, rounds: e.rounds, many: e.heroes.length > 1 };
+    const gOf = x => x?.g === "f";
+    const blower = e.heroes.find(x => x.name === e.blow);
+    const h = { names: e.heroes.map(x => x.name), blow: e.blow, fallen, survivors, rounds: e.rounds, many: e.heroes.length > 1,
+      g1: (m, f) => gOf(e.heroes[0]) ? f : m, gb: (m, f) => gOf(blower) ? f : m };
     const tale = (BOSS_TALES[dungeonId] || (() => `${list(h.names)} здолали боса «${RPG.ENEMIES[d.boss]?.name}».`))(h);
     const lines = [tale];
-    if (fallen.length) lines.push(`Полягли в бою: ${list(fallen)}. Перунів вогонь повернув полеглих до Храму — та пролита кров лишилася на цих сторінках.`);
+    const fallenOne = e.heroes.filter(x => x.fallen);
+    const fellWord = fallenOne.length > 1 ? "Полягли" : gOf(fallenOne[0]) ? "Полягла" : "Поліг";
+    if (fallen.length) lines.push(`${fellWord} в бою: ${list(fallen)}. Перунів вогонь повернув полеглих до Храму — та пролита кров лишилася на цих сторінках.`);
     else lines.push("Ніхто з групи не впав у цьому бою — рідкісна милість Громовержця.");
     lines.push(`Вийшли переможцями: ${list(survivors)}.`);
     return {
       title: `«${d?.name || dungeonId}» — ${RPG.ENEMIES[d?.boss]?.name || "бос"}`,
       date: fmtDate(e.at),
-      roster: e.heroes.map(x => `${x.name} — ${x.cls}, ${x.level} рів.${x.fallen ? " ✝ поліг(-ла)" : ""}`),
+      roster: e.heroes.map(x => `${x.name} — ${x.cls}, ${x.level} рів.${x.fallen ? (x.g === "f" ? " ✝ полягла" : " ✝ поліг") : ""}`),
       lines,
       wins: e.wins || 1
     };
@@ -205,7 +231,8 @@
   }
 
   Object.assign(RPG, {
-    CHRONICLE: { TITLE, INTRO, PROLOGUE, PARCHMENT, CHAPTERS, SEALED },
+    CHRONICLE: { TITLE, INTRO, intro, PROLOGUE, PARCHMENT, CHAPTERS, SEALED },
+    parchmentState, bookRestored, prologueFor,
     chronicleRecord: recordBossVictory, chronicleEntry: entryOf, chronicleBossEntry: bossEntry,
     chronicleContents: contents, chronicleChapterOf: chapterOfDungeon
   });
