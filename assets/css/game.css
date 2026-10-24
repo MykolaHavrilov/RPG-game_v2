@@ -986,3 +986,19 @@ main > a.location { display: flex; margin-bottom: 10px; }
   .log.journal-list { height: 64vh; font-size: .84rem; }
   .journal-dialog { padding: 14px 10px 10px; }
 }
+
+/* ---------- Сторінка «Персонаж»: підказки «i» атрибутів і характеристик ---------- */
+.stat-row .stat-i { margin-left: 2px; }
+.stat-info { max-width: 340px; }
+.stat-info-head { font-weight: 800; color: var(--gold); }
+.stat-info-sub { font-weight: 700; }
+.stat-parts { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; }
+.stat-parts li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: .86rem; }
+.stat-parts li span { overflow-wrap: anywhere; }
+.stat-parts li b { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: #8fe08f; }
+.stat-parts li.is-neg b { color: #ff8a7a; }
+.stat-parts li.is-sum { margin-top: 4px; font-weight: 700; }
+.stat-parts li.is-sum:first-child { margin-top: 0; }
+.stat-parts li:not(.is-sum) span { padding-left: 10px; opacity: .9; }
+.stat-parts li.is-empty span { opacity: .6; font-style: italic; }
+.stat-info .note-src { font-size: .82rem; opacity: .8; }

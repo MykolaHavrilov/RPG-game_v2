@@ -112,18 +112,41 @@ const STAT_KEYS = ["hp", "mp", "attack", "magic", "defense", "magicDefense", "sp
                    "crit", "dodge", "blockPhys", "blockMag", "hpRegen", "mpRegen", "attackSpeedPct"];
 const DECIMAL_KEYS = ["crit", "dodge", "blockPhys", "blockMag", "hpRegen", "mpRegen", "attackSpeedPct"];
 
-function calcStats(save) {
+// trace — необов'язковий об'єкт: якщо передати {}, у нього запишеться, з чого склалась
+// кожна характеристика: trace[key] = [{ label, value }] (сторінка «Персонаж» → підказки «i»).
+// Сума value дорівнює результату до округлення; округлення — окремим рядком.
+function calcStats(save, trace = null) {
   const cls = getClass(save.character.classId);
   const lvl = save.character.level;
   const stats = {};
   for (const key of STAT_KEYS) stats[key] = 0;
+  // Записати частку: delta — на скільки змінилось значення
+  const note = (key, label, delta) => {
+    if (!trace || !delta || Math.abs(delta) < 1e-9) return;
+    (trace[key] ??= []).push({ label, value: delta });
+  };
+  // Змінити значення через функцію і записати різницю
+  const change = (key, label, fn) => {
+    const before = stats[key] || 0;
+    stats[key] = fn(before);
+    note(key, label, stats[key] - before);
+  };
 
   for (const key in cls.baseStats) {
-    stats[key] += cls.baseStats[key] + (cls.growth[key] || 0) * (lvl - 1);
+    const grow = (cls.growth[key] || 0) * (lvl - 1);
+    stats[key] += cls.baseStats[key] + grow;
+    note(key, `Професія «${cls.name}»`, cls.baseStats[key]);
+    note(key, "Рівень", grow);
   }
 
   // Атрибути (власні + з речей)
-  addStats(stats, RPG.attrBonuses(RPG.totalAttrs(save)));
+  const attrs = RPG.totalAttrs(save);
+  addStats(stats, RPG.attrBonuses(attrs));
+  if (trace && RPG.attrContrib) {
+    for (const [key, parts] of Object.entries(RPG.attrContrib(attrs))) {
+      for (const pt of parts) note(key, pt.label, pt.value);
+    }
+  }
 
   // Бойові бонуси речей (атрибути з речей уже враховані вище).
   // Крит / ухилення / швидкість з ЛЕГЕНДАРНИХ речей відкладаємо окремо:
@@ -134,54 +157,58 @@ function calcStats(save) {
     const st = RPG.itemStats(ref);
     const legendary = RPG.rarityOf(ref) === "legendary";
     const offWeapon = slot === "offHand" && ITEMS[RPG.refId(ref)]?.weaponType;
+    const name = trace ? RPG.itemFullName(ref) : "";
     for (const key in st) {
       if (key in RPG.ATTRS) continue;
       if (offWeapon && key === "attack") continue;   // атака другої сокири — окремим ударом (dualWield)
       if (legendary && RPG.LEGEND_OVERCAP.includes(key)) legendOver[key] = (legendOver[key] || 0) + st[key];
-      else stats[key] = (stats[key] || 0) + st[key];
+      else { stats[key] = (stats[key] || 0) + st[key]; note(key, `Річ: ${name}`, st[key]); }
     }
   }
 
   // Володіння вдягненою зброєю (data/skills.js)
   const mastery = RPG.masteryBonus ? RPG.masteryBonus(save) : {};
   for (const key in mastery) {
-    if (key !== "attackSpeedPct") stats[key] = (stats[key] || 0) + mastery[key];
+    if (key !== "attackSpeedPct") { stats[key] = (stats[key] || 0) + mastery[key]; note(key, "Володіння вдягненою зброєю (Тренер)", mastery[key]); }
   }
 
   // Пасивні навички (data/skills.js → kind "passive"): % до характеристик, крит/ухилення — у пунктах
   const pas = RPG.passiveBonus ? RPG.passiveBonus(save) : {};
   const PCT = { hpPct: "hp", mpPct: "mp", attackPct: "attack", magicPct: "magic",
                 defensePct: "defense", magicDefensePct: "magicDefense", speedPct: "speed" };
-  for (const [k, stat] of Object.entries(PCT)) if (pas[k]) stats[stat] *= 1 + pas[k] / 100;
-  if (pas.crit) stats.crit += pas.crit;
-  if (pas.dodge) stats.dodge = (stats.dodge || 0) + pas.dodge;
+  for (const [k, stat] of Object.entries(PCT)) if (pas[k]) change(stat, "Пасивні навички", v => v * (1 + pas[k] / 100));
+  if (pas.crit) change("crit", "Пасивні навички", v => v + pas.crit);
+  if (pas.dodge) change("dodge", "Пасивні навички", v => v + pas.dodge);
 
   const CAP = RPG.STAT_CAP;
-  stats.crit = Math.min(stats.crit, CAP.crit);
-  stats.dodge = Math.min(stats.dodge, CAP.dodge);
-  stats.speed = Math.min(stats.speed, CAP.speed);
-  stats.blockPhys = Math.min(stats.blockPhys, CAP.block);
-  stats.blockMag = Math.min(stats.blockMag, CAP.block);
-  addStats(stats, legendOver);   // легендарні — понад ліміт
+  change("crit", "Обмеження максимуму", v => Math.min(v, CAP.crit));
+  change("dodge", "Обмеження максимуму", v => Math.min(v, CAP.dodge));
+  change("speed", "Обмеження максимуму", v => Math.min(v, CAP.speed));
+  change("blockPhys", "Обмеження максимуму", v => Math.min(v, CAP.block));
+  change("blockMag", "Обмеження максимуму", v => Math.min(v, CAP.block));
+  for (const key in legendOver) change(key, "Легендарні речі (понад межу)", v => v + legendOver[key]);   // легендарні — понад ліміт
 
   // Швидкість атаки з володіння (напр. лук до +25%) — теж понад ліміт,
   // але не більше 200% ліміту: це другий, крайній ліміт швидкості
   stats.attackSpeedPct = mastery.attackSpeedPct || 0;
-  if (stats.attackSpeedPct) stats.speed *= 1 + stats.attackSpeedPct / 100;
-  stats.speed = Math.min(stats.speed, CAP.speed * 2);
+  note("attackSpeedPct", "Володіння вдягненою зброєю (Тренер)", stats.attackSpeedPct);
+  if (stats.attackSpeedPct) change("speed", "Швидкість атаки (володіння зброєю)", v => v * (1 + stats.attackSpeedPct / 100));
+  change("speed", "Обмеження максимуму", v => Math.min(v, CAP.speed * 2));
 
   // Бонуси комплектів (data/items.js → ITEM_SETS), поверх усього іншого
   const setCounts = RPG.equippedSetCounts ? RPG.equippedSetCounts(save) : {};
   for (const [setId, n] of Object.entries(setCounts)) {
     const set = RPG.ITEM_SETS[setId];
     if (!set || n < set.pieces) continue;
-    for (const [key, pct] of Object.entries(set.bonusPct || {})) stats[key] = (stats[key] || 0) * (1 + pct / 100);
+    for (const [key, pct] of Object.entries(set.bonusPct || {})) change(key, set.name, v => (v || 0) * (1 + pct / 100));
   }
 
   for (const key in stats) {
+    const raw = stats[key];
     stats[key] = DECIMAL_KEYS.includes(key)
       ? Math.round(stats[key] * 10) / 10
       : Math.floor(stats[key]);
+    note(key, "Округлення", stats[key] - raw);
   }
   return stats;
 }

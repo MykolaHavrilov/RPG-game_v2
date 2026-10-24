@@ -68,6 +68,61 @@
     };
   }
 
+  // Що дає кожен атрибут — для підказок «i» на сторінці «Персонаж».
+  // ПОВИННО збігатися з attrBonuses вище (коефіцієнти — за 1 очко).
+  //   per — лінійні частки: { атрибут: скільки за 1 очко }
+  //   soft — «м'яке» зростання (шанс %, що сповільнюється): атрибути, від яких залежить, і межа
+  //   base — стале значення без атрибутів
+  const ATTR_EFFECTS = {
+    hp:           { per: { vit: 10 } },
+    mp:           { per: { int: 6, spi: 2 } },
+    attack:       { per: { str: 2, agi: 0.5 } },
+    magic:        { per: { int: 2, spi: 0.5 } },
+    defense:      { per: { vit: 1, str: 0.5 } },
+    magicDefense: { per: { spi: 1, int: 0.3 } },
+    speed:        { per: { agi: 0.5 } },
+    crit:         { soft: ["agi"], cap: CAP.critFromAttr },
+    dodge:        { soft: ["agi"], cap: CAP.dodgeFromAttr },
+    blockPhys:    { soft: ["agi", "str"], cap: CAP.blockFromAttr },
+    blockMag:     { soft: ["spi"], cap: CAP.blockFromAttr },
+    hpRegen:      { base: 1, per: { vit: 0.5 } },
+    mpRegen:      { base: 1, per: { spi: 0.5, int: 0.2 } }
+  };
+
+  // Внесок атрибутів у характеристики: { key: [{ label, value }] } — сума дорівнює attrBonuses(a)
+  function attrContrib(a) {
+    const bonus = attrBonuses(a);
+    const out = {};
+    for (const [key, eff] of Object.entries(ATTR_EFFECTS)) {
+      const parts = [];
+      if (eff.base) parts.push({ label: "Базове відновлення", value: eff.base });
+      for (const [attr, k] of Object.entries(eff.per || {})) {
+        if (a[attr]) parts.push({ label: ATTRS[attr], value: a[attr] * k });
+      }
+      if (eff.soft && bonus[key]) {
+        parts.push({ label: eff.soft.map(x => ATTRS[x]).join(", "), value: bonus[key] });
+      }
+      if (parts.length) out[key] = parts;
+    }
+    return out;
+  }
+
+  // На що впливає атрибут: [{ key, value }] — value: скільки дає зараз (при total очках у цьому атрибуті)
+  function attrEffects(attr, a) {
+    const out = [];
+    for (const [key, eff] of Object.entries(ATTR_EFFECTS)) {
+      if (eff.per && eff.per[attr]) {
+        out.push({ key, value: (a[attr] || 0) * eff.per[attr] });
+      } else if (eff.soft && eff.soft.includes(attr)) {
+        // скільки дає саме цей атрибут: різниця з ним і без нього
+        const without = { ...a, [attr]: 0 };
+        const value = attrBonuses(a)[key] - attrBonuses(without)[key];
+        out.push({ key, value });
+      }
+    }
+    return out;
+  }
+
   // Сталі бонуси атрибутів за рівні (classes.js → levelAttrs, changeBonus).
   // Рахуються по всьому шляху професій: попередні (classHistory) + поточна.
   // Нічого не зберігається в сейві — завжди обчислюється, тож зміна чисел
@@ -118,5 +173,6 @@
     return true;
   }
 
-  Object.assign(RPG, { ATTRS, POINTS_PER_LEVEL, STAT_CAP: CAP, soft, attrBonuses, levelAttrs, describeAttrs, totalAttrs, addAttrPoint });
+  Object.assign(RPG, { ATTRS, POINTS_PER_LEVEL, STAT_CAP: CAP, soft, attrBonuses, levelAttrs, describeAttrs, totalAttrs, addAttrPoint,
+    ATTR_EFFECTS, attrContrib, attrEffects });
 })(window.RPG);

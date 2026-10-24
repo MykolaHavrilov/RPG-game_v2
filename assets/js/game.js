@@ -2940,6 +2940,110 @@
       }
     }
 
+    // ---------- Підказки «i» для атрибутів і характеристик ----------
+    // Що робить характеристика в бою / поза боєм
+    const STAT_HELP = {
+      hp: "Скільки шкоди герой витримає. Коли здоров'я падає до 0 — герой полягає.",
+      mp: "Запас мани для навичок і заклинань.",
+      attack: "Сила фізичних ударів зброєю і фізичних навичок.",
+      magic: "Сила заклинань і магічних навичок.",
+      defense: "Зменшує фізичну шкоду, яку отримує герой.",
+      magicDefense: "Зменшує магічну шкоду, яку отримує герой.",
+      speed: "Як часто герой ходить у бою.",
+      crit: "Шанс завдати посиленого (критичного) удару.",
+      dodge: "Шанс повністю ухилитися від фізичного удару.",
+      blockPhys: "Шанс заблокувати половину фізичної шкоди.",
+      blockMag: "Шанс заблокувати половину магічної шкоди.",
+      hpRegen: "Скільки здоров'я відновлюється з часом поза боєм (у Домівці — швидше).",
+      mpRegen: "Скільки мани відновлюється з часом поза боєм (у Домівці — швидше).",
+      attackSpeedPct: "Бонус володіння зброєю до швидкості."
+    };
+    const PASSIVE_KEYS = { hp: "hpPct", mp: "mpPct", attack: "attackPct", magic: "magicPct", defense: "defensePct",
+                           magicDefense: "magicDefensePct", speed: "speedPct", crit: "crit", dodge: "dodge" };
+    const num1 = v => fmtNum(Math.round(v * 10) / 10);
+    const signed = v => (v < 0 ? "−" : "+") + num1(Math.abs(v));
+
+    // Від чого взагалі може залежати характеристика (загальний перелік джерел)
+    function statSources(key, cls) {
+      const out = [];
+      if (cls.baseStats?.[key] || cls.growth?.[key]) out.push("професії та рівня");
+      const eff = RPG.ATTR_EFFECTS[key];
+      const attrs = eff ? [...Object.keys(eff.per || {}), ...(eff.soft || [])] : [];
+      if (attrs.length) out.push(attrs.map(a => RPG.ATTRS[a]).join(", "));
+      if (key !== "attackSpeedPct") out.push("бонусів речей");
+      if (Object.values(RPG.MASTERY_BONUS || {}).some(b => key in b)) out.push("володіння зброєю (Тренер)");
+      const pk = PASSIVE_KEYS[key];
+      if (pk && Object.values(RPG.SKILLS || {}).some(sk => sk.kind === "passive" && sk.effects && pk in sk.effects)) out.push("пасивних навичок");
+      if (Object.values(RPG.ITEM_SETS || {}).some(set => key in (set.bonusPct || {}))) out.push("комплектів речей");
+      return out;
+    }
+
+    // Кнопка «i» з підказкою (наведення — попередній перегляд, клік / дотик — закріпити)
+    function infoButton(label, build) {
+      const b = el("button", "info-tip stat-i");
+      b.type = "button";
+      b.setAttribute("aria-label", label + " — детальніше");
+      b.append(el("span", "info-i", "i"));
+      RPG.bindTip(b, build, null);
+      return b;
+    }
+
+    // Підказка атрибута: власне (рівні + вкладені очки) окремо від речей, і на що впливає
+    function attrInfo(key, total) {
+      const ch = ms.character;
+      const fromLevels = RPG.levelAttrs(ms)[key] || 0;
+      const invested = ch.attrs[key] || 0;
+      const items = [];
+      for (const slot in ms.equipment) {
+        const v = RPG.itemStats(ms.equipment[slot])[key];
+        if (v) items.push([RPG.itemFullName(ms.equipment[slot]), v]);
+      }
+      const fromItems = items.reduce((sum, [, v]) => sum + v, 0);
+      const box = el("div", "info-body stat-info");
+      box.append(el("p", "stat-info-head", `${RPG.ATTRS[key]}: ${fmtNum(total[key])}`));
+      const own = el("ul", "stat-parts");
+      own.append(partRow(`Власна: ${fmtNum(fromLevels + invested)}`, null, "is-sum"));
+      own.append(partRow("рівень", fromLevels));
+      own.append(partRow("розподілені очки", invested));
+      own.append(partRow(`Бонус від речей: ${signed(fromItems)}`, null, "is-sum"));
+      if (items.length) for (const [name, v] of items) own.append(partRow(name, v));
+      else own.append(partRow("речей з цим атрибутом не вдягнено", null, "is-empty"));
+      box.append(own);
+      box.append(el("p", "stat-info-sub", "Впливає на:"));
+      const eff = el("ul", "stat-parts");
+      for (const e of RPG.attrEffects(key, total)) {
+        eff.append(partRow(RPG.STAT_NAMES[e.key], e.value, "", ["crit", "dodge", "blockPhys", "blockMag"].includes(e.key) ? "%" : ""));
+      }
+      box.append(eff);
+      return box;
+    }
+
+    // Рядок розкладу: підпис і значення (зі знаком). value === null — без числа
+    function partRow(label, value, cls = "", unit = "") {
+      const li = el("li", cls);
+      li.append(el("span", null, label));
+      if (value !== null && value !== undefined) li.append(el("b", null, signed(value) + unit));
+      return li;
+    }
+
+    // Підказка характеристики: що робить, з чого складається зараз, від чого залежить
+    function statInfo(key, st, trace) {
+      const pct = ["crit", "dodge", "blockPhys", "blockMag", "attackSpeedPct"].includes(key) ? "%" : "";
+      const box = el("div", "info-body stat-info");
+      box.append(el("p", "stat-info-head", `${RPG.STAT_NAMES[key]}: ${fmtStat(key, st[key] || 0)}`));
+      box.append(el("p", null, STAT_HELP[key] || ""));
+      // Округлення не показуємо — лише параметри, що впливають
+      const parts = (trace[key] || []).filter(pt => pt.label !== "Округлення" && Math.abs(pt.value) >= 0.05);
+      box.append(el("p", "stat-info-sub", "Складається з:"));
+      const list = el("ul", "stat-parts");
+      if (parts.length) for (const pt of parts) list.append(partRow(pt.label, pt.value, pt.value < 0 ? "is-neg" : "", pct));
+      else list.append(partRow("поки нічого не дає", null, "is-empty"));
+      box.append(list);
+      const src = statSources(key, RPG.getClass(ms.character.classId));
+      if (src.length) box.append(el("p", "note-src", "Залежить від: " + src.join("; ") + "."));
+      return box;
+    }
+
     function render() {
       renderMemberTabs();
       renderHeroBars(ms);
@@ -2952,7 +3056,6 @@
       const attrBox = $("attrs-list");
       attrBox.innerHTML = "";
       const total = RPG.totalAttrs(ms);
-      const byLevel = RPG.levelAttrs(ms);
       const cls = RPG.getClass(ch.classId);
       attrBox.append(el("p", ch.freePoints ? "status" : "note", ch.freePoints
         ? `Вільних очок: ${ch.freePoints}. Натисніть «+», щоб вкласти.`
@@ -2961,13 +3064,10 @@
       if (autoTxt) attrBox.append(el("p", "note", `${cls.name}: за кожен рівень автоматично ${autoTxt}.`));
       for (const key in RPG.ATTRS) {
         const row = el("div", "stat-row");
-        const fromLevels = byLevel[key] || 0;
-        const fromItems = total[key] - (ch.attrs[key] || 0) - fromLevels;
-        const extra = [];
-        if (fromLevels) extra.push(`+${fromLevels} за рівні`);
-        if (fromItems) extra.push(`+${fromItems} з речей`);
-        const value = el("strong", null, String(total[key]) + (extra.length ? ` (${extra.join(", ")})` : ""));
-        row.append(el("span", null, RPG.ATTRS[key]), value);
+        // Лише загальна сума; з чого вона складається і на що впливає — у підказці «i»
+        row.append(el("span", null, RPG.ATTRS[key]),
+          infoButton(RPG.ATTRS[key], () => attrInfo(key, RPG.totalAttrs(ms))),
+          el("strong", null, fmtNum(total[key])));
         if (ch.freePoints > 0) {
           const plus = button("+", "wf wf-button attr-plus", async () => {
             if (!RPG.addAttrPoint(ms, key)) return;
@@ -2983,9 +3083,13 @@
       // Бойові характеристики
       const list = $("stats-list");
       list.innerHTML = "";
+      const trace = {};
+      RPG.calcStats(ms, trace);
       for (const key of DERIVED) {
         const row = el("div", "stat-row");
-        row.append(el("span", null, RPG.STAT_NAMES[key]), el("strong", null, fmtStat(key, st[key] || 0)));
+        row.append(el("span", null, RPG.STAT_NAMES[key]),
+          infoButton(RPG.STAT_NAMES[key], () => statInfo(key, st, trace)),
+          el("strong", null, fmtStat(key, st[key] || 0)));
         list.append(row);
       }
 
