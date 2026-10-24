@@ -176,17 +176,39 @@
 
   // ---------- Окреме повідомлення (вікно), що закривається лише хрестиком ----------
   // Повертає Promise, який виконується після закриття.
-  function showNotice(title, lines, cls = "") {
+  // Черга вікон: вікна, що з'являються самі (повідомлення, «Увага — чемпіон!»), не відкриваються
+  // одне на одне — кожне чекає, доки закриються всі інші відкриті вікна, і показується по черзі.
+  // open() — відкриває вікно й повертає його (або null — показувати вже нічого).
+  // Повертає проміс, що виконується, коли це вікно закрили.
+  let dialogQueue = Promise.resolve();
+  function whenNoDialog() {
     return new Promise(resolve => {
+      const check = () => (document.querySelector("dialog[open]") ? setTimeout(check, 150) : resolve());
+      check();
+    });
+  }
+  function queueDialog(open) {
+    const p = dialogQueue.then(whenNoDialog).then(() => new Promise(resolve => {
+      const dlg = open();
+      if (!dlg || !dlg.open) { resolve(); return; }
+      dlg.addEventListener("close", () => resolve(), { once: true });
+    }));
+    dialogQueue = p.catch(e => console.error(e));
+    return p;
+  }
+
+  function showNotice(title, lines, cls = "") {
+    return queueDialog(() => {
       const dlg = el("dialog", "notice-dialog " + cls);
       const close = button("×", "notice-close", () => dlg.close());
       close.setAttribute("aria-label", "Закрити");
       dlg.append(close, el("h3", null, title));
       for (const l of lines) dlg.append(typeof l === "string" ? el("p", null, l) : l);
       dlg.addEventListener("cancel", ev => ev.preventDefault());     // Esc не закриває — лише хрестик
-      dlg.addEventListener("close", () => { dlg.remove(); resolve(); });
+      dlg.addEventListener("close", () => dlg.remove());
       document.body.append(dlg);
       dlg.showModal();
+      return dlg;
     });
   }
 
@@ -2040,7 +2062,10 @@
       panel.append(open);
     }
     // Вікно «Увага, чемпіон!» — з'являється, коли серед ворогів є чемпіон
-    function showChampionWarning() {
+    // Показується в черзі вікон (queueDialog): після «Незнайомця» та інших повідомлень, а не поверх них
+    function showChampionWarning() { queueDialog(openChampionWarning); }
+    function openChampionWarning() {
+      if (fighting || !foes.some(f => f.champion)) return null;   // поки чекали — ворога вже змінили
       let dlg = $("champion-dialog");
       if (!dlg) {
         dlg = el("dialog", "champion-dialog");
@@ -2062,6 +2087,7 @@
         button("Шукати іншого ворога", "wf wf-link", () => { dlg.close(); $("reroll-btn")?.click(); }));
       dlg.append(row);
       if (!dlg.open) dlg.showModal();
+      return dlg;
     }
     function curEnemy(i = 0) { return RPG.enemyFromSpec(foes[i]); }
     const gsText = e => (e.gs ? ` · GS ${e.gs}` : "");
@@ -2238,6 +2264,7 @@
     // Перетягнути портрет на клітинку своєї зони або натиснути героя, потім клітинку.
     // onDone() — що робити після «Готово» (наприклад, почати бій)
     function openFormation(onDone = null) {
+      if (document.querySelector("dialog[open]:not(#formation-dialog)")) { queueDialog(() => { openFormation(onDone); return $("formation-dialog"); }); return; }
       const team = fighters();
       if (!team.length) { showMsg(msg, "Усі герої групи полягли — розставляти нікого.", true); return; }
       const f = save.formation || {};
@@ -3005,9 +3032,11 @@
       own.append(partRow(`Власна: ${fmtNum(fromLevels + invested)}`, null, "is-sum"));
       own.append(partRow("рівень", fromLevels));
       own.append(partRow("розподілені очки", invested));
-      own.append(partRow(`Бонус від речей: ${signed(fromItems)}`, null, "is-sum"));
-      if (items.length) for (const [name, v] of items) own.append(partRow(name, v));
-      else own.append(partRow("речей з цим атрибутом не вдягнено", null, "is-empty"));
+      // Бонус від речей — лише якщо якісь вдягнені речі додають цей атрибут (і лише ці речі)
+      if (items.length) {
+        own.append(partRow(`Бонус від речей: ${signed(fromItems)}`, null, "is-sum"));
+        for (const [name, v] of items) own.append(partRow(name, v));
+      }
       box.append(own);
       box.append(el("p", "stat-info-sub", "Впливає на:"));
       const eff = el("ul", "stat-parts");
