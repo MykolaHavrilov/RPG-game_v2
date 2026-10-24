@@ -1672,7 +1672,7 @@
       if (guildNpc === "admin") renderQuestBoard(npc);
       else if (guildNpc === "trader") {
         npc.append(el("p", "note",
-          `Тадеуш, торговець гільдії, продає зброю 1–2 виду, малі й середні зілля (за ${Math.round(RPG.SHOP_SELL_RATE * 100)}% вартості), ` +
+          `Тадеуш, торговець гільдії, продає зброю 1–2 виду, шкіряну броню (2 вид), малі й середні зілля (за ${Math.round(RPG.SHOP_SELL_RATE * 100)}% вартості), ` +
           `а купує будь-що за ${Math.round(RPG.SHOP_BUY_RATE * 100)}%.`));
         renderShop(npc, RPG.GUILD_SHOP || []);
       } else renderTrainer(npc);
@@ -1689,6 +1689,47 @@
       renderProfession(box);
       box.append(el("p", "note",
         `«Роботи вистачає — беріть до ${RPG.questMaxActive(save)} завдань одночасно.» Виконано завдань: ${qs.done}.`));
+
+      // «Здати все»: разом усі виконані завдання гільдії та нагороди за чемпіонів
+      if (qs.active.length || qs.bounties.length) {
+        const readyCount = qs.active.filter(q => RPG.isQuestComplete(save, q)).length + qs.bounties.length;
+        const all = button(readyCount ? `Здати все (${readyCount})` : "Здати все", "wf wf-button turn-in-all", async () => {
+          let exp = 0, gold = 0, quests = 0, bounties = 0, lastLevel = null;
+          const items = {};
+          const noteLevel = lv => { if (lv.length) lastLevel = lv[lv.length - 1]; };
+          for (const bounty of [...qs.bounties]) {
+            const res = RPG.claimBounty(save, bounty.id);
+            if (!res.ok) continue;
+            bounties++;
+            exp += bounty.exp;
+            gold += bounty.gold;
+            noteLevel(res.levelUps);
+            journalReward(save, `Гільдія: переможено чемпіона «${bounty.name}»`,
+              `Нагорода за чемпіона: +${bounty.exp} EXP, +${bounty.gold} золота.`);
+          }
+          for (const quest of qs.active.filter(q => RPG.isQuestComplete(save, q))) {
+            const res = RPG.turnInQuest(save, quest.id);
+            if (!res.ok) continue;
+            quests++;
+            exp += quest.reward.exp;
+            gold += quest.reward.gold;
+            for (const it of quest.reward.items) items[it.id] = (items[it.id] || 0) + it.qty;
+            noteLevel(res.levelUps);
+            journalReward(save, `Завдання «${RPG.questTitle(quest)}» здано`, `Нагорода: ${RPG.describeReward(quest.reward)}.`);
+          }
+          if (!quests && !bounties) { showMsg(msg, "Немає виконаних завдань.", true); return; }
+          const reward = RPG.describeReward({ exp, gold, items: Object.entries(items).map(([id, qty]) => ({ id, qty })) });
+          const what = [quests ? `завдань: ${quests}` : "", bounties ? `нагород за чемпіонів: ${bounties}` : ""].filter(Boolean).join(", ");
+          const txt = `Здано ${what}. Нагорода: ${reward}.` + (lastLevel ? ` Новий рівень: ${lastLevel}!` : "");
+          await RPG.saveGame(save);
+          showMsg(msg, txt);
+          renderAll();
+        });
+        all.disabled = !readyCount;
+        const allRow = el("div", "row");
+        allRow.append(all);
+        box.append(allRow);
+      }
 
       if (qs.bounties.length) {
         box.append(el("h3", null, "Нагороди за чемпіонів"));
@@ -1764,12 +1805,18 @@
         box.append(el("p", "note", `Особливе завдання «${E.name}» Артеміда доручає героям від ${E.minLevel} рівня.`));
         return;
       }
+      // Виконано: один раз показуємо повідомлення про відкриття Дошки оголошень, далі поле приховане
+      if (info.done) {
+        if (!info.st.announced) {
+          info.st.announced = true;
+          RPG.saveGame(save).catch(e => console.error(e));
+          showExploreUnlocked();
+        }
+        return;
+      }
       const card = el("div", "stack explore-card");
       card.append(el("h3", null, `Особливе завдання: «${E.name}»`));
-      if (info.done) {
-        card.append(el("p", "note", E.finale));
-        card.append(link("До Центрального району (Мерія)", "game.html?district=center"));
-      } else if (info.canStart) {
+      if (info.canStart) {
         card.append(el("p", "note", `«Ви вже ${RPG.gw(save, "досвідчений авантюрист", "досвідчена авантюристка")}. Час дослідити світ далі — але спершу допоможіть нам. ` +
           `Завдання з ${info.total} частин, кожна відкривається після попередньої.»`));
         card.append(button("Взяти завдання", "wf wf-button", async () => {
@@ -1792,16 +1839,28 @@
           const up = r.levelUps.length ? ` Новий рівень: ${r.levelUps[r.levelUps.length - 1]}!` : "";
           journalReward(save, r.finished ? `Завдання «${E.name}» виконано` : `«${E.name}»: частину ${info.index} з ${info.total} здано`,
             `Нагорода: ${RPG.describeExploreReward(r.part || info.part)}.${up}`);
+          if (r.finished) RPG.storyState(save).announced = true;
           await RPG.saveGame(save);
-          showMsg(msg, r.finished
-            ? `«${E.name}» виконано! Дошка оголошень біля Мерії (Центральний район) тепер відкрита — можна наймати героїв у групу.${up}`
-            : `Частину виконано! Нагорода: ${RPG.describeExploreReward(r.part)}.${up} Далі: ${E.parts[RPG.storyState(save).part - 1].title}.`);
+          if (r.finished) showExploreUnlocked(up);
+          else showMsg(msg, `Частину виконано! Нагорода: ${RPG.describeExploreReward(r.part)}.${up} Далі: ${E.parts[RPG.storyState(save).part - 1].title}.`);
           renderAll();
         });
         b.disabled = !info.complete;
         card.append(b);
       }
       box.append(card);
+    }
+
+    // Повідомлення: «Час дослідити» виконано — відкрито Дошку оголошень біля Мерії
+    function showExploreUnlocked(up = "") {
+      const E = RPG.EXPLORE;
+      const go = link("До Центрального району (Мерія)", "game.html?district=center", "wf wf-button");
+      showNotice("Відкрито доступ: Дошка оголошень", [
+        `Особливе завдання «${E.name}» виконано!${up}`,
+        E.finale,
+        "Дошка оголошень біля Мерії (Центральний район) тепер відкрита — можна наймати героїв у групу.",
+        go
+      ]);
     }
 
     // --- Квест «Шлях професії» (з 12 рівня Селянина; 3 гілки по 10 завдань; професія — на 15 рівні) ---

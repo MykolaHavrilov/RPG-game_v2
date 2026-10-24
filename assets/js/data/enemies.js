@@ -1107,13 +1107,14 @@
     }
   };
 
-  // Торговець Гільдії авантюристів (Дубова Застава): зброя 1–2 виду, малі й середні зілля
+  // Торговець Гільдії авантюристів (Дубова Застава): зброя 1–2 виду, шкіряна броня (2 вид), малі й середні зілля
   const GUILD_SHOP = [
     "potion_hp_small", "potion_hp_medium", "potion_mp_small", "potion_mp_medium",
     "sword_t1", "dagger_t1", "axe_t1", "bow_t1", "staff_t1",
     "shield_t1", "quiver_t1", "orb_t1", "knife_t1",
     "sword_t2", "dagger_t2", "axe_t2", "bow_t2", "staff_t2",
-    "shield_t2", "quiver_t2", "orb_t2", "knife_t2"
+    "shield_t2", "quiver_t2", "orb_t2", "knife_t2",
+    "leather_head", "leather_chest", "leather_legs", "leather_hands", "leather_feet"
   ];
   const RESPAWN_LOCATION = "temple";
 

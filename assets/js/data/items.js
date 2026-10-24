@@ -345,31 +345,31 @@ const ITEMS = {
   },
   leather_head: {
     name: "Шкіряна шапка", icon: ["armor", 5],
-    type: "armor", slot: "head", tier: 2, levelReq: 10, price: 90, set: "leather", noShop: true,
+    type: "armor", slot: "head", tier: 2, levelReq: 10, price: 90, set: "leather",
     stats: { defense: 5, hp: 20 },
     description: "Частина шкіряного комплекту."
   },
   leather_chest: {
     name: "Шкіряна куртка", icon: ["armor", 6],
-    type: "armor", slot: "chest", tier: 2, levelReq: 10, price: 150, set: "leather", noShop: true,
+    type: "armor", slot: "chest", tier: 2, levelReq: 10, price: 150, set: "leather",
     stats: { defense: 9, hp: 35 },
     description: "Частина шкіряного комплекту."
   },
   leather_legs: {
     name: "Шкіряні штани", icon: ["armor", 7],
-    type: "armor", slot: "legs", tier: 2, levelReq: 10, price: 110, set: "leather", noShop: true,
+    type: "armor", slot: "legs", tier: 2, levelReq: 10, price: 110, set: "leather",
     stats: { defense: 6, hp: 25 },
     description: "Частина шкіряного комплекту."
   },
   leather_hands: {
     name: "Шкіряні наручі", icon: ["armor", 8],
-    type: "armor", slot: "hands", tier: 2, levelReq: 10, price: 90, set: "leather", noShop: true,
+    type: "armor", slot: "hands", tier: 2, levelReq: 10, price: 90, set: "leather",
     stats: { defense: 4, attack: 3 },
     description: "Частина шкіряного комплекту."
   },
   leather_feet: {
     name: "Шкіряні чоботи", icon: ["armor", 9],
-    type: "armor", slot: "feet", tier: 2, levelReq: 10, price: 100, set: "leather", noShop: true,
+    type: "armor", slot: "feet", tier: 2, levelReq: 10, price: 100, set: "leather",
     stats: { defense: 4, speed: 2 },
     description: "Частина шкіряного комплекту."
   },
