@@ -1,9 +1,27 @@
-// menu.js — логіка меню: кнопка «Назад» і підтвердження виходу
+// menu.js — логіка меню: «Продовжити гру», кнопка «Назад» і підтвердження виходу
 
 document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Музика головного меню (audio.js) ----------------------------
-  if (document.body.dataset.page === 'index' && window.RPG && RPG.audio) RPG.audio.play('menu');
+  const menuPages = ['index', 'about'];
+  if (menuPages.includes(document.body.dataset.page) && window.RPG && RPG.audio) RPG.audio.play('menu');
+
+  // ---- «Продовжити гру» (тільки на головному меню) ------------------
+  // Відкриває гру, яку завантажували або створювали останньою (поточний слот).
+  // Якщо цей сейв видалено (або гри ще не було) — кнопка неактивна,
+  // доки не завантажать інше збереження чи не почнуть нову гру.
+  const continueBtn = document.getElementById('continue-btn');
+  if (continueBtn && window.RPG && RPG.listSaves) {
+    const currentId = RPG.getCurrentSlot();
+    RPG.listSaves().then(saves => {
+      const target = currentId && saves.find(s => s.id === currentId);
+      if (!target) { continueBtn.title = 'Немає гри для продовження — завантажте збереження або почніть нову гру'; return; }
+      const c = target.character || {};
+      continueBtn.title = `${c.name || 'Герой'}, рівень ${c.level || 1}`;
+      continueBtn.disabled = false;
+      continueBtn.addEventListener('click', () => { location.href = 'pages/game.html'; });
+    }).catch(err => console.warn('[menu] Не вдалося прочитати збереження:', err));
+  }
 
   // ---- Кнопки «Назад» (data-back) --------------------------------
   // Налаштування: повертаємо туди, звідки їх відкрили
