@@ -934,3 +934,55 @@ main > a.location { display: flex; margin-bottom: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .chronicle-p.is-restored { animation: none; } }
 .parchment-keep { margin: 8px 0 0; text-align: center; font-size: .95rem; color: #7a5530; }
+
+/* ---------- Журнал бою (journal.js): кнопка, короткий стан, окреме вікно ---------- */
+/* Короткий стан на сторінці — вузька смужка максимум у 2 рядки, щоб поле бою займало якнайбільше місця.
+   Рядки йдуть в один потік через « · »; повний текст — у вікні журналу (клік по смужці). */
+.log.log-status {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  height: auto; min-height: 0; max-height: calc(2 * 1.35em + 10px); overflow: hidden;
+  padding: 4px 8px; font-size: .84rem; line-height: 1.35; cursor: pointer; scroll-behavior: auto;
+}
+.log.log-status:empty { display: none; }
+.log.log-status li, .log.log-status li[data-who] {
+  display: inline !important; margin: 0 !important; padding: 0 !important; border: 0 !important;
+  background: none !important; box-shadow: none !important; animation: none;
+  font-family: inherit !important; font-size: inherit !important; text-transform: none; letter-spacing: 0; text-align: left;
+}
+.log.log-status li + li::before { content: " · "; color: var(--text-dim); font-weight: 400; font-style: normal; }
+.log.log-status .log-mark { display: none !important; }
+.log.log-status .log-text { display: inline; }
+.log.log-status .log-title { font-weight: 800; }
+.log.log-status:hover { border-color: var(--gold); }
+/* Невелика кнопка «Журнал бою» */
+.actions .wf.journal-btn, .journal-btn { min-height: 0; padding: 4px 10px; font-size: .85rem; align-self: center; }
+#journal-btn-place { align-self: flex-start; }
+
+.journal-dialog { max-width: min(760px, calc(100vw - 24px)); padding: 16px 14px 12px; }
+.journal-note { margin: 0 0 8px; font-size: .8rem; color: var(--text-dim); }
+.journal-wrap { position: relative; }
+.log.journal-list { height: min(62vh, 560px); padding-right: 44px; scroll-behavior: smooth; }
+.journal-list li { animation: none; }
+.journal-list.is-empty::before { content: "Журнал порожній — тут з'являться ваші бої та нагороди."; display: block; padding: 8px; color: var(--text-dim); font-style: italic; }
+.journal-list .log-entry-head {
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  margin-top: 12px; padding: 6px 6px 2px; border-top: 2px solid var(--border-color); border-radius: 0;
+  font-size: .76rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em;
+}
+.journal-list .log-entry-head:first-child { margin-top: 0; border-top: 0; }
+.log-entry-num { font-variant-numeric: tabular-nums; opacity: .7; }
+.log-entry-kind { font-weight: 800; color: var(--gold); }
+.log-entry-head.is-quest .log-entry-kind { color: #8fe08f; }
+.log-entry-at { margin-left: auto; font-variant-numeric: tabular-nums; }
+/* Дві малі стрілки: на самий верх / в самий низ */
+.journal-nav { position: absolute; right: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+.journal-jump {
+  width: 30px; height: 30px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--pop-border); background: rgba(0, 0, 0, .45); color: inherit; font-size: .8rem; line-height: 1;
+}
+.journal-jump:hover, .journal-jump:focus-visible { color: var(--gold); border-color: var(--gold); }
+.journal-dialog .dialog-actions { justify-content: flex-end; margin-top: 10px; }
+@media (max-width: 700px) {
+  .log.journal-list { height: 64vh; font-size: .84rem; }
+  .journal-dialog { padding: 14px 10px 10px; }
+}

@@ -74,13 +74,15 @@
           <div class="panel stack dungeon-panel" id="dungeon-panel" hidden></div>
           <!-- Поле бою 3×8: герої (ліві 3×3), проміжок 2×3, вороги (праві 3×3) — game.js → renderField -->
           <div class="bfield" id="bfield" aria-label="Поле бою"></div>
-          <!-- Журнал бою: тут і готовність до бою, і хід бою, і нагорода (game.js → setArena / addLogLine) -->
-          <ol class="log" id="battle-log" aria-label="Журнал бою" aria-live="polite"></ol>
+          <!-- Короткий стан: готовність до бою, останній рядок бою, підсумок (game.js → setArena / addLogLine).
+               Повний журнал (останні 100 подій) — у вікні за кнопкою «Журнал бою» (journal.js) -->
+          <ol class="log log-status" id="battle-log" aria-label="Стан бою" aria-live="polite"></ol>
           <!-- Одразу під журналом: почати бій / пропустити суперника -->
           <div class="row actions">
             <button class="wf wf-button" id="start-btn" type="button">Почати бій</button>
             <button class="wf wf-link" id="reroll-btn" type="button">Шукати іншого ворога</button>
             <button class="wf wf-link" id="formation-btn" type="button">Розстановка</button>
+            <button class="wf wf-link journal-btn" id="journal-btn" type="button" title="Останні 100 подій">📜 Журнал бою</button>
             <button class="wf wf-link" id="leave-btn" type="button" hidden>Покинути данж</button>
           </div>
 
@@ -94,6 +96,7 @@
           <div class="queue" id="queue"></div>
         </div>
 
+        <button class="wf wf-link journal-btn" id="journal-btn-place" type="button" title="Останні 100 подій" hidden>📜 Журнал бою</button>
         <button class="wf wf-button wf-secondary" id="save-btn" type="button">Зберегти гру</button>
         <div class="msg" id="msg" role="status" hidden></div>
       </section>
@@ -131,6 +134,7 @@
   <script src="../assets/js/dungeon.js" defer></script>
   <script src="../assets/js/data/chronicle.js" defer></script>
   <script src="../assets/js/save.js" defer></script>
+  <script src="../assets/js/journal.js" defer></script>
   <script src="../assets/js/character.js" defer></script>
   <script src="../assets/js/party.js" defer></script>
   <script src="../assets/js/data/npcs.js" defer></script>

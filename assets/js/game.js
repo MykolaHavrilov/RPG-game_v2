@@ -190,6 +190,11 @@
     });
   }
 
+  // ---------- Журнал бою: нагорода за завдання (journal.js) ----------
+  function journalReward(save, title, text) {
+    if (RPG.journalAdd) RPG.journalAdd(save, { kind: "quest", lines: [["title", title, "win"], ["info", text]] });
+  }
+
   // ---------- Незнайомець зі сферою (квест «Долоні Велеса», 12 рівень) ----------
   async function meetStranger(save) {
     if (!RPG.velesGiveOrb(save)) return;
@@ -1187,6 +1192,7 @@
         const drink = button("Випити з джерела", "wf wf-button", async () => {
           const r = RPG.drinkSpring(save);
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          journalReward(save, "Джерело Велеса", `Група напилася з чарівного джерела: +${V.expBonusPct}% досвіду за бої на ${r.minutes} хвилин.`);
           await RPG.saveGame(save);
           showMsg(msg, `Вода холодна й солодка, як весняний дощ. Уся група відчуває, як світ стає яснішим: +${V.expBonusPct}% досвіду ` +
             `за бої на ${r.minutes} хвилин.`);
@@ -1229,6 +1235,9 @@
         if (!r.ok) return { text: `«${r.reason}»`, error: true, to: "progress" };
         await RPG.saveGame(save);
         if (!r.finished) return { text: "Капітан задоволено киває. «Добре. Тепер — припаси.»", to: "progress" };
+        journalReward(save, "Завдання «Варта Центральної брами» виконано",
+          `Нагорода: +${fmtNum(RPG.GATE.reward.exp)} досвіду${r.levelUps.length ? `, новий рівень: ${r.levelUps.at(-1)}!` : "."}`);
+        await RPG.saveGame(save);
         return { text: `Капітан віддає наказ відчинити браму. «Ти з наших. Темний ліс чекає.» +${fmtNum(RPG.GATE.reward.exp)} досвіду` +
           (r.levelUps.length ? `, новий рівень: ${r.levelUps.at(-1)}!` : ".") };
       },
@@ -1668,9 +1677,11 @@
           r.append(info, button("Отримати", "wf wf-button", async () => {
             const res = RPG.claimBounty(save, bounty.id);
             if (!res.ok) { showMsg(msg, res.reason, true); return; }
+            const txt = `Нагорода за чемпіона: +${bounty.exp} EXP, +${bounty.gold} золота.` +
+              (res.levelUps.length ? ` Новий рівень: ${res.levelUps[res.levelUps.length - 1]}!` : "");
+            journalReward(save, `Гільдія: переможено чемпіона «${bounty.name}»`, txt);
             await RPG.saveGame(save);
-            showMsg(msg, `Нагорода за чемпіона: +${bounty.exp} EXP, +${bounty.gold} золота.` +
-              (res.levelUps.length ? ` Новий рівень: ${res.levelUps[res.levelUps.length - 1]}!` : ""));
+            showMsg(msg, txt);
             renderAll();
           }));
           box.append(r);
@@ -1687,9 +1698,11 @@
         const turnIn = button("Здати", "wf wf-button", async () => {
           const res = RPG.turnInQuest(save, quest.id);
           if (!res.ok) { showMsg(msg, res.reason, true); return; }
+          const txt = `Завдання виконано! Нагорода: ${RPG.describeReward(quest.reward)}.` +
+            (res.levelUps.length ? ` Новий рівень: ${res.levelUps[res.levelUps.length - 1]}!` : "");
+          journalReward(save, `Завдання «${RPG.questTitle(quest)}» здано`, txt);
           await RPG.saveGame(save);
-          showMsg(msg, `Завдання виконано! Нагорода: ${RPG.describeReward(quest.reward)}.` +
-            (res.levelUps.length ? ` Новий рівень: ${res.levelUps[res.levelUps.length - 1]}!` : ""));
+          showMsg(msg, txt);
           renderAll();
         });
         turnIn.disabled = !done;
@@ -1754,8 +1767,10 @@
         const b = button(info.index < info.total ? "Здати частину" : "Завершити завдання", "wf wf-button", async () => {
           const r = RPG.turnInExplore(save);
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
-          await RPG.saveGame(save);
           const up = r.levelUps.length ? ` Новий рівень: ${r.levelUps[r.levelUps.length - 1]}!` : "";
+          journalReward(save, r.finished ? `Завдання «${E.name}» виконано` : `«${E.name}»: частину ${info.index} з ${info.total} здано`,
+            `Нагорода: ${RPG.describeExploreReward(r.part || info.part)}.${up}`);
+          await RPG.saveGame(save);
           showMsg(msg, r.finished
             ? `«${E.name}» виконано! Дошка оголошень біля Мерії (Центральний район) тепер відкрита — можна наймати героїв у групу.${up}`
             : `Частину виконано! Нагорода: ${RPG.describeExploreReward(r.part)}.${up} Далі: ${E.parts[RPG.storyState(save).part - 1].title}.`);
@@ -1827,8 +1842,9 @@
             return;
           }
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
-          await RPG.saveGame(save);
           const c = RPG.getClass(r.classId);
+          journalReward(save, "Шлях професії пройдено", `Нагорода за шлях: ${r.exp ? fmtNum(r.exp) + " EXP (15 рівень) і " : ""}нова професія — ${c.name}.`);
+          await RPG.saveGame(save);
           showMsg(msg, `Нагорода за шлях: ${r.exp ? fmtNum(r.exp) + " EXP (15 рівень) і " : ""}нова професія — ${c.name}! ${c.description} ` +
             `Рівень професії почався з 1, а бонуси Селянина лишилися. Тренер Брут навчить новим навичкам.` +
             (r.change?.removed?.length ? " Зброю, якою ця професія не користується, знято в інвентар." : ""));
@@ -1846,6 +1862,8 @@
         const b = button("Здати завдання", "wf wf-button", async () => {
           const r = RPG.turnInProfession(save);
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          journalReward(save, `Шлях професії: завдання ${info.index} з ${info.total} здано`,
+            `Нагорода: ${fmtNum(r.exp)} EXP.${levelTxt(r.levelUps)}`);
           await RPG.saveGame(save);
           const next = RPG.professionInfo(save);
           showMsg(msg, `Завдання виконано! Нагорода: ${fmtNum(r.exp)} EXP.${levelTxt(r.levelUps)} ` +
@@ -2427,13 +2445,19 @@
       else renderPlace();
     }
 
-    // Колишнє поле «Готові до бою»: заголовок і рядки тепер пишуться в журнал бою
+    // Короткий стан бою (logBox): заголовок і рядки. Повний журнал — у вікні (journal.js).
+    // Під час показу бою (liveLines) рядки ще й ідуть у відкрите вікно журналу.
+    let liveLines = null;     // рядки бою, що зараз показується
+    let liveEntry = null;     // його запис у save.battleLog (у вікні не показуємо, поки бій іде)
+    let journalCtl = null;    // відкрите вікно журналу
+    function statusAppend(line) {
+      logBox.append(RPG.logLi(line));   // смужка на 2 рядки: видно початок (головне), решта — у журналі
+    }
     function setArena(title, lines, state = "") {
-      const li = el("li", "log-title" + (state ? " is-" + state : ""));
-      li.append(el("span", "log-mark", state === "win" ? "★" : state === "lose" ? "✝" : "⚑"), el("span", "log-text", title));
-      logBox.append(li);
-      for (const line of lines || []) addLogLine({ who: "info", text: line });
-      logBox.scrollTop = logBox.scrollHeight;
+      logBox.innerHTML = "";
+      const all = [["title", title, state], ...(lines || []).map(l => ["info", l])];
+      all.forEach(statusAppend);
+      if (liveLines) all.forEach(l => { liveLines.push(l); journalCtl?.append(l); });
     }
 
     const foesText = () => foes.map((f, i) => { const e = curEnemy(i); return `${e.name} (рівень ${e.level})`; }).join(", ");
@@ -2467,19 +2491,17 @@
       setArena(anyChampion() ? "Чемпіон!" : "Готові до бою", lines, anyChampion() ? "champion" : "ready");
     }
 
-    // Рядок журналу: позначка «хто діє» + текст, числа виділені
+    // Рядок журналу: позначка «хто діє» + текст, числа виділені (RPG.logLi).
+    // Під час бою в короткому стані — заголовок бою й лише останній рядок.
     function addLogLine(ev) {
-      const li = el("li", "log-" + ev.who + (ev.crit ? " log-crit" : "") + (ev.move ? " log-move" : "") + (ev.heal ? " log-heal" : ""));
-      li.dataset.who = ev.who;
-      li.append(el("span", "log-mark", ev.who === "round" ? "" : ev.move ? "➜" : ev.who === "hero" ? "⚔" : ev.who === "enemy" ? "✸" : "◆"));
-      const text = el("span", "log-text");
-      String(ev.text).split(/(\d+)/).forEach((part, i) => {
-        if (!part) return;
-        text.append(i % 2 ? el("b", "log-num", part) : document.createTextNode(part));
-      });
-      li.append(text);
+      const line = RPG.journalPack(ev);
+      if (!liveLines) { statusAppend(line); return; }
+      liveLines.push(line);
+      journalCtl?.append(line);
+      logBox.querySelector(".log-live")?.remove();
+      const li = RPG.logLi(line);
+      li.classList.add("log-live");
       logBox.append(li);
-      logBox.scrollTop = logBox.scrollHeight;
     }
 
     // Ефекти: хто діє — спалах; у кого змінилось HP — число над портретом
@@ -2655,11 +2677,47 @@
         if (result.win && dunNext.done && RPG.chronicleRecord) chron = RPG.chronicleRecord(save, dun.id, team, result);
       }
       if (!result.draw || result.win) fieldLootAdd(save, { win: result.win, exp: battleExp, gold: battleGold, items: got, lost, filtered });
+
+      // Підсумок бою (заголовок + рядки) — рахуємо одразу, щоб записати в журнал разом із ходом бою
+      let outcome;
+      if (deaths) {
+        const lines = deaths.map(({ ms, d }) =>
+          `${group ? ms.character.name + ": " : ""}штраф досвіду −${d.expPct}% (${fmtNum(d.expLost)} EXP)` +
+          (d.levelDown ? `, рівень знижено до ${d.newLevel}${d.pointsLost ? ` (−${d.pointsLost} очок атрибутів)` : ""}` : "") +
+          (d.lostItems.length ? `, втрачено: ${d.lostItems.map(ref => RPG.itemFullName(ref)).join(", ")}` : ""));
+        lines.push(`${group ? "Уся група відродилася" : "Ви відродилися"} в Храмі з ${Math.round(RPG.RESPAWN_HP_PCT * 100)}% здоров'я і без мани.`);
+        outcome = { title: group ? "Група загинула" : "Загибель", lines, state: "lose" };
+      } else if (dun && result.win && !dunNext.done) {
+        const lines = [`Бій ${dun.stage} з ${dun.stages} виграно. Нагороди за нього немає — лише за боса.`];
+        if (summary.length) lines.push(summary.join(" · "));
+        lines.push("Зілля й відновлення тут не діють — HP переходить у наступний бій як є (лікують лише навички).");
+        outcome = { title: `Данж: бій ${dun.stage} з ${dun.stages} — перемога`, lines, state: "win" };
+      } else if (result.win) {
+        const lines = [summary.join(" · ")];
+        for (const l of levelLines) lines.push(l + " Здоров'я та мана відновлені, є нові вільні очки атрибутів (сторінка «Персонаж»).");
+        lines.push(`Переможено ворогів: ${save.character.kills}`);
+        if (chron?.first) lines.push(`📜 У книзі «${RPG.CHRONICLE.TITLE}» з'явився новий запис` +
+          (chron.chapterDone ? ` — «${chron.chapter.title}» завершено!` : ` («${chron.chapter.title}»).`) +
+          " Попросіть Розпорядника Захара в Мерії показати книгу.");
+        outcome = { title: dun ? `Данж «${dun.name}» пройдено!` : "Перемога!", lines, state: "win" };
+      } else if (dun) {
+        outcome = { title: foes.length > 1 ? "Вороги втекли — данж провалено" : "Ворог утік — данж провалено",
+          lines: ["Ворота зачинилися. Нагороди немає, ключ використано."], state: "draw" };
+      } else {
+        outcome = { title: foes.length > 1 ? "Вороги втекли" : "Ворог утік", lines: ["Нагороди немає."], state: "draw" };
+      }
+      const fightTitle = `${team.map(ms => ms.character.name).join(", ")} проти: ${foesText()}`;
+      // Журнал бою (journal.js): увесь хід бою + підсумок; найстаріший запис понад 100 затирається
+      liveEntry = RPG.journalAdd(save, { kind: "battle", lines: [
+        ["title", fightTitle, "fight"], ...result.events.map(RPG.journalPack),
+        ["title", outcome.title, outcome.state], ...outcome.lines.map(l => ["info", l])] });
       await RPG.saveGame(save).catch(e => console.error(e));
 
-      // Показ бою
+      // Показ бою (у вікні журналу цей бій з'являється рядок за рядком, без спойлера підсумку)
       const stepByStep = RPG.getSettings().battleView !== "result";
-      setArena(`${team.map(ms => ms.character.name).join(", ")} проти: ${foesText()}`, [], "fight");
+      liveLines = [];
+      journalCtl?.refresh({ skip: liveEntry, live: liveLines });
+      setArena(fightTitle, [], "fight");
       lastSnap = null;
       // Поле бою: розстановка цього бою, смужки — зі стану на початку
       renderField({ team, heroPos: result.heroPos, foePos: result.foePos, maxStats });
@@ -2687,13 +2745,11 @@
         else if (result.win && levelLines.length) RPG.audio.jingle("levelup");
         else if (result.win) RPG.audio.jingle("victory");
       }
+      // Бій показано — у журналі тепер повний запис (з підсумком)
+      liveLines = liveEntry = null;
+      journalCtl?.refresh({ skip: null, live: null });
+      setArena(outcome.title, outcome.lines, outcome.state);
       if (deaths) {
-        const lines = deaths.map(({ ms, d }) =>
-          `${group ? ms.character.name + ": " : ""}штраф досвіду −${d.expPct}% (${fmtNum(d.expLost)} EXP)` +
-          (d.levelDown ? `, рівень знижено до ${d.newLevel}${d.pointsLost ? ` (−${d.pointsLost} очок атрибутів)` : ""}` : "") +
-          (d.lostItems.length ? `, втрачено: ${d.lostItems.map(ref => RPG.itemFullName(ref)).join(", ")}` : ""));
-        lines.push(`${group ? "Уся група відродилася" : "Ви відродилися"} в Храмі з ${Math.round(RPG.RESPAWN_HP_PCT * 100)}% здоров'я і без мани.`);
-        setArena(group ? "Група загинула" : "Загибель", lines, "lose");
         const wake = el("li", "log-action");
         wake.append(link("Прокинутися в Храмі", "game.html"));
         logBox.append(wake);
@@ -2705,26 +2761,6 @@
         startBtn.disabled = rerollBtn.disabled = true;   // бій звідси вже неможливий
         saveBtn.disabled = false;
         return;
-      }
-
-      if (dun && result.win && !dunNext.done) {
-        const lines = [`Бій ${dun.stage} з ${dun.stages} виграно. Нагороди за нього немає — лише за боса.`];
-        if (summary.length) lines.push(summary.join(" · "));
-        lines.push("Зілля й відновлення тут не діють — HP переходить у наступний бій як є (лікують лише навички).");
-        setArena(`Данж: бій ${dun.stage} з ${dun.stages} — перемога`, lines, "win");
-      } else if (result.win) {
-        const lines = [summary.join(" · ")];
-        for (const l of levelLines) lines.push(l + " Здоров'я та мана відновлені, є нові вільні очки атрибутів (сторінка «Персонаж»).");
-        lines.push(`Переможено ворогів: ${save.character.kills}`);
-        if (chron?.first) lines.push(`📜 У книзі «${RPG.CHRONICLE.TITLE}» з'явився новий запис` +
-          (chron.chapterDone ? ` — «${chron.chapter.title}» завершено!` : ` («${chron.chapter.title}»).`) +
-          " Попросіть Розпорядника Захара в Мерії показати книгу.");
-        setArena(dun ? `Данж «${dun.name}» пройдено!` : "Перемога!", lines, "win");
-      } else if (dun) {
-        setArena(foes.length > 1 ? "Вороги втекли — данж провалено" : "Ворог утік — данж провалено",
-          ["Ворота зачинилися. Нагороди немає, ключ використано."], "draw");
-      } else {
-        setArena(foes.length > 1 ? "Вороги втекли" : "Ворог утік", ["Нагороди немає."], "draw");
       }
 
       // Наступні суперники
@@ -2765,6 +2801,16 @@
       });
     });
 
+    // Журнал бою: останні 100 подій в окремому вікні (journal.js); під час бою — поточний бій наживо.
+    // Кнопка є і в бойових локаціях (біля «Почати бій»), і в мирних (біля «Зберегти гру»)
+    const openJournal = () => { journalCtl = RPG.openJournal(save, liveLines ? { skip: liveEntry, live: liveLines } : {}); };
+    document.querySelectorAll(".journal-btn").forEach(b => b.addEventListener("click", openJournal));
+    // Коротка смужка стану (2 рядки) — клік відкриває повний журнал
+    logBox.title = "Натисніть, щоб відкрити журнал бою";
+    logBox.addEventListener("click", openJournal);
+    const placeJournal = $("journal-btn-place");
+    if (placeJournal) placeJournal.hidden = !!combat;
+
     saveBtn.addEventListener("click", async () => {
       try {
         await RPG.saveGame(save);
@@ -2778,6 +2824,7 @@
       // Після прибуття на локацію перед першим боєм — вікно розстановки героїв
       startBtn.addEventListener("click", () => { if (fighting) return; if (placedHere()) startBattle(); else openFormation(startBattle); });
       $("formation-btn")?.addEventListener("click", () => { if (!fighting) openFormation(); });
+
       rerollBtn.addEventListener("click", () => {
         if (fighting || mode === "dungeon") return;
         nextEnemy();

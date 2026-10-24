@@ -196,6 +196,8 @@
     const loc = RPG.LOCATIONS[save.location.map];
     if (!loc || loc.locked) save.location.map = RPG.DEFAULT_LOCATION;
     save.settings ??= { battleView: "stepByStep" };
+    // Журнал бою (journal.js): останні 100 подій
+    save.battleLog = Array.isArray(save.battleLog) ? save.battleLog.filter(r => r && Array.isArray(r.lines)).slice(-100) : [];
     save.battleQueue ??= ["attack"];
     save.battleQueue = save.battleQueue.slice(0, RPG.QUEUE_SIZE || 6);
     if (!save.battleQueue.some(Boolean)) save.battleQueue = ["attack"];
