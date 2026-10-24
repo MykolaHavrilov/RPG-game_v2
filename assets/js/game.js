@@ -2302,7 +2302,22 @@
     const fighters = () => RPG.aliveMembers(save);
     // Від половини групи до розміру групи (макс. 6) — випадково (RPG.enemyGroupRange); данж — без змін
     let champWarn = false;      // показати вікно-попередження про чемпіона
+    // Кут поля, де з'являться герої в наступному бою (battle.js → corner 0…3);
+    // з кожною новою групою ворогів — інший кут, вороги — у протилежному
+    // Краї поля (EDGE_TYPES) і перешкоди за краями (EDGE_COVER) — див. «Краї поля» нижче (fieldEdges, fieldCover).
+    // Оголошені тут, бо nextEnemy() кличе fieldCover() ще до того місця.
+    const EDGE_TYPES = { trees: "Дерева", rocks: "Скелі", walls: "Стіни", water: "Вода" };
+    const EDGE_COVER = { trees: ["tree", "bush"], rocks: ["rock", "stone"], walls: ["wall", "stone"] };
+    let corner = RPG.randomCorner();
+    let obstacles = [];         // перешкоди наступного бою (battle.js → makeObstacles), нові з кожною групою ворогів
+    let foePositions = [];      // стартові місця ворогів (battle.js → placeFoesFree): будь-де на полі, купою або врозкид
     function nextEnemy() {
+      corner = RPG.randomCorner(corner);
+      obstacles = RPG.makeObstacles(fieldCover(), corner);
+      pickFoes();
+      foePositions = RPG.placeFoesFree(foes, corner, obstacles);
+    }
+    function pickFoes() {
       if (mode === "dungeon") {
         // У данжі вороги задані наперед; поки ворота зачинені — показуємо боса
         foes = dungeonOn() ? RPG.dungeonSpecs(save) : [{ id: dungeonInfo.boss, champion: false }];
@@ -2446,15 +2461,21 @@
       });
     }
 
-    // ---------- Поле бою 3 × 8 (battle.js → BATTLE_FIELD, placeHeroes, placeFoes) ----------
-    // c 0–2 — зона групи (3×3), c 3–4 — проміжок для маневру, c 5–7 — зона ворогів.
-    // Розстановку героїв обирає гравець (вікно розстановки) і вона зберігається в save.formation:
-    // { main: { r, c }, <id напарника>: { r, c } }. save.formationAt — на якій локації її вже
-    // підтвердили після прибуття (travel.js скидає при новому прибутті); інакше вікно
-    // з'являється перед першим боєм.
+    // ---------- Поле бою 15 × 30 (battle.js → BATTLE_FIELD, fieldPos, placeHeroes, placeFoes) ----------
+    // Логічно поле 15 рядків × 30 стовпців. На ПК показується так само (широке),
+    // на телефоні (≤ 700 px) — повернуте: 30 рядків × 15 стовпців (високе).
+    // Герої стоять у куті corner (зона 3 × 3), вороги — будь-де на полі (купою або врозкид),
+    // але не ближче ніж на хід руху до героїв (battle.js → placeFoesFree).
+    // Розстановку героїв обирає гравець (вікно розстановки) — ВІДНОСНО своєї зони 3 × 3
+    // (c 2 — передній ряд), і вона зберігається в save.formation:
+    // { main: { r, c }, <id напарника>: { r, c } }. Якщо для всіх героїв групи вона вже є —
+    // використовується щоразу, у будь-якому куті; інакше вікно з'являється перед першим боєм.
     const FIELD = RPG.BATTLE_FIELD;
     const fieldBox = $("bfield");
     const fieldTokens = { hero: [], enemy: [] };
+    const mobileField = window.matchMedia ? window.matchMedia("(max-width: 700px)") : { matches: false };
+    // Повернули телефон / змінили ширину вікна — перемалювати поле під новий вигляд (не під час бою)
+    mobileField.addEventListener?.("change", () => { if (combat && !fighting) renderField(); });
     const memberKey = ms => (ms.memberIndex ? (save.party[ms.memberIndex - 1]?.id || "m" + ms.memberIndex) : "main");
     function formationOf(team) {
       const f = save.formation || {};
@@ -2465,23 +2486,107 @@
       team.forEach((ms, i) => { if (pos[i]) save.formation[memberKey(ms)] = { r: pos[i].r, c: pos[i].c }; });
       save.formationAt = locId;
     }
-    const placedHere = () => save.formationAt === locId;
+    // Чи вже є розстановка для всіх, хто йде в бій (нового напарника треба поставити)
+    const inZone = p => p && p.r >= 0 && p.r < FIELD.zone && p.c >= 0 && p.c < FIELD.zone;
+    const placedHere = () => {
+      const f = save.formation || {};
+      const team = fighters();
+      return team.length > 0 && team.every(ms => inZone(f[memberKey(ms)]));
+    };
 
-    // Сітка поля: 24 клітинки з підсвіткою зон
-    function fieldGrid(box, extra = "") {
+    // Як клітинка (r, c) стоїть на екрані: box.bfView = { rows, cols, map(p) → { row, col }, scale }
+    function setView(box, rows, cols, map, scale = 1) {
+      box.bfView = { rows, cols, map, scale };
+      box.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      box.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+      box.style.setProperty("--bf-ar", cols / rows);
+    }
+    function addCell(box, p, cls) {
+      const v = box.bfView.map(p);
+      const cell = el("div", "bf-cell " + cls);
+      cell.dataset.r = p.r;
+      cell.dataset.c = p.c;
+      cell.style.gridRow = v.row + 1;
+      cell.style.gridColumn = v.col + 1;
+      box.append(cell);
+      return cell;
+    }
+    // ---------- Краї поля: дерева / скелі / стіни / вода (data/enemies.js → LOCATIONS / DUNGEONS → edge) ----------
+    // Поле обгортається рамкою .bf-frame з чотирма смугами .bf-edge (суто для вигляду, на бій не впливають).
+    // Логічні краї [верх, право, низ, ліво] поточної локації (у данжі — краї данжу, якщо задані)
+    function fieldEdges() {
+      const src = (mode === "dungeon" && dungeonInfo?.edge) || locData?.edge || "trees";
+      const arr = Array.isArray(src) ? src : [src, src, src, src];
+      return [0, 1, 2, 3].map(i => (EDGE_TYPES[arr[i]] ? arr[i] : "trees"));
+    }
+    // Які перешкоди бувають на полі: з LOCATIONS / DUNGEONS → cover = { block: [...], low: [...] },
+    // а без нього — за краями: дерева → дерева й кущі, скелі → скелі й каміння, стіни → стіни й уламки-каміння
+    function fieldCover() {
+      const own = (mode === "dungeon" && dungeonInfo?.cover) || locData?.cover;
+      if (own) return own;
+      const kinds = [...new Set(fieldEdges())].filter(k => EDGE_COVER[k]);
+      if (!kinds.length) kinds.push("trees");                  // лише вода — тоді дерева й кущі
+      return { block: kinds.map(k => EDGE_COVER[k][0]), low: [...new Set(kinds.map(k => EDGE_COVER[k][1]))] };
+    }
+    const OBST_TITLES = {
+      tree: "Дерево — не пройти й не видно ціль", rock: "Скеля — не пройти й не видно ціль", wall: "Стіна — не пройти й не видно ціль",
+      bush: "Кущ — не стати, але ціль видно (лук, заклинання)", stone: "Каміння — не стати, але ціль видно (лук, заклинання)"
+    };
+    let fieldFrame = null;
+    function frameField(mob) {
+      if (!fieldBox) return;
+      if (!fieldFrame) {
+        fieldFrame = el("div", "bf-frame");
+        fieldBox.parentNode.insertBefore(fieldFrame, fieldBox);
+        fieldFrame.append(fieldBox);
+        for (const side of ["top", "right", "bottom", "left"]) fieldFrame.append(el("div", "bf-edge bf-edge-" + side));
+      }
+      const [t, r, b, l] = fieldEdges();
+      // На телефоні поле повернуте (рядок ↔ стовпець): логічний лівий край стає верхнім,
+      // нижній — правим, правий — нижнім, верхній — лівим
+      const shown = mob ? [l, b, r, t] : [t, r, b, l];
+      fieldFrame.className = "bf-frame" + (mob ? " is-mobile" : "") + (locData?.region === "dark" ? " is-dark" : "");
+      ["top", "right", "bottom", "left"].forEach((side, i) => {
+        const strip = fieldFrame.querySelector(".bf-edge-" + side);
+        strip.className = `bf-edge bf-edge-${side} edge-${shown[i]}`;
+        strip.title = EDGE_TYPES[shown[i]];
+      });
+    }
+
+    // Велике поле: 450 клітинок, підсвічені зони кутів героїв і ворогів
+    function fieldGrid(box, heroCorner = corner, obst = obstacles) {
       box.innerHTML = "";
-      box.className = "bfield" + (extra ? " " + extra : "");
+      const mob = mobileField.matches;
+      if (box === fieldBox) frameField(mob);
+      box.className = "bfield bf-big" + (mob ? " is-mobile" : "");
+      setView(box, mob ? FIELD.cols : FIELD.rows, mob ? FIELD.rows : FIELD.cols,
+        mob ? p => ({ row: p.c, col: p.r }) : p => ({ row: p.r, col: p.c }), 1.3);
+      const zone = {};
+      for (const z of RPG.zoneCells(heroCorner)) zone[z.r + ":" + z.c] = "bf-hero" + (z.front ? " bf-front" : "");
+      const ob = {};
+      for (const o of obst || []) ob[o.r + ":" + o.c] = o;
       for (let r = 0; r < FIELD.rows; r++) {
         for (let c = 0; c < FIELD.cols; c++) {
-          const zone = FIELD.heroCols.includes(c) ? "hero" : FIELD.enemyCols.includes(c) ? "enemy" : "gap";
-          const cell = el("div", "bf-cell bf-" + zone);
-          cell.dataset.r = r;
-          cell.dataset.c = c;
-          cell.style.gridRow = r + 1;
-          cell.style.gridColumn = c + 1;
-          box.append(cell);
+          const o = ob[r + ":" + c];
+          const cell = addCell(box, { r, c }, o ? `bf-gap bf-obst ob-${o.kind}${o.block ? " is-block" : " is-low"}` : (zone[r + ":" + c] || "bf-gap"));
+          if (o) cell.title = OBST_TITLES[o.kind] || "";
         }
       }
+    }
+    // Вікно розстановки: лише своя зона 3 × 3 і смуга «у бік поля» з боку переднього ряду
+    // (на ПК — праворуч, на телефоні — знизу)
+    function zoneGrid(box, extra = "") {
+      box.innerHTML = "";
+      const mob = mobileField.matches;
+      box.className = "bfield bf-zone" + (mob ? " is-mobile" : "") + (extra ? " " + extra : "");
+      const n = FIELD.zone;
+      setView(box, mob ? n + 1 : n, mob ? n : n + 1,
+        mob ? p => ({ row: p.c, col: p.r }) : p => ({ row: p.r, col: p.c }));
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) addCell(box, { r, c }, "bf-hero" + (c === n - 1 ? " bf-front" : ""));
+      const toward = el("div", "bf-toward", mob ? "↓ у бік поля ↓" : "у бік поля →");
+      if (mob) { toward.style.gridRow = n + 1; toward.style.gridColumn = "1 / -1"; }
+      else { toward.style.gridColumn = n + 1; toward.style.gridRow = "1 / -1"; }
+      box.append(toward);
     }
     // Іконка учасника: портрет + маленькі смужки HP / MP
     function fieldToken(kind, name, sprite, extra = "") {
@@ -2498,10 +2603,15 @@
       t.append(face, bars);
       return t;
     }
-    function tokenPos(t, p) {
-      if (!p) return;
-      t.style.left = (p.c * 100 / FIELD.cols) + "%";
-      t.style.top = (p.r * 100 / FIELD.rows) + "%";
+    // Іконка на клітинці p (логічні r, c) поля box; scale > 1 — трохи більша за клітинку (по центру)
+    function tokenPos(t, p, box = fieldBox) {
+      const v = box?.bfView;
+      if (!p || !v) return;
+      const q = v.map(p), k = v.scale || 1;
+      t.style.width = (k * 100 / v.cols) + "%";
+      t.style.height = (k * 100 / v.rows) + "%";
+      t.style.left = ((q.col - (k - 1) / 2) * 100 / v.cols) + "%";
+      t.style.top = ((q.row - (k - 1) / 2) * 100 / v.rows) + "%";
     }
     function tokenBars(t, hp, maxHp, mp, maxMp) {
       const [h, m] = t.querySelectorAll(".bf-bar i");
@@ -2522,9 +2632,11 @@
     function renderField(opts = {}) {
       if (!fieldBox) return;
       const team = opts.team || fighters();
-      const heroPos = opts.heroPos || formationOf(team);
-      const foePos = opts.foePos || RPG.placeFoes(foes);
-      fieldGrid(fieldBox);
+      const hc = Number.isInteger(opts.corner) ? opts.corner : corner;
+      const heroPos = opts.heroPos || formationOf(team).map(p => RPG.fieldPos(p, hc));
+      if (foePositions.length !== foes.length) foePositions = RPG.placeFoesFree(foes, corner, obstacles);
+      const foePos = opts.foePos || foePositions;
+      fieldGrid(fieldBox, hc, opts.obstacles || obstacles);
       fieldTokens.hero = team.map((ms, k) => {
         const t = heroTokenFor(ms);
         const st = opts.maxStats?.[k] || RPG.calcStats(ms);
@@ -2590,7 +2702,7 @@
       dlg.innerHTML = "";
       const close = button("×", "notice-close", () => dlg.close());
       close.setAttribute("aria-label", "Закрити");
-      const field = el("div", "bfield");
+      const field = el("div", "bfield bf-zone");
       const tray = el("div", "bf-tray");
       tray.setAttribute("aria-label", "Герої, яких ще не розставлено");
       const hint = el("p", "bf-hint");
@@ -2611,8 +2723,11 @@
       const row = el("div", "row dialog-actions");
       row.append(btnOk, btnAuto, button("Скасувати", "wf wf-link", () => dlg.close()));
       dlg.append(close, el("h3", null, "Розстановка героїв"),
-        el("p", "note", "Ваша зона — ліві 3×3 клітинки. Перетягніть героя на клітинку або натисніть на героя, а потім на клітинку. " +
-          "Посередині — 2 стовпці для маневру, праворуч стоять вороги. Дальність: ближній бій — 1 клітинка, посох (заклинання) — 2, лук — 3."),
+        el("p", "note", "Ваша зона — 3×3 клітинки. У кожному бою група з'являється в іншому куті поля, " +
+          "а вороги — будь-де на полі (купою або врозкид), але не ближче ніж на хід руху. Розстановка задається відносно " +
+          "кута: передній ряд (виділений) дивиться в бік поля. " +
+          "Перетягніть героя на клітинку або натисніть на героя, а потім на клітинку. " +
+          "Дальність: ближній бій — 1 клітинка, посох (заклинання) — 2, лук — 3. Схема збережеться для наступних боїв і локацій."),
         field, tray, hint, row);
 
       function placeAt(i, p) {
@@ -2683,16 +2798,9 @@
       }
 
       function draw() {
-        fieldGrid(field, "is-setup" + (selected !== null ? " has-pick" : ""));
+        zoneGrid(field, "is-setup" + (selected !== null ? " has-pick" : ""));
         field.querySelectorAll(".bf-cell.bf-hero").forEach(cell => {
           cell.addEventListener("click", () => cellClick(cell));
-        });
-        RPG.placeFoes(foes).forEach((p, i) => {
-          const f = foes[i], e = curEnemy(i);
-          const t = foeTokenFor(f, e);
-          tokenPos(t, p);
-          tokenBars(t, e.stats.hp, e.stats.hp, e.stats.mp || 0, e.stats.mp || 0);
-          field.append(t);
         });
         tray.innerHTML = "";
         team.forEach((ms, i) => {
@@ -2705,7 +2813,7 @@
           t.title += ` · дальність ${reach}`;
           if (i === selected) t.classList.add("is-picked");
           bindDrag(t, i);
-          if (pos[i]) { tokenPos(t, pos[i]); field.append(t); }
+          if (pos[i]) { tokenPos(t, pos[i], field); field.append(t); }
           else { t.classList.add("in-tray"); tray.append(t); }
         });
         tray.classList.toggle("is-empty", !tray.children.length);
@@ -2917,7 +3025,7 @@
       const maxStats = team.map(ms => RPG.calcStats(ms));
       RPG.equipFoes(foes, team);   // GS групи міг змінитися (перевдягнулись) — речі ворогів під нього
       renderEnemy();
-      const result = RPG.simulatePartyBattle(team, foes, { heroPos: formationOf(team) });
+      const result = RPG.simulatePartyBattle(team, foes, { heroPos: formationOf(team), corner, obstacles, foePos: foePositions });
       const group = team.length > 1;
 
       // Результат застосовуємо і зберігаємо ОДРАЗУ — щоб не можна було
@@ -3055,7 +3163,7 @@
       setArena(fightTitle, [], "fight");
       lastSnap = null;
       // Поле бою: розстановка цього бою, смужки — зі стану на початку
-      renderField({ team, heroPos: result.heroPos, foePos: result.foePos, maxStats });
+      renderField({ team, heroPos: result.heroPos, foePos: result.foePos, corner: result.corner, obstacles: result.obstacles, maxStats });
       fieldEvent(result.events[0], null, team, maxStats);
       if (stepByStep) {
         let prevEv = null;

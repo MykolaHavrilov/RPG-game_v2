@@ -14,14 +14,34 @@
 //   Приклад: герой 1 — 200, герой 2 — 100, ворог 1 — 80, ворог 2 — 100:
 //   герой 1 → герой 2 → ворог 2 → герой 1 (вдруге) → ворог 1.
 //
-// ПОЛЕ БОЮ 3 × 8 (FIELD)
-//   3 клітинки завширшки (рядки r = 0…2), 8 завдовжки (стовпці c = 0…7):
-//   c 0–2 — зона групи гравця (3×3), c 3–4 — проміжок для маневру (2×3), c 5–7 — зона ворогів (3×3).
+// ПОЛЕ БОЮ 15 × 30 (FIELD)
+//   Логічно поле завжди 15 рядків (r = 0…14) × 30 стовпців (c = 0…29).
+//   На ПК воно показується як 15 × 30 (широке), на телефоні — повернуте, 30 × 15 (високе):
+//   це лише показ (game.js), розрахунок бою однаковий.
+//   КУТИ (corner 0…3): 0 — верхній лівий, 1 — нижній лівий, 2 — верхній правий, 3 — нижній правий.
+//   Щоразу герої з'являються в іншому куті (game.js обирає кут перед боєм), у зоні 3 × 3.
+//   ВОРОГИ (placeFoesFree) — у будь-якому місці поля: або кожен у випадковій клітинці («scatter»),
+//   або всі купою біля однієї точки («pack»), але не ближче ніж на хід руху до зони героїв
+//   (відстань ≥ MOVE_STEPS + 1), не на перешкодах і лише там, звідки можна дійти до героїв.
+//   Стара розстановка ворогів у протилежному куті (placeFoes) лишилась запасним варіантом.
+//   РОЗСТАНОВКА зберігається ВІДНОСНО зони 3 × 3 (локальні координати): r 0…2, c 0…2,
+//   де c 2 — передній ряд (ближче до ворогів), c 0 — задній. fieldPos() переносить її у потрібний кут.
 //   Героїв розставляє гравець (game.js → вікно розстановки, save.formation),
 //   ворогів — автоматично (placeFoes): ближній бій — у передній стовпець, далекий — глибше.
 //   В одній клітинці — лише один учасник.
 //   Відстань = більша з різниць по рядках і стовпцях (діагональ теж 1 клітинка).
-//   Передні ряди стоять на відстані 3: c 2 ↔ c 5.
+//   Передні ряди стоять на відстані 25 (START_DISTANCE). Поки суперник далеко, хід «руху»
+//   переносить учасника до MOVE_STEPS клітинок за раз (на великому полі бій не затягується).
+//
+// ПЕРЕШКОДИ (makeObstacles, opts.obstacles): [{ r, c, kind, block }]
+//   block: true  — велика перешкода (дерево, скеля, стіна): не пройти й не видно крізь неї;
+//   block: false — мала (кущ, каміння): стати не можна, але ціль крізь неї видно.
+//   Дальня атака (дальність > 1: лук, заклинання) — лише якщо пряма лінія між клітинками
+//   не перетинає великої перешкоди (hasSight). Ближній удар по сусідній клітинці — завжди.
+//   Рух — найкоротшим шляхом в обхід перешкод і учасників (moveToward, пошук у ширину)
+//   до найближчої клітинки, звідки можна вдарити.
+//   Зона героїв 3 × 3 і клітинки довкола неї завжди вільні; від неї можна дійти майже до всього поля
+//   (замкнених «кишень» — не більше 15% вільних клітинок, і ворогів у них не ставлять).
 //   Дальність дії: ближній бій (меч, кинджал, сокира, посох без заклинання, кулаки) — 1,
 //   заклинання з посохом — 2, лук — 3. Вороги: data/enemies.js → range (1 / 2 / 3).
 //   Хто не дістає жодного суперника — замість удару робить крок на 1 клітинку до найближчого
@@ -50,11 +70,37 @@
   const CRIT_MULT = 1.5;
   const DUAL_MULT = 0.8;         // кожна з двох сокир Берсерка б'є на 80%
   const FREEZE_TURNS = 2;
-  const START_DISTANCE = 3;      // між передніми рядами (c 2 і c 5)
-  const FIELD = { rows: 3, cols: 8, heroCols: [0, 1, 2], gapCols: [3, 4], enemyCols: [5, 6, 7] };
+  const FIELD = { rows: 15, cols: 30, zone: 3 };   // зона кожної сторони — 3 × 3 у куті
+  const START_DISTANCE = FIELD.cols - 2 * FIELD.zone + 1;   // між передніми рядами: 25
+  const MOVE_STEPS = 4;          // скільки клітинок проходить учасник за один хід руху
   const ROW_ORDER = [1, 0, 2];   // спершу середній рядок, потім краї
 
   const inField = p => p && p.r >= 0 && p.r < FIELD.rows && p.c >= 0 && p.c < FIELD.cols;
+  // Локальні координати зони 3 × 3 (розстановка): r 0…2, c 0…2 (c 2 — передній ряд)
+  const inZone = p => p && p.r >= 0 && p.r < FIELD.zone && p.c >= 0 && p.c < FIELD.zone;
+  const oppositeCorner = k => 3 - (k & 3);
+  // Випадковий кут; якщо передати попередній — новий буде іншим
+  function randomCorner(prev = null) {
+    const opts = [0, 1, 2, 3].filter(k => k !== prev);
+    return opts[Math.floor(Math.random() * opts.length)];
+  }
+  // Локальна клітинка зони 3 × 3 → клітинка поля для кута corner
+  function fieldPos(p, corner = 0) {
+    if (!p) return p;
+    const bottom = corner & 1, right = corner & 2;
+    return {
+      r: bottom ? FIELD.rows - FIELD.zone + p.r : p.r,
+      c: right ? FIELD.cols - 1 - p.c : p.c
+    };
+  }
+  // Усі клітинки зони кута (для підсвітки на сторінці): [{ r, c, front }]
+  function zoneCells(corner = 0) {
+    const out = [];
+    for (let r = 0; r < FIELD.zone; r++) for (let c = 0; c < FIELD.zone; c++) {
+      out.push(Object.assign(fieldPos({ r, c }, corner), { front: c === FIELD.zone - 1 }));
+    }
+    return out;
+  }
   const cellDist = (a, b) => Math.max(Math.abs(a.r - b.r), Math.abs(a.c - b.c));
   const stepDist = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
   const keyOf = p => p.r + ":" + p.c;
@@ -65,13 +111,99 @@
     return t === "bow" || t === "staff" ? 1 : 2;
   }
 
+  // ---------- Перешкоди ----------
+  // Великі: tree — дерево, rock — скеля, wall — стіна; малі: bush — кущ, stone — каміння
+  const OBSTACLE_KINDS = {
+    tree: { block: true }, rock: { block: true }, wall: { block: true },
+    bush: { block: false }, stone: { block: false }
+  };
+  // Пряма видимість між клітинками a і b: лінія (Брезенгем) не проходить крізь велику перешкоду.
+  // sight — Set ключів "r:c" великих перешкод. Самі a і b не перевіряються.
+  function hasSight(a, b, sight) {
+    if (!sight || !sight.size) return true;
+    let x = a.c, y = a.r;
+    const dx = Math.abs(b.c - x), dy = -Math.abs(b.r - y);
+    const sx = x < b.c ? 1 : -1, sy = y < b.r ? 1 : -1;
+    let err = dx + dy;
+    for (;;) {
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x += sx; }
+      if (e2 <= dx) { err += dx; y += sy; }
+      if (x === b.c && y === b.r) return true;
+      if (sight.has(y + ":" + x)) return false;
+    }
+  }
+  // Усі клітинки, до яких можна дійти від start (обходячи blocked): Set ключів "r:c"
+  function reachableFrom(start, blocked) {
+    const seen = new Set(start.map(keyOf)), queue = start.map(p => ({ r: p.r, c: p.c }));
+    while (queue.length) {
+      const p = queue.shift();
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const q = { r: p.r + dr, c: p.c + dc }, k = keyOf(q);
+        if ((dr || dc) && inField(q) && !seen.has(k) && !blocked.has(k)) { seen.add(k); queue.push(q); }
+      }
+    }
+    return seen;
+  }
+  // Випадкові перешкоди для бою. cover = { block: ["tree", ...], low: ["bush", ...] } — які бувають
+  // на локації (game.js → fieldCover); corner — кут героїв. Повертає [{ r, c, kind, block }].
+  function makeObstacles(cover = {}, corner = 0) {
+    const big = (cover.block || ["tree"]).filter(k => OBSTACLE_KINDS[k]?.block);
+    const low = (cover.low || ["bush"]).filter(k => OBSTACLE_KINDS[k] && !OBSTACLE_KINDS[k].block);
+    const zones = zoneCells(corner);
+    const near = p => zones.some(z => cellDist(z, p) <= 1);   // зона героїв і клітинки довкола — вільні
+    const rnd = n => Math.floor(Math.random() * n);
+    const pick = arr => arr[rnd(arr.length)];
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const used = new Map();
+      const free = p => inField(p) && !near(p) && !used.has(keyOf(p));
+      const put = (p, kind) => used.set(keyOf(p), { r: p.r, c: p.c, kind, block: OBSTACLE_KINDS[kind].block });
+      // Великі — купками: стіна — відрізок 3–6 клітинок (іноді з поворотом), дерева й скелі — гурт 2–5
+      const groups = big.length ? 5 + rnd(3) : 0;
+      for (let g = 0; g < groups; g++) {
+        const kind = pick(big);
+        let p = { r: rnd(FIELD.rows), c: rnd(FIELD.cols) };
+        if (!free(p)) continue;
+        put(p, kind);
+        if (kind === "wall") {
+          let dir = Math.random() < 0.5 ? { r: 0, c: 1 } : { r: 1, c: 0 };
+          const len = 3 + rnd(4), turn = Math.random() < 0.35 ? 1 + rnd(len - 1) : -1;
+          for (let i = 1; i < len; i++) {
+            if (i === turn) dir = dir.r ? { r: 0, c: Math.random() < 0.5 ? 1 : -1 } : { r: Math.random() < 0.5 ? 1 : -1, c: 0 };
+            p = { r: p.r + dir.r, c: p.c + dir.c };
+            if (!free(p)) break;
+            put(p, kind);
+          }
+        } else {
+          const size = 2 + rnd(4);
+          for (let i = 1; i < size; i++) {
+            const q = { r: p.r + rnd(3) - 1, c: p.c + rnd(3) - 1 };
+            if (free(q)) { put(q, kind); p = q; }
+          }
+        }
+      }
+      // Малі — поодинці, 8–13 штук
+      const smalls = low.length ? 8 + rnd(6) : 0;
+      for (let i = 0; i < smalls; i++) {
+        const p = { r: rnd(FIELD.rows), c: rnd(FIELD.cols) };
+        if (free(p)) put(p, pick(low));
+      }
+      const list = [...used.values()];
+      const blocked = new Set(list.map(keyOf));
+      const freeCells = FIELD.rows * FIELD.cols - blocked.size;
+      if (reachableFrom(zones, blocked).size >= freeCells * 0.85) return list;
+    }
+    return [];
+  }
+
   // Розстановка героїв: saved — [{ r, c }] у порядку members (може бути неповна чи з помилками).
-  // Повертає позиції в зоні групи без повторів; кому місця не дісталось — ставить автоматично.
+  // Повертає ЛОКАЛЬНІ позиції в зоні 3 × 3 без повторів; кому місця не дісталось — ставить автоматично.
+  // На поле їх переносить fieldPos(p, corner).
   function placeHeroes(members, saved = []) {
     const used = new Set(), out = [];
     members.forEach((ms, i) => {
       const p = saved[i];
-      if (inField(p) && FIELD.heroCols.includes(p.c) && !used.has(keyOf(p))) {
+      if (inZone(p) && !used.has(keyOf(p))) {
         out[i] = { r: p.r, c: p.c };
         used.add(keyOf(p));
       }
@@ -88,21 +220,61 @@
     return out;
   }
 
-  // Автоматична розстановка ворогів: дальність 1 — c 5, 2 — c 6, 3 — c 7;
-  // якщо стовпець зайнятий — глибше, а тоді ближче до центру поля
-  function placeFoes(specs) {
+  // Автоматична розстановка ворогів у ЛОКАЛЬНІЙ зоні 3 × 3 (c 2 — передній ряд):
+  // дальність 1 — c 2, 2 — c 1, 3 — c 0; якщо стовпець зайнятий — глибше, а тоді ближче до героїв
+  function placeFoesLocal(specs) {
     const used = new Set();
     return specs.map(spec => {
       const e = RPG.enemyFromSpec ? RPG.enemyFromSpec(spec) : RPG.getEnemy(spec.id, spec.champion);
       const range = RPG.enemyRange ? RPG.enemyRange(e) : 1;
-      const pref = FIELD.enemyCols[Math.min(2, Math.max(0, range - 1))];
-      const cols = [pref, ...FIELD.enemyCols.filter(c => c > pref), ...FIELD.enemyCols.filter(c => c < pref).reverse()];
+      const pref = 2 - Math.min(2, Math.max(0, range - 1));
+      const cols = [pref, ...[0, 1, 2].filter(c => c < pref).reverse(), ...[0, 1, 2].filter(c => c > pref)];
       for (const c of cols) {
         const r = ROW_ORDER.find(r => !used.has(r + ":" + c));
         if (r !== undefined) { used.add(r + ":" + c); return { r, c }; }
       }
-      return { r: 1, c: 7 };
+      return { r: 1, c: 0 };
     });
+  }
+  // Вороги на полі: у куті, протилежному куту героїв (heroCorner) — запасний варіант
+  function placeFoes(specs, heroCorner = 0) {
+    const k = oppositeCorner(heroCorner);
+    return placeFoesLocal(specs).map(p => fieldPos(p, k));
+  }
+
+  // Стартові місця ворогів по всьому полю. heroCorner — кут героїв, obstacles — перешкоди бою.
+  // spread: "scatter" — кожен у випадковій клітинці, "pack" — купою біля однієї точки;
+  //   без нього — навпіл випадково. Обмеження: не ближче MOVE_STEPS + 1 клітинок до зони героїв,
+  //   не на перешкоді, по одному в клітинці, лише там, звідки можна дійти до героїв.
+  // Повертає [{ r, c }] у порядку specs (масив має поле spread — як їх розставлено).
+  function placeFoesFree(specs, heroCorner = 0, obstacles = [], spread = null) {
+    const n = specs.length;
+    const blocked = new Set((obstacles || []).map(keyOf));
+    const heroZone = zoneCells(heroCorner);
+    const gap = MOVE_STEPS + 1;
+    const ok = [...reachableFrom(heroZone, blocked)]
+      .map(k => { const [r, c] = k.split(":").map(Number); return { r, c }; })
+      .filter(p => heroZone.every(z => cellDist(z, p) >= gap));
+    if (ok.length < n) {
+      const out = placeFoes(specs, heroCorner);
+      out.spread = "corner";
+      return out;
+    }
+    const mode = spread || (Math.random() < 0.5 ? "pack" : "scatter");
+    let out;
+    if (mode === "scatter") {
+      const pool = ok.slice();
+      out = specs.map(() => pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    } else {
+      // Купа: випадкова точка, а вороги — у найближчих до неї вільних клітинках (з невеликим розкидом)
+      const center = ok[Math.floor(Math.random() * ok.length)];
+      const ranked = ok.map(p => ({ p, d: cellDist(p, center) + stepDist(p, center) * 0.01 + Math.random() * 0.5 }))
+        .sort((a, b) => a.d - b.d);
+      out = ranked.slice(0, n).map(x => x.p);
+    }
+    out = out.map(p => ({ r: p.r, c: p.c }));
+    out.spread = mode;
+    return out;
   }
 
   const variance = () => 0.85 + Math.random() * 0.3;   // ±15%
@@ -428,10 +600,15 @@
   }
 
   // members — «вигляди» героїв (party.js → memberSave), живі; enemySpecs — [{ id, champion }]
-  // opts.heroPos — [{ r, c }] розстановка героїв (у порядку members); без неї — автоматична.
-  // Вороги стають за placeFoes(enemySpecs).
+  // opts.heroPos — [{ r, c }] ЛОКАЛЬНА розстановка героїв у зоні 3 × 3 (у порядку members);
+  //   без неї — автоматична. opts.corner — кут героїв (0…3); без нього — випадковий.
+  // Вороги стають за placeFoes(enemySpecs, corner) — у протилежному куті.
   // Повертає { win, draw, rounds, heroes: [{ hp, mp, dead }], enemies: [{ id, champion, name, exp }],
-  //            events, enemyIds, heroHp, heroMp, champion, heroPos, foePos }
+  //            events, enemyIds, heroHp, heroMp, champion, heroPos, foePos, corner }
+  //   (heroPos / foePos — уже клітинки поля)
+  // opts.foePos — готові стартові місця ворогів (placeFoesFree, як показано на сторінці);
+  //   без них або якщо вони некоректні — розставляються тут.
+  // opts.obstacles — перешкоди (makeObstacles); без них поле чисте. Повертаються в result.obstacles.
   // кожна подія: { who: "hero" | "enemy" | "info" | "round", text, crit,
   //               heroes: [{hp, mp, pos: {r, c}}], enemies: [{hp, mp, pos: {r, c}}],
   //               actor: { side: "hero" | "enemy", i } | null, target: { side, i } | null,
@@ -442,11 +619,29 @@
     const heroes = members.map(makeHero);
     const labels = enemyLabels(enemySpecs);
     const foes = enemySpecs.map((spec, i) => makeEnemy(spec, labels[i]));
-    const heroPos = placeHeroes(members, opts.heroPos || []);
-    const foePos = placeFoes(enemySpecs);
+    const corner = Number.isInteger(opts.corner) ? (opts.corner & 3) : randomCorner();
+    const heroPos = placeHeroes(members, opts.heroPos || []).map(p => fieldPos(p, corner));
+    const obstacles = (opts.obstacles || []).filter(o => inField(o) && OBSTACLE_KINDS[o.kind]);
+    const walls = new Set(obstacles.map(keyOf));
+    // Вороги: готові місця з opts.foePos (те, що гравець бачив на полі до бою), якщо вони коректні;
+    // інакше — розставляємо тут
+    const heroKeys = new Set(heroPos.map(keyOf));
+    const given = opts.foePos;
+    const givenOk = Array.isArray(given) && given.length === enemySpecs.length &&
+      given.every(p => inField(p) && !walls.has(keyOf(p)) && !heroKeys.has(keyOf(p))) &&
+      new Set(given.map(keyOf)).size === given.length;
+    const foePos = givenOk ? given.map(p => ({ r: p.r, c: p.c })) : placeFoesFree(enemySpecs, corner, obstacles);
+    const foeSpread = givenOk ? (given.spread || null) : foePos.spread;
     heroes.forEach((h, i) => { h.pos = { ...heroPos[i] }; h.idx = i; });
     applyGroupPassives(heroes);
     foes.forEach((f, i) => { f.pos = { ...foePos[i] }; f.idx = i; });
+    // Перешкоди: усі — не стати; великі (block) — ще й не видно крізь них
+    const sight = new Set(obstacles.filter(o => OBSTACLE_KINDS[o.kind].block).map(keyOf));
+    // Чи дістає U до T з клітинки from: відстань ≤ reach, а для дальньої дії — ще й пряма видимість
+    const canHitFrom = (from, T, reach) => {
+      const d = cellDist(from, T.pos);
+      return d <= reach && (d <= 1 || hasSight(from, T.pos, sight));
+    };
     const events = [];
     const cur = { actor: null, target: null };   // хто діє і по кому (для поля бою на сторінці)
     const ref = u => (u ? { side: u.side, i: u.idx } : null);
@@ -464,14 +659,51 @@
     const minDist = () => Math.min(...aliveH().flatMap(h => aliveE().map(e => dist(h, e))));
     const multi = heroes.length > 1;
 
-    // Найближчий з тих, до кого дістає (reach); при рівній відстані — перший за списком
+    // Найближчий з тих, до кого дістає (reach) і кого видно; при рівній відстані — перший за списком
     function nearestInReach(U, list, reach) {
       let best = null, bd = Infinity;
       for (const T of list) {
         const d = dist(U, T);
-        if (d <= reach && d < bd) { best = T; bd = d; }
+        if (d < bd && canHitFrom(U.pos, T, reach)) { best = T; bd = d; }
       }
       return best;
+    }
+    // Хід руху: найкоротшим шляхом (пошук у ширину, 8 напрямків) в обхід перешкод і учасників
+    // до найближчої клітинки, звідки можна вдарити когось із targets; за хід — до MOVE_STEPS клітинок.
+    // Якщо такої клітинки не дістатись (усе заступили) — крок «просто ближче», як раніше.
+    // Повертає нову відстань до найближчого суперника або null (немає куди)
+    function moveToward(U, targets, reach = 1) {
+      const busy = new Set([...aliveH(), ...aliveE()].filter(x => x !== U).map(x => keyOf(x.pos)));
+      const startKey = keyOf(U.pos);
+      const prev = new Map([[startKey, null]]);
+      const queue = [{ r: U.pos.r, c: U.pos.c }];
+      let goal = null;
+      while (queue.length && !goal) {
+        const p = queue.shift();
+        for (let dr = -1; dr <= 1 && !goal; dr++) for (let dc = -1; dc <= 1; dc++) {
+          if (!dr && !dc) continue;
+          const q = { r: p.r + dr, c: p.c + dc }, k = keyOf(q);
+          if (!inField(q) || prev.has(k) || walls.has(k) || busy.has(k)) continue;
+          prev.set(k, keyOf(p));
+          if (targets.some(T => canHitFrom(q, T, reach))) { goal = q; break; }
+          queue.push(q);
+        }
+      }
+      if (!goal) {
+        let d = null;
+        for (let i = 0; i < MOVE_STEPS; i++) {
+          const nd = stepToward(U, targets);
+          if (nd === null) break;
+          d = nd;
+          if (d <= reach) break;
+        }
+        return d;
+      }
+      const path = [];
+      for (let k = keyOf(goal); k && k !== startKey; k = prev.get(k)) path.unshift(k);
+      const [r, c] = path[Math.min(MOVE_STEPS, path.length) - 1].split(":").map(Number);
+      U.pos = { r, c };
+      return Math.min(...targets.map(T => cellDist(U.pos, T.pos)));
     }
     // Крок на 1 клітинку до найближчого суперника. Повертає нову відстань або null (немає куди)
     function stepToward(U, targets) {
@@ -489,7 +721,7 @@
       for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
         if (!dr && !dc) continue;
         const p = { r: U.pos.r + dr, c: U.pos.c + dc };
-        if (!inField(p) || busy.has(keyOf(p))) continue;
+        if (!inField(p) || busy.has(keyOf(p)) || walls.has(keyOf(p))) continue;
         const sc = score(p);
         // лише якщо стало ближче (або так само за клітинками, але менше кроків) — без ходіння по колу
         if (sc[0] < bs[0] || (sc[0] === bs[0] && sc[1] < bs[1])) { best = p; bs = sc; }
@@ -501,7 +733,9 @@
 
     const heroNames = heroes.map(h => h.name).join(", ");
     const foeNames = foes.map(f => `«${f.enemy.name}» (рівень ${f.enemy.level})${f.enemy.boss ? " — БОС" : ""}`).join(", ");
-    push({ who: "info", text: `Бій починається: ${heroNames} проти ${foeNames}. До найближчого ворога — ${minDist()} кл.` });
+    const spreadTxt = foes.length > 1 && foeSpread === "pack" ? " Вороги тримаються купою."
+      : foes.length > 1 && foeSpread === "scatter" ? " Вороги розсипались по полю." : "";
+    push({ who: "info", text: `Бій починається: ${heroNames} проти ${foeNames}. До найближчого ворога — ${minDist()} кл.${spreadTxt}` });
 
     // Хто вже походив у поточному раунді (для «Молитви зцілення» жерця)
     let roundActed = new Set();
@@ -562,10 +796,14 @@
       const E = targetE().filter(T => dist(H, T) <= 3).sort((a, b) => a.hp - b.hp)[0];
       if (!E) return;
       const busy = new Set([...aliveH(), ...aliveE()].filter(x => x !== H).map(x => keyOf(x.pos)));
+      // «Спина» — клітинки з боку ворога, протилежного розбійнику (поле велике, кути різні)
+      const sr = Math.sign(E.pos.r - H.pos.r), sc = Math.sign(E.pos.c - H.pos.c);
       const behind = [];
-      for (const dr of [0, -1, 1]) behind.push({ r: E.pos.r + dr, c: E.pos.c + 1 });   // «спина» — далі від героїв
-      for (const dr of [-1, 0, 1]) for (const dc of [0, -1]) if (dr || dc) behind.push({ r: E.pos.r + dr, c: E.pos.c + dc });
-      const spot = behind.find(p => inField(p) && !busy.has(keyOf(p)));
+      if (sr || sc) behind.push({ r: E.pos.r + sr, c: E.pos.c + sc });
+      if (sc) behind.push({ r: E.pos.r, c: E.pos.c + sc }, { r: E.pos.r - 1, c: E.pos.c + sc }, { r: E.pos.r + 1, c: E.pos.c + sc });
+      if (sr) behind.push({ r: E.pos.r + sr, c: E.pos.c }, { r: E.pos.r + sr, c: E.pos.c - 1 }, { r: E.pos.r + sr, c: E.pos.c + 1 });
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr || dc) behind.push({ r: E.pos.r + dr, c: E.pos.c + dc });
+      const spot = behind.find(p => inField(p) && !busy.has(keyOf(p)) && !walls.has(keyOf(p)));
       if (!spot) return;
       H.pos = spot;
       cur.target = E;
@@ -617,7 +855,7 @@
       const target = nearestInReach(H, targetE(), reach);
       if (!target) {
         if (!targetE().length) { push({ who: "hero", move: true, text: `${H.name} чекає, поки розтане крига`, crit: false }); return; }
-        const d = stepToward(H, targetE());
+        const d = moveToward(H, targetE(), reach);
         if (d !== null) push({ who: "hero", move: true, text: `${H.name} просувається вперед (до ворога ${d} кл.)`, crit: false });
         else push({ who: "hero", move: true, text: `${H.name} чекає — шлях уперед зайнятий`, crit: false });
         return;
@@ -685,7 +923,7 @@
 
       const H = inReach();
       if (!H) {
-        const d = stepToward(E, aliveH());
+        const d = moveToward(E, aliveH(), E.range || 1);
         if (d !== null) push({ who: "enemy", move: true, text: `${E.name} наближається (до героя ${d} кл.)`, crit: false });
         return;
       }
@@ -739,7 +977,7 @@
       enemyIds: foes.map(f => f.id),
       heroHp: heroes[0].hp, heroMp: heroes[0].mp,
       champion: foes.some(f => f.champion),
-      heroPos, foePos
+      heroPos, foePos, corner, obstacles, foeSpread
     };
   }
 
@@ -785,5 +1023,6 @@
   }
 
   Object.assign(RPG, { simulateBattle, simulatePartyBattle, rollEnemyGroup, enemyGroupCap, enemyGroupRange, roundSchedule, BATTLE_START_DISTANCE: START_DISTANCE,
-    BATTLE_FIELD: FIELD, placeHeroes, placeFoes });
+    BATTLE_FIELD: FIELD, placeHeroes, placeFoes, placeFoesLocal, fieldPos, zoneCells, randomCorner, oppositeCorner,
+    makeObstacles, hasSight, OBSTACLE_KINDS, placeFoesFree });
 })(window.RPG);

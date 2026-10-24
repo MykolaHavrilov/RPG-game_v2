@@ -707,16 +707,20 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .key-count { white-space: nowrap; color: var(--gold); }
 .key-row.is-full .key-count { color: #ffb04d; }
 
-/* ---------- Поле бою 3 × 8 (game.js → renderField, вікно розстановки) ----------
-   c 1–3 — зона групи (синя), c 4–5 — проміжок для маневру, c 6–8 — зона ворогів (червона).
-   Клітинки квадратні: поле 8 × 3. Іконки стоять абсолютно й плавно переїжджають між клітинками. */
+/* ---------- Поле бою 15 × 30 (game.js → renderField, вікно розстановки) ----------
+   ПК — 15 рядків × 30 стовпців, телефон (≤ 700 px) — 30 × 15. Розмір сітки й пропорції
+   задає game.js (grid-template-*, --bf-ar = стовпці / рядки). Зона групи — синя (3×3 у куті),
+   зона ворогів — червона (протилежний кут), передній ряд кожної зони — яскравіший.
+   Клітинки квадратні. Іконки стоять абсолютно й плавно переїжджають між клітинками. */
 .bfield {
+  --bf-ar: 2;
   position: relative;
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: repeat(30, 1fr);
+  grid-template-rows: repeat(15, 1fr);
   width: 100%;
-  aspect-ratio: 8 / 3;
+  aspect-ratio: var(--bf-ar);
+  margin-inline: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, .35);
@@ -725,16 +729,28 @@ main > a.location { display: flex; margin-bottom: 10px; }
   -webkit-user-select: none;
 }
 .bf-cell { border: 1px solid rgba(255, 255, 255, .06); }
-.bf-cell.bf-hero  { background: rgba(90, 150, 230, .10); }
+.bfield.bf-big .bf-cell { border-width: 0 1px 1px 0; border-color: rgba(255, 255, 255, .04); }
+.bf-cell.bf-hero  { background: rgba(90, 150, 230, .14); }
 .bf-cell.bf-gap   { background: rgba(255, 255, 255, .015); }
-.bf-cell.bf-enemy { background: rgba(220, 85, 70, .10); }
-.bf-cell.bf-hero[data-c="2"]  { border-right: 2px solid rgba(120, 170, 255, .45); }
-.bf-cell.bf-enemy[data-c="5"] { border-left: 2px solid rgba(255, 120, 110, .45); }
+.bf-cell.bf-enemy { background: rgba(220, 85, 70, .14); }
+.bf-cell.bf-hero.bf-front  { background: rgba(90, 150, 230, .26); }
+.bf-cell.bf-enemy.bf-front { background: rgba(220, 85, 70, .26); }
+/* Телефон: поле високе — щоб не було довшим за екран, звужуємо його за висотою */
+.bfield.bf-big.is-mobile { width: 100%; }   /* ширину на телефоні задає рамка .bf-frame.is-mobile */
+/* Вікно розстановки: лише своя зона 3×3 і смуга «до ворогів» */
+.bfield.bf-zone { width: min(100%, 360px); }
+.bfield.bf-zone.is-mobile { width: min(100%, 270px); }
+.bf-toward {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: 4px; font-size: .8rem; color: #ff8a7d; letter-spacing: .03em;
+  background: linear-gradient(90deg, rgba(220, 85, 70, .04), rgba(220, 85, 70, .2));
+}
+.bfield.is-mobile .bf-toward { background: linear-gradient(180deg, rgba(220, 85, 70, .04), rgba(220, 85, 70, .2)); }
 
 .bf-unit {
   position: absolute;
   z-index: 2;
-  width: 12.5%;
+  width: 12.5%;          /* справжній розмір і місце задає game.js → tokenPos */
   height: 33.333%;
   padding: 2px 3px 3px;
   display: flex;
@@ -767,7 +783,63 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .bf-unit.is-acting .bf-face { outline: 2px solid var(--accent); outline-offset: 1px; }
 .bf-unit.is-target .bf-face { outline: 2px solid #e5483b; outline-offset: 1px; }
 .bf-unit .fx-num { top: 10%; font-size: 1rem; }
+/* На великому полі іконки маленькі: тонші смужки, менші відступи */
+.bfield.bf-big .bf-unit { padding: 1px; gap: 1px; }
+.bfield.bf-big .bf-bar { height: 2px; }
+.bfield.bf-big .bf-face { border-radius: 2px; }
 .bf-unit .fx-crit { font-size: 1.35rem; }
+
+/* ---------- Краї поля бою: дерева / скелі / стіни / вода (game.js → frameField, LOCATIONS → edge) ----------
+   Рамка .bf-frame обгортає поле; чотири смуги .bf-edge лежать у її відступах. Візерунки — вбудовані SVG-плитки
+   (вигляд згори), розмір плитки = товщина краю. Темний ліс (.is-dark) — приглушені, похмуріші кольори. */
+.bf-frame {
+  --bf-edge: clamp(14px, 2.4vw, 26px);
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--bf-edge);
+  margin-inline: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #15110c;
+  overflow: hidden;
+}
+.bf-frame > .bfield { border-radius: 2px; box-shadow: 0 0 10px 3px rgba(0, 0, 0, .65); }
+/* Телефон: поле високе — звужуємо рамку так, щоб разом із краями вміщалась у ~78% висоти екрана */
+.bf-frame.is-mobile { width: min(100%, calc((78vh - 2 * var(--bf-edge)) / 2 + 2 * var(--bf-edge))); }
+.bf-edge {
+  position: absolute;
+  pointer-events: none;
+  background-size: var(--bf-edge) var(--bf-edge);
+  background-repeat: repeat;
+}
+.bf-edge-top    { top: 0; left: 0; right: 0; height: var(--bf-edge); }
+.bf-edge-bottom { bottom: 0; left: 0; right: 0; height: var(--bf-edge); }
+.bf-edge-left   { left: 0; top: var(--bf-edge); bottom: var(--bf-edge); width: var(--bf-edge); }
+.bf-edge-right  { right: 0; top: var(--bf-edge); bottom: var(--bf-edge); width: var(--bf-edge); }
+.bf-edge.edge-trees { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Crect width='24' height='24' fill='%2318210f'/%3E%3Ccircle cx='6' cy='7' r='6.5' fill='%2322391a'/%3E%3Ccircle cx='5' cy='6' r='3.6' fill='%232d4f22'/%3E%3Ccircle cx='4.2' cy='5' r='1.4' fill='%233a6229'/%3E%3Ccircle cx='18' cy='17' r='6.5' fill='%231f3418'/%3E%3Ccircle cx='17' cy='16' r='3.6' fill='%232a4920'/%3E%3Ccircle cx='16.2' cy='15' r='1.4' fill='%23365b27'/%3E%3Ccircle cx='19.5' cy='4.5' r='3.4' fill='%23253f1c'/%3E%3Ccircle cx='19' cy='4' r='1.6' fill='%23305425'/%3E%3Ccircle cx='4.5' cy='19.5' r='3.4' fill='%23233b1b'/%3E%3Ccircle cx='4' cy='19' r='1.6' fill='%232e5023'/%3E%3C/svg%3E"); }
+.bf-edge.edge-rocks { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Crect width='24' height='24' fill='%2324211d'/%3E%3Cpath d='M1 9 L5 3 L12 3.5 L14 10 L9 14 L2.5 13Z' fill='%235a554d'/%3E%3Cpath d='M5 3 L12 3.5 L10 8 L4.5 7Z' fill='%2377716a'/%3E%3Cpath d='M13 15 L18 10.5 L23.5 13.5 L22.5 21 L15 22.5Z' fill='%23524d47'/%3E%3Cpath d='M18 10.5 L23.5 13.5 L19 16Z' fill='%236c665f'/%3E%3Cpath d='M0.5 18.5 L5 16.5 L8.5 20.5 L5 24 L0.5 23.5Z' fill='%2347433d'/%3E%3Cpath d='M15 1 L20 0.5 L22 5 L17 6.5Z' fill='%234c4842'/%3E%3C/svg%3E"); }
+.bf-edge.edge-walls { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Crect width='24' height='24' fill='%231f1a15'/%3E%3Crect x='0.5' y='0.5' width='11' height='5' fill='%235a5047'/%3E%3Crect x='12.5' y='0.5' width='11' height='5' fill='%234e463e'/%3E%3Crect x='0' y='6.5' width='5.5' height='5' fill='%23615649'/%3E%3Crect x='6.5' y='6.5' width='11' height='5' fill='%23544b42'/%3E%3Crect x='18.5' y='6.5' width='5.5' height='5' fill='%235a5047'/%3E%3Crect x='0.5' y='12.5' width='11' height='5' fill='%234e463e'/%3E%3Crect x='12.5' y='12.5' width='11' height='5' fill='%23615649'/%3E%3Crect x='0' y='18.5' width='5.5' height='5' fill='%23544b42'/%3E%3Crect x='6.5' y='18.5' width='11' height='5' fill='%235a5047'/%3E%3Crect x='18.5' y='18.5' width='5.5' height='5' fill='%234e463e'/%3E%3C/svg%3E"); }
+.bf-edge-left.edge-walls, .bf-edge-right.edge-walls { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Crect width='24' height='24' fill='%231f1a15'/%3E%3Crect x='0.5' y='0.5' width='5' height='11' fill='%235a5047'/%3E%3Crect x='0.5' y='12.5' width='5' height='11' fill='%234e463e'/%3E%3Crect x='6.5' y='0' width='5' height='5.5' fill='%23615649'/%3E%3Crect x='6.5' y='6.5' width='5' height='11' fill='%23544b42'/%3E%3Crect x='6.5' y='18.5' width='5' height='5.5' fill='%235a5047'/%3E%3Crect x='12.5' y='0.5' width='5' height='11' fill='%234e463e'/%3E%3Crect x='12.5' y='12.5' width='5' height='11' fill='%23615649'/%3E%3Crect x='18.5' y='0' width='5' height='5.5' fill='%23544b42'/%3E%3Crect x='18.5' y='6.5' width='5' height='11' fill='%235a5047'/%3E%3Crect x='18.5' y='18.5' width='5' height='5.5' fill='%234e463e'/%3E%3C/svg%3E"); }
+.bf-edge.edge-water { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Crect width='24' height='24' fill='%2311293f'/%3E%3Cpath d='M0 5 Q3 3 6 5 T12 5 T18 5 T24 5' fill='none' stroke='%232a5b82' stroke-width='1.2'/%3E%3Cpath d='M-3 13 Q0 11 3 13 T9 13 T15 13 T21 13 T27 13' fill='none' stroke='%2324506f' stroke-width='1.2'/%3E%3Cpath d='M0 20 Q3 18 6 20 T12 20 T18 20 T24 20' fill='none' stroke='%232a5b82' stroke-width='1.2'/%3E%3Ccircle cx='17' cy='9' r='0.8' fill='%234d86b3'/%3E%3Ccircle cx='6' cy='16' r='0.7' fill='%234d86b3'/%3E%3C/svg%3E"); animation: bf-water 7s linear infinite; }
+.bf-edge-left.edge-water, .bf-edge-right.edge-water { animation-name: bf-water-v; }
+@keyframes bf-water   { to { background-position: var(--bf-edge) 0; } }
+@keyframes bf-water-v { to { background-position: 0 var(--bf-edge); } }
+.bf-frame.is-dark .bf-edge { filter: saturate(.45) brightness(.78); }
+@media (prefers-reduced-motion: reduce) {
+  .bf-edge.edge-water { animation: none; }
+}
+
+/* ---------- Перешкоди на полі (battle.js → makeObstacles, game.js → fieldGrid) ----------
+   .is-block — дерево / скеля / стіна (не пройти й не видно ціль); .is-low — кущ / каміння (не стати, але видно). */
+.bf-cell.bf-obst { background-repeat: no-repeat; background-position: center; background-size: 100% 100%; }
+.bf-cell.bf-obst.is-low { background-size: 90% 90%; }
+.bf-cell.ob-tree  { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cellipse cx='13' cy='14' rx='10' ry='9' fill='%23000' opacity='.45'/%3E%3Ccircle cx='12' cy='12' r='10.5' fill='%231f3618'/%3E%3Ccircle cx='9' cy='9' r='6' fill='%232b4c21'/%3E%3Ccircle cx='15.5' cy='14.5' r='4.5' fill='%23284620'/%3E%3Ccircle cx='8' cy='7.5' r='2.4' fill='%233b6429'/%3E%3C/svg%3E"); }
+.bf-cell.ob-rock  { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cellipse cx='13' cy='15' rx='10' ry='7.5' fill='%23000' opacity='.45'/%3E%3Cpath d='M2 14 L5 5 L13 2 L21 6 L22.5 15 L16 21.5 L6 21Z' fill='%2356514a'/%3E%3Cpath d='M5 5 L13 2 L21 6 L14 10 L6 9Z' fill='%2377716a'/%3E%3Cpath d='M14 10 L21 6 L22.5 15 L16 14Z' fill='%23625d56'/%3E%3C/svg%3E"); }
+.bf-cell.ob-wall  { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%231f1a15'/%3E%3Crect x='0.5' y='0.5' width='11' height='5' fill='%235f554b'/%3E%3Crect x='12.5' y='0.5' width='11' height='5' fill='%2352493f'/%3E%3Crect x='0' y='6.5' width='5.5' height='5' fill='%23665a4c'/%3E%3Crect x='6.5' y='6.5' width='11' height='5' fill='%23584e44'/%3E%3Crect x='18.5' y='6.5' width='5.5' height='5' fill='%235f554b'/%3E%3Crect x='0.5' y='12.5' width='11' height='5' fill='%2352493f'/%3E%3Crect x='12.5' y='12.5' width='11' height='5' fill='%23665a4c'/%3E%3Crect x='0' y='18.5' width='5.5' height='5' fill='%23584e44'/%3E%3Crect x='6.5' y='18.5' width='11' height='5' fill='%235f554b'/%3E%3Crect x='18.5' y='18.5' width='5.5' height='5' fill='%2352493f'/%3E%3C/svg%3E"); }
+.bf-cell.ob-bush  { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cellipse cx='12.5' cy='14' rx='7' ry='5.5' fill='%23000' opacity='.4'/%3E%3Ccircle cx='9' cy='13' r='4.2' fill='%232f5a26'/%3E%3Ccircle cx='15' cy='13.5' r='4' fill='%232a5122'/%3E%3Ccircle cx='12' cy='10' r='4.2' fill='%23386a2c'/%3E%3Ccircle cx='11' cy='8.8' r='1.6' fill='%234c8a3a'/%3E%3C/svg%3E"); }
+.bf-cell.ob-stone { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cellipse cx='9.5' cy='15' rx='5' ry='3' fill='%23000' opacity='.4'/%3E%3Cpath d='M5 14 L7 10 L12 9.5 L14 13 L11 16 L6 16Z' fill='%236a655e'/%3E%3Cpath d='M7 10 L12 9.5 L11 12 L7.5 12Z' fill='%238a847c'/%3E%3Cpath d='M14 17 L16 14.5 L19.5 15 L20 18 L16.5 19.5Z' fill='%235d5851'/%3E%3Cpath d='M15 8 L17 6.5 L19 8 L17.5 10Z' fill='%23625d56'/%3E%3C/svg%3E"); }
+.bf-frame.is-dark .bf-cell.bf-obst { filter: saturate(.45) brightness(.8); }
 
 /* Вікно розстановки */
 .formation-dialog {

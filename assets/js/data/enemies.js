@@ -964,6 +964,12 @@
   // chest: "<id сховища>" — у локації стоїть скриня (character.js → CHEST_STORAGES).
   //   Скрині з однаковим id пов'язані — у них спільний вміст; новий id — окрема скриня.
   // ID локацій НЕ перейменовувати (вони в сейвах). village_start — це Ферма.
+  // edge — краї поля бою (game.js → fieldEdges): "trees" дерева, "rocks" скелі, "walls" стіни, "water" вода.
+  //   Рядок — однакові з усіх боків; масив [верх, право, низ, ліво] — різні (сторони поля на ПК;
+  //   на телефоні поле повернуте, і краї повертаються разом з ним). Без edge — дерева.
+  // cover — перешкоди на полі бою (battle.js → makeObstacles): { block: ["tree"|"rock"|"wall"], low: ["bush"|"stone"] }.
+  //   Без cover — за краями: дерева → дерева й кущі, скелі → скелі й каміння, стіни → стіни й каміння.
+  //   В DUNGEONS edge / cover теж можна задати — тоді в данжі вони замінюють локаційні.
   const LOCATIONS = {
     home: {
       name: "Домівка",
@@ -980,7 +986,8 @@
       name: "Ферма",
       type: "combat",
       description: "Звідки беруться ці щури — з льоху під коморою, з підвалу під амбаром чи з поля? Тут водяться лише вони, а от за полем, у лісі, вже виють вовки…",
-      enemies: ["rat", "rat2", "rat3"]
+      enemies: ["rat", "rat2", "rat3"],
+      edge: ["trees", "water", "trees", "trees"]   // поле між гаями, з одного боку — річка
     },
     tavern: {
       name: "Шинок біля млина",
@@ -1023,7 +1030,8 @@
       type: "combat",
       minLevel: 3,
       description: "Вузька стежка між темних ялин. Тут полюють вовки — сірі, чорні, а подекуди й білі. Новачкам сюди зарано.",
-      enemies: ["wolf", "wolf2", "wolf3"]
+      enemies: ["wolf", "wolf2", "wolf3"],
+      edge: "trees"
     },
     forest_cave: {
       name: "Печера в лісі",
@@ -1031,7 +1039,8 @@
       minLevel: 6,
       description: "Волога темна печера, де стіни блищать від слизу. Тут живуть зелені, сині й фіолетові слайми, а в глибині, кажуть, сидить сам Король слайм.",
       enemies: ["slime", "slime2", "slime3", "slime_king"],
-      dungeon: "cave_secret"
+      dungeon: "cave_secret",
+      edge: "rocks"
     },
 
     // ---------- ТЕМНИЙ ЛІС (region: "dark") — за Центральною брамою Дубової Застави ----------
@@ -1044,39 +1053,46 @@
     dk_edge: {
       name: "Похмуре узлісся", type: "combat", region: "dark", minLevel: 10,
       description: "Сухі сірі дерева, коріння, що чіпляється за ноги, і очі, які світяться в глибині. Тут Темний ліс тільки починається.",
-      enemies: ["shadow_wolf", "rot_boar", "forest_spider"]
+      enemies: ["shadow_wolf", "rot_boar", "forest_spider"],
+      edge: "trees"
     },
     dk_marsh: {
       name: "Туманні болота", type: "combat", region: "dark", minLevel: 10,
       description: "Чорна вода, гнилі кладки й бліді вогники в тумані. Хто зійшов зі стежки — той лишився тут назавжди.",
-      enemies: ["bog_leech", "drowner", "will_wisp"]
+      enemies: ["bog_leech", "drowner", "will_wisp"],
+      edge: ["water", "trees", "water", "water"]
     },
     dk_grave: {
       name: "Старе кладовище", type: "combat", region: "dark", minLevel: 10,
       description: "Покинуті могили, розкриті склепи й зруйнована каплиця. Мертві тут не сплять.",
-      enemies: ["skeleton_archer", "ghost", "ghoul"]
+      enemies: ["skeleton_archer", "ghost", "ghoul"],
+      edge: ["walls", "trees", "walls", "trees"]   // мур кладовища й мертві дерева
     },
     dk_webs: {
       name: "Ліс павутини", type: "combat", region: "dark", minLevel: 10,
       description: "Велетенські дерева, обплетені павутинням, і кокони на гілках. Десь у глибині — гніздо Королеви павуків.",
       enemies: ["web_hunter", "web_weaver", "spider_queen"],
-      dungeon: "web_nest"
+      dungeon: "web_nest",
+      edge: "trees"
     },
     dk_ravine: {
       name: "Вовкулачий яр", type: "combat", region: "dark", minLevel: 10,
       description: "Глибокий кам'янистий яр, обгризені кістки й сліди пазурів на скелях. Уночі тут виють не вовки.",
-      enemies: ["werewolf", "pack_leader", "shadow_beast"]
+      enemies: ["werewolf", "pack_leader", "shadow_beast"],
+      edge: "rocks"
     },
     dk_ruins: {
       name: "Руїни відьминої вежі", type: "combat", region: "dark", minLevel: 10,
       description: "Розвалена вежа на пагорбі, фіолетове сяйво й свічки на уламках. Культисти досі служать тут своїй господині.",
-      enemies: ["cultist", "witch", "stone_golem"]
+      enemies: ["cultist", "witch", "stone_golem"],
+      edge: ["walls", "rocks", "walls", "rocks"]   // уламки вежі на кам'янистому пагорбі
     },
     dk_heart: {
       name: "Серце Темного лісу", type: "combat", region: "dark", minLevel: 10,
       description: "Коло замшілих каменів і велетенське мертве дерево, що світиться зсередини. Тут править Володар Темного лісу.",
       enemies: ["ancient_treant", "black_rider", "forest_lord"],
-      dungeon: "dark_throne"
+      dungeon: "dark_throne",
+      edge: ["rocks", "trees", "rocks", "trees"]   // коло каменів у лісі
     }
   };
   const DEFAULT_LOCATION = "home";
@@ -1093,16 +1109,19 @@
     cave_secret: {
       name: "Таємниці печери", explore: "Обстеження печери", location: "forest_cave",
       key: "key_cave_secret", keyChance: 0.01, boss: "slime_king", pool: ["slime", "slime2", "slime3"],
+      edge: "walls",   // кам'яні зали за воротами (краї поля в данжі; без edge — як у локації)
       description: "Важкі кам'яні ворота в глибині печери. За ними — три зали, повні слизу, і трон Короля слайма. Зілля й відпочинок там не допоможуть — лише навички лікування."
     },
     web_nest: {
       name: "Гніздо Королеви", explore: "Обстеження глибин лісу", location: "dk_webs",
       key: "key_web_nest", keyChance: 0.01, boss: "spider_queen", pool: ["web_hunter", "web_weaver"],
+      edge: "rocks",
       description: "Прохід у кокон завбільшки з будинок. Усередині — мисливці й ткачі, а в самому серці гнізда — Королева павуків."
     },
     dark_throne: {
       name: "Трон Володаря", explore: "Обстеження Серця лісу", location: "dk_heart",
       key: "key_dark_throne", keyChance: 0.01, boss: "forest_lord", pool: ["ancient_treant", "black_rider"],
+      edge: "trees",
       description: "Коло каменів розступається, відкриваючи стежку до мертвого дерева. Його вартують лісовики й вершники, а на троні з коріння чекає Володар Темного лісу."
     }
   };
