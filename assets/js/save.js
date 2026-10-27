@@ -12,7 +12,7 @@
   const STORE = "saves";
   const LS_PREFIX = "rpg_save_"; // запасне сховище в localStorage
 
-  const SAVE_VERSION = 6;        // версія ФОРМАТУ сейву (полів усередині)
+  const SAVE_VERSION = 7;        // версія ФОРМАТУ сейву (полів усередині)
   const CURRENT_SLOT_KEY = "rpg_current_slot";
 
   // ---------- Відкриття бази ----------
@@ -183,6 +183,8 @@
     save.character.kills ??= 0;
     save.equipment ??= {};
     save.inventory ??= [];
+    // Версія 7: власні доми (character.js → HOUSES) — список, бо згодом будуть доми в інших містах
+    if (!Array.isArray(save.houses)) save.houses = [];
     // Версія 6: скрині — окремі сховища save.chests = { main: [...] } (пов'язані скрині ділять одне сховище).
     // Стара скриня Домівки (save.chest) переїжджає в сховище "main".
     save.chests = (save.chests && typeof save.chests === "object" && !Array.isArray(save.chests)) ? save.chests : {};

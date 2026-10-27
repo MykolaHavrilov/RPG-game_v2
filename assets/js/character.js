@@ -962,6 +962,50 @@ const TRADE_PRICE_MULT = 3;
 function tradeStock() {
   return Object.keys(ITEMS).filter(id => ITEMS[id].tier === 3);
 }
+// ---------- Власні доми (план крафту, етап 4) ----------
+// Дім купують в управителя Спального району Дубової Застави. Гравець дає дому назву —
+// згодом доми будуть і в інших містах. Скриня в домі — спільна з Домівкою (сховище "main").
+// Стан: save.houses = [{ id, key, name, boughtAt }] (key — з HOUSES)
+const HOUSE_NAME_MAX = 20;
+const HOUSES = {
+  oak: { city: "Дубова Застава", district: "rest", loc: "house_oak", price: 100000 }
+};
+function houseOf(save, key) { return (save.houses || []).find(h => h.key === key) || null; }
+function houseHere(save) {
+  const key = RPG.getLocation(save.location.map).house;
+  return key ? houseOf(save, key) : null;
+}
+function cleanHouseName(name) { return String(name || "").replace(/\s+/g, " ").trim().slice(0, HOUSE_NAME_MAX); }
+function buyHouse(save, key, name) {
+  const conf = HOUSES[key];
+  if (!conf) return { ok: false, reason: "Такого дому немає." };
+  if (houseOf(save, key)) return { ok: false, reason: "Цей дім уже ваш." };
+  const title = cleanHouseName(name);
+  if (!title) return { ok: false, reason: "Дайте дому назву." };
+  if (save.character.gold < conf.price) return { ok: false, reason: `Не вистачає золота (потрібно ${conf.price}).` };
+  save.character.gold -= conf.price;
+  save.houses ??= [];
+  const house = { id: "h_" + key, key, name: title, boughtAt: Date.now() };
+  save.houses.push(house);
+  return { ok: true, house, price: conf.price };
+}
+function renameHouse(save, key, name) {
+  const h = houseOf(save, key);
+  const title = cleanHouseName(name);
+  if (!h) return { ok: false, reason: "Дому немає." };
+  if (!title) return { ok: false, reason: "Назва не може бути порожньою." };
+  h.name = title;
+  return { ok: true, house: h };
+}
+function enterHouse(save, key) {
+  const conf = HOUSES[key];
+  if (!conf || !houseOf(save, key)) return { ok: false, reason: "Дім вам не належить." };
+  delete save.travel;
+  save.location.map = conf.loc;
+  save.location.district = conf.district;
+  return { ok: true };
+}
+
 // ============================================================
 // ТЕСТ: Іфрит — тимчасовий торговець ресурсами ремесла (Гільдія авантюристів, вкладка «Іфрит (тест)»).
 // Не належить до лору. Щоб прибрати: видалити цей блок (IFRIT, ifritPrice, buyFromIfrit) — вкладка зникне сама.
@@ -1008,12 +1052,14 @@ function isDistrictOpen(save, d) {
   if (d.id === "center") return RPG.isCentralOpen(save);
   if (d.id === "trade") return save.character.level >= TRADE_MIN_LEVEL;
   if (d.id === "north") return getClass(save.character.classId).tier > 1;
+  if (d.id === "rest") return !!RPG.isCoalDone?.(save);
   return false;
 }
 function districtLockText(d) {
   if (d.id === "center") return `Варта не пускає до Мерії новачків. Повертайтеся з ${RPG.CENTRAL_MIN_LEVEL} рівня.`;
   if (d.id === "trade") return `Торгова гільдія приймає лише поважних гостей — з ${TRADE_MIN_LEVEL} рівня.`;
   if (d.id === "north") return "Варта не пускає до брами простих селян. Повертайтеся, коли матимете професію (квест «Шлях професії», з 15 рівня).";
+  if (d.id === "rest") return "Спальний район відкривається після завдання Мерії «Збір вугілля» (Розпорядник Захар, Центральний район).";
   return "Закрито — відкриється згодом.";
 }
 
@@ -1089,6 +1135,7 @@ Object.assign(RPG, {
   INV_SIZE, invFree, fitQty,
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
+  HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, renameHouse, enterHouse,
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
   createNewSave, calcStats, clampHpMp, fullHeal, FEMALE_NAMES, heroGender, gw,

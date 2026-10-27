@@ -967,6 +967,7 @@
   // Картинка локації для CSS (var(--loc-img))
   function locImage(id) {
     if (id === "south_gate") id = "city";            // вхід у Дубову Заставу — та сама картинка
+    if (RPG.LOCATIONS[id]?.house) id = "home";       // власний дім — поки картинка Домівки
     return `url("${RPG.asset("assets/images/locations/loc_" + id + ".webp")}")`;
   }
 
@@ -1249,7 +1250,9 @@
     if (save.fieldLoot && save.fieldLoot.loc !== save.location.map) setTimeout(() => showFieldLoot(save), 0);
     const locId = save.location.map;
     const locData = RPG.getLocation(locId);
-    $("location-name").textContent = locData.name;
+    // Власний дім показується з назвою, яку дав гравець
+    const placeName = locData.house ? (RPG.houseHere(save)?.name || locData.name) : locData.name;
+    $("location-name").textContent = placeName;
     $("location-desc").textContent = locData.description;
     // Фон локації (assets/images/locations/loc_<id>.webp) — за портретами та в банері.
     // Якщо картинки ще немає, лишається фон теми.
@@ -1351,7 +1354,7 @@
     function renderPlace() {
       place.innerHTML = "";
       const banner = el("div", "place-banner info-anchor");
-      banner.append(el("h2", null, locData.name));
+      banner.append(el("h2", null, placeName));
       place.append(banner);
       if (locData.type === "home") renderHome();
       else if (locData.type === "temple") renderTemple();
@@ -1379,6 +1382,7 @@
       const row = el("div", "row");
       row.append(link("Інвентар і скриня", "inventory.html"), link("Вирушити (Мапа)", "maps.html"));
       place.append(row);
+      if (locData.house) { renderHouseExtras(); return; }
       // Обірваний пергамент — шматок Прологу з книги «Предки…» (data/chronicle.js → PARCHMENT)
       // Після прочитання пергамент іде в торбу (save.story.parchment = "have") — кнопка зникає
       if (RPG.CHRONICLE && !RPG.parchmentState(save)) {
@@ -1393,6 +1397,77 @@
         }));
         place.append(box);
       }
+    }
+
+    // Власний дім: добудови (кузня, склад — наступні етапи) і вихід у Спальний район
+    function renderHouseExtras() {
+      const h = RPG.houseHere(save);
+      const box = el("div", "stack house-panel");
+      box.append(el("h3", null, "Добудови"));
+      box.append(el("p", "house-soon", "Кузня і склад для скринь ремесла з'являться в наступних оновленнях."));
+      const row = el("div", "row");
+      row.append(button("Перейменувати дім", "wf wf-link", () => askHouseName(h?.name || "", async name => {
+        const r = RPG.renameHouse(save, locData.house, name);
+        if (!r.ok) { showMsg(msg, r.reason, true); return; }
+        await RPG.saveGame(save);
+        renderAll();
+      })));
+      row.append(button("Вийти в Спальний район", "wf wf-secondary", async () => {
+        RPG.enterCity(save, RPG.HOUSES[locData.house].district);
+        await RPG.saveGame(save);
+        location.href = "game.html";
+      }));
+      box.append(row);
+      place.append(box);
+    }
+
+    // Вікно з полем для назви дому (купівля / перейменування)
+    function askHouseName(current, onOk, opts = {}) {
+      const dlg = el("dialog", "notice-dialog house-dialog");
+      const close = button("×", "notice-close", () => dlg.close());
+      close.setAttribute("aria-label", "Закрити");
+      dlg.append(close, el("h3", null, opts.title || "Назва дому"));
+      if (opts.text) dlg.append(el("p", null, opts.text));
+      const label = el("label", "field", "Назва дому");
+      const input = el("input");
+      Object.assign(input, { type: "text", maxLength: RPG.HOUSE_NAME_MAX, value: current, placeholder: "Напр. «Дубовий двір»" });
+      label.append(input);
+      const ok = button(opts.okText || "Зберегти", "wf wf-button", () => { const v = input.value; dlg.close(); onOk(v); });
+      input.addEventListener("keydown", e => { if (e.key === "Enter") ok.click(); });
+      dlg.append(label, el("p", "note keep", `До ${RPG.HOUSE_NAME_MAX} символів. Згодом доми будуть і в інших містах — назва допоможе їх розрізняти.`), ok);
+      dlg.addEventListener("close", () => dlg.remove());
+      document.body.append(dlg);
+      dlg.showModal();
+      input.focus();
+    }
+
+    // --- Спальний район: управитель продає дім на околиці ---
+    function renderRestDistrict(box) {
+      renderNpc(box, "rest_steward");
+      const key = "oak", conf = RPG.HOUSES[key], h = RPG.houseOf(save, key);
+      const card = el("div", "stack house-card");
+      if (!h) {
+        card.append(el("p", null, `Дім на околиці Спального району — ${fmtNum(conf.price)} золота. У вас: ${fmtNum(save.character.gold)}.`));
+        const buy = button(`Купити дім за ${fmtNum(conf.price)} золота`, "wf wf-button", () => askHouseName("", async name => {
+          const r = RPG.buyHouse(save, key, name);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          showMsg(msg, `Дім «${r.house.name}» тепер ваш! −${fmtNum(r.price)} золота.`);
+          renderAll();
+        }, { title: "Купівля дому", okText: `Купити за ${fmtNum(conf.price)} золота`,
+             text: "Як назвете свій дім? Назву можна буде змінити пізніше." }));
+        buy.disabled = save.character.gold < conf.price;
+        card.append(buy);
+      } else {
+        card.append(el("p", null, `Ваш дім: «${h.name}».`));
+        card.append(button(`Увійти в дім «${h.name}»`, "wf wf-button", async () => {
+          const r = RPG.enterHouse(save, key);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          location.href = "game.html";
+        }));
+      }
+      box.append(card);
     }
 
     // Темний ліс: зворотний бік Центральної брами
@@ -1558,6 +1633,21 @@
           "Вона веде вас за вівтар, у внутрішній двір Храму. Посеред двору — висохлий кам'яний фонтан, а над ним статуя Велеса, " +
           "що береже мудрість поколінь, з глечиком біля ніг. Ви придивляєтеся: на його розкритих долонях — невеликий виступ у формі ромба.",
           to: "veles_yard" };
+      },
+      // Квест «Збір вугілля» (quests.js → COAL)
+      async coal_start() {
+        const r = RPG.startCoal(save);
+        if (!r.ok) return { text: `«${r.reason}»`, error: true };
+        await RPG.saveGame(save);
+        return { text: "Завдання «Збір вугілля» взято. Прогрес — у журналі квестів на сторінці «Персонаж»." };
+      },
+      async coal_turn() {
+        const r = RPG.turnInCoal(save);
+        if (!r.ok) return { text: `«${r.reason}»`, error: true };
+        await RPG.saveGame(save);
+        const up = r.levelUps.length ? ` Новий рівень: ${r.levelUps.at(-1)}!` : "";
+        return { text: `Вози з вугіллям рушають до складів Мерії. +${fmtNum(RPG.COAL.reward.exp)} досвіду, ` +
+          `срібні злитки ×${RPG.COAL.reward.items[0].qty}. Спальний район відкрито.${up}` };
       },
       // Віддати Захару обірваний пергамент — книга відновлюється
       async parchment_give() {
@@ -1812,6 +1902,7 @@
         else if (d.id === "trade") renderTradeGuild(box);
         else if (d.id === "north") renderNpc(box, "captain");
         else if (d.id === "center") renderTownHall(box);
+        else if (d.id === "rest") renderRestDistrict(box);
         place.append(box);
       }
       const row = el("div", "row");

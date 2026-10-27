@@ -508,6 +508,57 @@
     return { ok: true, finished, levelUps };
   }
 
+  // ---------- Квест Мерії «Збір вугілля» (план крафту, етап 3) ----------
+  // Видає Розпорядник Захар (Мерія, Центральний район — з 6 рівня). Принести 1000 вугілля
+  // (рахується вугілля будь-якої рідкості, спершу забирається звичайне) — тепло для Застави на зиму.
+  // Нагорода: досвід головному герою + срібні злитки; відкривається Спальний район (дім, кузня, склад).
+  // Стан: save.story.coal = { part: 0 (не взято) | 1 (взято) | 2 (виконано) }
+  const COAL = {
+    name: "Збір вугілля",
+    need: 1000,
+    reward: { exp: 50000, items: [{ id: "silver_ingot", qty: 50 }] },
+    text: "«Зима цього року прийде рано, а біженців у Заставі вдвічі більше, ніж місця біля печей. " +
+          "Принесіть Мерії тисячу вугілля — і Застава цього не забуде.»"
+  };
+  const coalGrades = () => ["coal", "coal_magic", "coal_epic", "coal_legendary"].filter(id => RPG.ITEMS[id]);
+  function coalState(save) {
+    save.story ??= {};
+    save.story.coal ??= { part: 0 };
+    return save.story.coal;
+  }
+  function coalHave(save) { return coalGrades().reduce((n, id) => n + RPG.countItem(save, id), 0); }
+  function isCoalDone(save) { return coalState(save).part >= 2; }
+  function coalInfo(save) {
+    const st = coalState(save);
+    const have = Math.min(coalHave(save), COAL.need);
+    return { st, taken: st.part === 1, done: st.part >= 2, canStart: st.part === 0 && RPG.isCentralOpen(save),
+             have, need: COAL.need, complete: st.part === 1 && have >= COAL.need };
+  }
+  function startCoal(save) {
+    const info = coalInfo(save);
+    if (!info.canStart) return { ok: false, reason: "Завдання зараз не можна взяти." };
+    info.st.part = 1;
+    return { ok: true };
+  }
+  function turnInCoal(save) {
+    const info = coalInfo(save);
+    if (!info.taken) return { ok: false, reason: "Завдання не взято." };
+    if (!info.complete) return { ok: false, reason: `Потрібно ${COAL.need} вугілля (є ${info.have}).` };
+    for (const it of COAL.reward.items) {
+      if (RPG.fitQty(save, it.id, it.qty) < it.qty) return { ok: false, reason: "Звільніть місце в інвентарі для нагороди." };
+    }
+    let left = COAL.need;
+    for (const id of coalGrades()) {                      // спершу звичайне, потім рідкісніше
+      const take = Math.min(left, RPG.countItem(save, id));
+      if (take) { RPG.removeItem(save, id, take); left -= take; }
+      if (!left) break;
+    }
+    for (const it of COAL.reward.items) RPG.addItem(save, it.id, it.qty);
+    info.st.part = 2;
+    const levelUps = RPG.addExp(save, COAL.reward.exp);
+    return { ok: true, levelUps };
+  }
+
   // ---------- Нагороди за чемпіонів ----------
   function addChampionBounty(save, enemyId) {
     const q = state(save);
@@ -628,6 +679,10 @@
     const vs = velesState(save);
     if (vs.stage >= 1 && vs.stage <= 4) out.push({ title: `«${VELES.name}»`, special: true,
       lines: [VELES.stages[vs.stage]], where: vs.stage >= 3 ? "Храм" : "Дубова Застава, Шинок біля млина, Храм", ready: false });
+    const co = coalInfo(save);
+    if (co.taken) out.push({ title: `«${COAL.name}»`, special: true,
+      lines: [`Вугілля: ${co.have}/${co.need}`, `Нагорода: ${COAL.reward.exp} EXP, срібні злитки ×${COAL.reward.items[0].qty}, Спальний район`],
+      where: "Розпорядник Захар — Дубова Застава, Центральний район (Мерія)", ready: co.complete });
     const gt = gateInfo(save);
     if (gt.part) out.push({ title: `«${GATE.name}» (${gt.index}/${gt.total}): ${gt.part.title}`, special: true,
       lines: gt.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: "Капітан варти — Дубова Застава, Північний район (Центральна брама)", ready: gt.complete });
@@ -651,6 +706,7 @@
     VELES, velesState, velesStrangerDue, velesGiveOrb, velesAdvance, velesPlaceOrb, springLeft, springCooldown, drinkSpring, springExpMult,
     PROFESSION, PROFESSION_BRANCHES, PROFESSION_QUEST_LEVEL, PROFESSION_END, PROFESSION_REFUSE,
     professionState, professionInfo, professionName, professionBranches, professionCheckpoint, startProfession, turnInProfession,
-    GATE, gateState, isGateOpen, gateInfo, startGate, turnInGate
+    GATE, gateState, isGateOpen, gateInfo, startGate, turnInGate,
+    COAL, coalState, coalInfo, isCoalDone, startCoal, turnInCoal
   });
 })(window.RPG);

@@ -182,6 +182,8 @@
             { text: "Мені не дають квест на професію. Що не так з моїми силами?", to: "profession",
               show: (save, ctx) => { const ms = RPG.memberSave(save, ctx.member || 0);
                 return ms.character.classId === RPG.DEFAULT_CLASS && ms.character.level >= RPG.PROFESSION_QUEST_LEVEL; } },
+            { text: "Чи потрібна Мерії допомога?", to: "coal", show: save => !RPG.coalInfo(save).done },
+            { text: "Як там тепло для Застави?", to: "coal", show: save => RPG.coalInfo(save).done },
             { text: "Що це за книга у вас на столі?", to: "book" },
             { text: "Чим займається Мерія?", to: "about" },
             { text: "До побачення.", to: "bye" }
@@ -231,6 +233,22 @@
           replies: [
             { text: "Перерозподілити вміння.", to: "reset", show: save => save.character.level >= STEWARD_MIN_LEVEL },
             { text: save => g(save, "Дякую, зрозумів.", "Дякую, зрозуміла."), to: "start" }
+          ]
+        },
+        // Квест «Збір вугілля» (quests.js → COAL)
+        coal: {
+          text: save => {
+            const c = RPG.coalInfo(save), C = RPG.COAL;
+            if (c.done) return "Захар усміхається. «Печі горять, біженці не мерзнуть. Спальний район тепер для вас відкритий — " +
+              "там управитель продає доми на околиці. Кажуть, при домі можна й кузню збудувати.»";
+            if (c.taken) return `«Ну що, вугілля? Мерії потрібно ${fmt(C.need)}, а у вас поки ${fmt(c.have)}.»`;
+            return `Захар відкладає сувій. ${C.text} «За це — ${fmt(C.reward.exp)} досвіду, ${C.reward.items[0].qty} срібних злитків, ` +
+              "і Мерія відкриє вам Спальний район: там продають доми.»";
+          },
+          replies: [
+            { text: save => `Згоден, принесу ${fmt(RPG.COAL.need)} вугілля.`, action: "coal_start", to: "coal", show: save => RPG.coalInfo(save).canStart },
+            { text: "Ось вугілля.", action: "coal_turn", to: "coal", show: save => RPG.coalInfo(save).complete },
+            { text: "Повернуся пізніше.", to: "start" }
           ]
         },
         // Книга «Предки…» (data/chronicle.js). Пергамент з Домівки: "have" — можна віддати, "given" — книга відновлена
@@ -292,6 +310,30 @@
         text: "Скрудж уперше підводить очі й довго дивиться на вас. «З незнайомцями про справи гільдії я не розмовляю. " +
               "Купуйте, продавайте — а там подивимось.»",
         replies: [{ text: "Як скажете.", to: "start" }]
+      },
+      bye
+    }
+  };
+
+  // ---------- Спальний район: управитель (план крафту, етап 4) ----------
+  NPCS.rest_steward = {
+    name: "Управитель Спального району Тиміш Дубчак",
+    portrait: "npc_rest_steward",
+    nodes: {
+      start: {
+        text: save => RPG.houseOf(save, "oak")
+          ? `Тиміш киває вам, як сусідові. «Як ведеться в «${RPG.houseOf(save, "oak").name}»? Дах не тече? Кажуть, при домі можна й кузню звести.»`
+          : "Огрядний чоловік зі зв'язкою ключів на поясі підводиться назустріч. «Тиміш Дубчак, управитель Спального району. " +
+            `Мерія казала, що ви зігріли Заставу цієї зими. На околиці є добрий дім — ${fmt(RPG.HOUSES.oak.price)} золота, і він ваш.»`,
+        replies: [
+          { text: "Що за дім?", to: "about" },
+          { text: "Бувайте.", to: "bye" }
+        ]
+      },
+      about: {
+        text: "«Міцний зруб на кам'яному підмурку, піч, комора. Скриня там стоїть та сама, що й у вашій Домівці — " +
+              "не питайте, як, то Велесові справи. А на подвір'ї місця вистачить і на кузню, і на склад.»",
+        replies: [{ text: save => g(save, "Зрозумів.", "Зрозуміла."), to: "start" }]
       },
       bye
     }
