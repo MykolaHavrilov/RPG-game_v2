@@ -1186,3 +1186,5 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .stat-parts li:not(.is-sum) span { padding-left: 10px; opacity: .9; }
 .stat-parts li.is-empty span { opacity: .6; font-style: italic; }
 .stat-info .note-src { font-size: .82rem; opacity: .8; }
+/* ТЕСТ: Іфрит (тимчасовий торговець) */
+.ifrit-note { margin: 0; padding: 6px 10px; border: 1px dashed #e8742c; border-radius: 4px; color: #ffb27a; font-style: italic; }

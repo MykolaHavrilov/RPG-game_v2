@@ -584,6 +584,74 @@ const ITEMS = {
   }
 };
 
+// ---------- МАТЕРІАЛИ РЕМЕСЛА (Книга «Небесна кузня») ----------
+// Нові матеріали для крафту. Іконок поки немає — у клітинці показується назва.
+// craftTier — тір речей, для яких матеріал потрібен; g — рід назви (m/f/n/pl) для «Магічний/-на/-не/-ні».
+// Мідь, срібло, залізо й золото — це матеріали (руда → злиток у горні), а не гроші: золоті монети — окрема валюта.
+const CRAFT_MATERIALS = {
+  coal:        { name: "Вугілля",          g: "n",  craftTier: 3, price: 5,  description: "Тепло для горна й для зими. Мерія Дубової Застави завжди його потребує." },
+  oak_wood:    { name: "Дубова деревина",  g: "f",  craftTier: 1, price: 2,  description: "Міцне дерево Перуна — на руків'я, щити й дерев'яну зброю." },
+  ash_wood:    { name: "Ясенова деревина", g: "f",  craftTier: 1, price: 2,  description: "Гнучкий ясен — на луки й посохи." },
+  flax:        { name: "Льон",             g: "m",  craftTier: 1, price: 2,  description: "Волокно для лляного одягу й полотняних колчанів." },
+  leather_strap:{ name: "Ремінь",          g: "m",  craftTier: 1, price: 3,  description: "Шкіряний ремінь — обмотка руків'я, кріплення броні." },
+  glass:       { name: "Скло",             g: "n",  craftTier: 1, price: 4,  description: "Для скляних сфер чародіїв." },
+  flint:       { name: "Кремінь",          g: "m",  craftTier: 2, price: 6,  description: "Твердий камінь для кам'яної зброї." },
+  lapis:       { name: "Лазурит",          g: "m",  craftTier: 2, price: 15, description: "Синій камінь — серце лазурних сфер." },
+  onyx:        { name: "Онікс",            g: "m",  craftTier: 3, price: 40, description: "Чорний камінь для оніксових сфер." },
+  gem:         { name: "Самоцвіт",         g: "m",  craftTier: 3, price: 60, description: "Камінь для золотих прикрас." },
+  copper_ore:  { name: "Мідна руда",       g: "f",  craftTier: 1, price: 3,  description: "Переплавляється в горні на мідні злитки." },
+  copper_ingot:{ name: "Мідний злиток",    g: "m",  craftTier: 1, price: 8,  description: "Мідь для перших прикрас." },
+  silver_ore:  { name: "Срібна руда",      g: "f",  craftTier: 2, price: 10, description: "Переплавляється в горні на срібні злитки." },
+  silver_ingot:{ name: "Срібний злиток",   g: "m",  craftTier: 2, price: 25, description: "Срібло для прикрас тіру 2." },
+  iron_ore:    { name: "Залізна руда",     g: "f",  craftTier: 3, price: 12, description: "Переплавляється в горні на залізні злитки." },
+  iron_ingot:  { name: "Залізний злиток",  g: "m",  craftTier: 3, price: 30, description: "Залізо для зброї й броні тіру 3." },
+  gold_ore:    { name: "Золота руда",      g: "f",  craftTier: 3, price: 30, description: "Переплавляється в горні на золоті злитки." },
+  gold_ingot:  { name: "Золотий злиток",   g: "m",  craftTier: 3, price: 75, description: "Золото для прикрас тіру 3. Не плутати з монетами." }
+};
+for (const [id, m] of Object.entries(CRAFT_MATERIALS)) {
+  ITEMS[id] = { name: m.name, g: m.g, craftTier: m.craftTier, type: "material", price: m.price,
+                stackable: true, maxStack: 200, noShop: true, description: m.description };
+}
+// Небесна іскра — лише легендарна, без інших рідкостей
+ITEMS.heavenly_spark = {
+  name: "Небесна іскра", type: "material", grade: "legendary", noGrades: true, price: 1000,
+  stackable: true, maxStack: 200, noShop: true,
+  description: "Вогник з горна Сварога. Без нього легендарна річ майже не народжується. Згоряє при куванні."
+};
+
+// Рід назв наявних матеріалів (для назв магічних/епічних/легендарних стопок)
+Object.assign(ITEMS.rat_tail, { g: "m" }); Object.assign(ITEMS.rat_skin, { g: "f" });
+Object.assign(ITEMS.wolf_pelt, { g: "f" }); Object.assign(ITEMS.wolf_fang, { g: "n" });
+Object.assign(ITEMS.white_pelt, { g: "f" }); Object.assign(ITEMS.slime_gel, { g: "m" });
+
+// ---------- РІДКІСТЬ МАТЕРІАЛІВ ----------
+// Кожен матеріал має 4 рідкості — 4 окремі стопки: <id> (звичайна), <id>_magic, <id>_epic, <id>_legendary.
+// Зламаних матеріалів немає. Рідкість показує рамка клітинки (як у речей) і колір назви.
+const MATERIAL_GRADES = {
+  magic:     { mult: 2.5, adj: { m: "Магічний",    f: "Магічна",    n: "Магічне",    pl: "Магічні" } },
+  epic:      { mult: 6,   adj: { m: "Епічний",     f: "Епічна",     n: "Епічне",     pl: "Епічні" } },
+  legendary: { mult: 20,  adj: { m: "Легендарний", f: "Легендарна", n: "Легендарне", pl: "Легендарні" } }
+};
+const lowerFirst = s => s.charAt(0).toLowerCase() + s.slice(1);
+for (const [id, base] of Object.entries(ITEMS)) {
+  if (base.type !== "material" || base.noGrades || base.gradeOf) continue;
+  base.grade = "common";
+  for (const [gr, conf] of Object.entries(MATERIAL_GRADES)) {
+    ITEMS[`${id}_${gr}`] = {
+      ...base, grade: gr, gradeOf: id,
+      name: `${conf.adj[base.g || "m"]} ${lowerFirst(base.name)}`,
+      price: Math.ceil(base.price * conf.mult), noShop: true
+    };
+  }
+}
+// Базовий матеріал за ID будь-якої рідкості: "iron_ingot_epic" → "iron_ingot"
+function materialBase(id) { return ITEMS[id]?.gradeOf || id; }
+// ID матеріалу потрібної рідкості: materialOfGrade("iron_ingot", "epic") → "iron_ingot_epic"
+function materialOfGrade(id, grade) {
+  const base = materialBase(id);
+  return !grade || grade === "common" ? base : (ITEMS[`${base}_${grade}`] ? `${base}_${grade}` : base);
+}
+
 // ---------- КОМПЛЕКТИ (бонус за кілька вдягнених речей одного set) ----------
 // pieces — скільки речей комплекту треба вдягнути (кільця/сережки рахуються кожна);
 // bonusPct — відсоткові бонуси поверх уже підрахованих характеристик
@@ -660,7 +728,7 @@ function shopSellPrice(id) { return Math.ceil((ITEMS[id]?.price || 0) * SHOP_SEL
 function shopBuyPrice(id)  { return Math.max(1, Math.floor((ITEMS[id]?.price || 0) * SHOP_BUY_RATE)); }
 
 Object.assign(RPG, {
-  SLOTS, SLOT_GROUPS, slotsFor, ITEM_RENAMES, STAT_NAMES, ITEMS, getItem, itemIconStyle, spriteStyle, ICON_SHEETS, isEquippable,
+  SLOTS, SLOT_GROUPS, slotsFor, ITEM_RENAMES, STAT_NAMES, ITEMS, getItem, CRAFT_MATERIALS, MATERIAL_GRADES, materialBase, materialOfGrade, itemIconStyle, spriteStyle, ICON_SHEETS, isEquippable,
   OFFHAND_RULES, OFF_TYPE_NAMES, offHandAllowed, offHandRuleText, ITEM_SETS, equippedSetCounts,
   SHOP_SELL_RATE, SHOP_BUY_RATE, shopSellPrice, shopBuyPrice
 });

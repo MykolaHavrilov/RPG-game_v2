@@ -18,7 +18,7 @@ const DEATH_EXP_MULT = 10;        // штраф: досвід за перемо�
 const DEATH_MAX_PCT = 25;         // … але не більше 25% смужки досвіду рівня
 const ITEM_LOSS_CHANCE = 0.005;   // 0,5% на кожну вдягнену річ
 const QUEUE_SIZE = 6;             // скільки дій у черзі бою
-const BUY_MAX = 999;              // найбільше штук за одну покупку
+const BUY_MAX = 1000;             // найбільше штук за одну покупку
 
 // «Молитва благодаті» (Храм): +2% макс. HP кожні 5 с і +3% макс. MP кожні 10 с,
 // діє 10 хвилин реального часу (і поки гра закрита теж).
@@ -962,6 +962,29 @@ const TRADE_PRICE_MULT = 3;
 function tradeStock() {
   return Object.keys(ITEMS).filter(id => ITEMS[id].tier === 3);
 }
+// ============================================================
+// ТЕСТ: Іфрит — тимчасовий торговець ресурсами ремесла (Гільдія авантюристів, вкладка «Іфрит (тест)»).
+// Не належить до лору. Щоб прибрати: видалити цей блок (IFRIT, ifritPrice, buyFromIfrit) — вкладка зникне сама.
+// Ціни — з таблиці «Небесна_кузня_крафт_v2.xlsx», аркуш «Іфрит (тест)».
+// ============================================================
+const IFRIT = {
+  stock: ["coal", "oak_wood", "ash_wood", "flax", "leather_strap", "glass", "copper_ore", "flint",
+          "lapis", "silver_ore", "iron_ore", "gold_ore", "onyx", "gem"]
+};
+function ifritPrice(id) { return ITEMS[id]?.price || 0; }
+function buyFromIfrit(save, id, qty = 1) {
+  if (save.location.map !== "city") return { ok: false, reason: "Іфрит — у Гільдії авантюристів Дубової Застави." };
+  if (!IFRIT.stock.includes(id)) return { ok: false, reason: "Іфрит цього не продає." };
+  qty = Math.floor(Number(qty));
+  if (!(qty >= 1 && qty <= BUY_MAX)) return { ok: false, reason: `Вкажіть кількість від 1 до ${BUY_MAX}.` };
+  const unit = ifritPrice(id), price = unit * qty;
+  if (save.character.gold < price) return { ok: false, reason: `Не вистачає золота (потрібно ${price}).` };
+  if (fitQty(save, id, qty) < qty) return { ok: false, reason: fullText(save, id, qty) };
+  save.character.gold -= price;
+  addItem(save, id, qty);
+  return { ok: true, price, qty, unit };
+}
+
 function tradePrice(id) {
   return Math.ceil((ITEMS[id]?.price || 0) * TRADE_PRICE_MULT);
 }
@@ -1065,6 +1088,7 @@ function applyReward(save, exp, loot) {
 Object.assign(RPG, {
   INV_SIZE, invFree, fitQty,
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
+  IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
   createNewSave, calcStats, clampHpMp, fullHeal, FEMALE_NAMES, heroGender, gw,

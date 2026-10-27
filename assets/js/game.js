@@ -710,7 +710,10 @@
 
   // Клас кольору рідкості для тексту заглушки
   function rarityTextClass(ref) {
-    return RPG.hasRarity(RPG.refId(ref)) ? " rt-" + RPG.rarityOf(ref) : "";
+    const id = RPG.refId(ref);
+    if (RPG.hasRarity(id)) return " rt-" + RPG.rarityOf(ref);
+    const gr = RPG.ITEMS[id]?.grade;                  // рідкість матеріалу (окрема стопка)
+    return gr && gr !== "common" ? " rt-" + gr : "";
   }
 
   // Маленька заглушка: перші літери назви кольором рідкості
@@ -776,6 +779,8 @@
     const id = RPG.refId(ref);
     let cls = RPG.ITEMS[id]?.rarity === "rare" ? " rarity-rare" : "";
     if (RPG.hasRarity(id)) cls += " rarity-" + RPG.rarityOf(ref);
+    const grade = RPG.ITEMS[id]?.grade;               // матеріал магічної / епічної / легендарної рідкості — рамка
+    if (grade && grade !== "common") cls += " rarity-" + grade;
     return "wf wf-slot" + cls + (extra ? " " + extra : "");
   }
 
@@ -984,12 +989,14 @@
     const head = el("div", "tip-head");
     head.append(smallIcon(ref, "tip-icon"));
     const title = el("div", "tip-title");
-    const name = RPG.hasRarity(id) ? rarityName(ref) : el("strong", item.rarity === "rare" ? "rt-epic" : null, item.name);
+    const gradeCls = item.grade && item.grade !== "common" ? "rt-" + item.grade : null;
+    const name = RPG.hasRarity(id) ? rarityName(ref) : el("strong", item.rarity === "rare" ? "rt-epic" : gradeCls, item.name);
     name.classList.add("tip-name");
     title.append(name);
     const sub = [TYPE_NAMES[item.type] || "Предмет"];
     if (RPG.hasRarity(id)) sub.push(RARITY_NAMES[RPG.rarityOf(ref)] || "");
     else if (item.rarity === "rare") sub.push("рідкісне");
+    else if (item.grade) sub.push(RARITY_NAMES[item.grade] || "");
     if (qty > 1) sub.push(`×${fmtNum(qty)}`);
     title.append(el("span", "tip-sub", sub.filter(Boolean).join(" · ")));
     head.append(title);
@@ -1901,7 +1908,9 @@
 
     function renderGuild(box) {
       const tabs = el("div", "row npc-tabs");
-      for (const [id, name] of [["admin", "Адміністратор Артеміда"], ["trader", "Торговець Тадеуш"], ["trainer", "Тренер Брут"]]) {
+      const guildTabs = [["admin", "Адміністратор Артеміда"], ["trader", "Торговець Тадеуш"], ["trainer", "Тренер Брут"]];
+      if (RPG.IFRIT) guildTabs.push(["ifrit", "Іфрит (тест)"]);      // ТЕСТ: прибрати разом з блоком IFRIT у character.js
+      for (const [id, name] of guildTabs) {
         tabs.append(button(name, "wf " + (guildNpc === id ? "wf-button" : "wf-link"), () => { guildNpc = id; renderPlace(); }));
       }
       box.append(tabs);
@@ -1909,7 +1918,9 @@
       // Шапка з портретом (assets/images/npc/<файл>.webp; поки картинки немає — лише ім'я)
       const GUILD_NPC = { admin: ["npc_guild_admin", "Артеміда, адміністратор гільдії"],
                           trader: ["npc_guild_trader", "Тадеуш, торговець гільдії"],
-                          trainer: ["npc_trainer", "Брут, тренер гільдії"] };
+                          trainer: ["npc_trainer", "Брут, тренер гільдії"],
+                          ifrit: ["npc_ifrit", "Іфрит — тестовий торговець ресурсами"] };
+      if (!GUILD_NPC[guildNpc] || (guildNpc === "ifrit" && !RPG.IFRIT)) guildNpc = "admin";
       const [pic, who] = GUILD_NPC[guildNpc];
       const head = el("div", "npc-head");
       const img = new Image();
@@ -1924,6 +1935,11 @@
           `Тадеуш, торговець гільдії, продає зброю 1–2 виду, шкіряну броню (2 вид), малі й середні зілля (за ${Math.round(RPG.SHOP_SELL_RATE * 100)}% вартості), ` +
           `а купує будь-що за ${Math.round(RPG.SHOP_BUY_RATE * 100)}%.`));
         renderShop(npc, RPG.GUILD_SHOP || []);
+      } else if (guildNpc === "ifrit") {
+        // ТЕСТ: Іфрит не належить до лору — продає ресурси, які ще не падають і не добуваються
+        npc.append(el("p", "ifrit-note", "Тестовий персонаж (не з лору гри). Продає ресурси ремесла, які поки ніде не падають і не добуваються. " +
+          `За одну покупку — до ${fmtNum(RPG.BUY_MAX)} шт.`));
+        renderShop(npc, RPG.IFRIT.stock, { priceOf: RPG.ifritPrice, buy: RPG.buyFromIfrit, stock: true });
       } else renderTrainer(npc);
       box.append(npc);
     }
