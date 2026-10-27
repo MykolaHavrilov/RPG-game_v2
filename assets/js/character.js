@@ -963,7 +963,7 @@ function tradeStock() {
   return Object.keys(ITEMS).filter(id => ITEMS[id].tier === 3);
 }
 // ---------- Власні доми (план крафту, етап 4) ----------
-// Дім купують в управителя Спального району Дубової Застави. Гравець дає дому назву —
+// Дім купують в управителя Спального району Дубової Застави. Гравець дає дому назву один раз, при купівлі —
 // згодом доми будуть і в інших містах. Скриня в домі — спільна з Домівкою (сховище "main").
 // Стан: save.houses = [{ id, key, name, boughtAt }] (key — з HOUSES)
 const HOUSE_NAME_MAX = 20;
@@ -988,14 +988,6 @@ function buyHouse(save, key, name) {
   const house = { id: "h_" + key, key, name: title, boughtAt: Date.now() };
   save.houses.push(house);
   return { ok: true, house, price: conf.price };
-}
-function renameHouse(save, key, name) {
-  const h = houseOf(save, key);
-  const title = cleanHouseName(name);
-  if (!h) return { ok: false, reason: "Дому немає." };
-  if (!title) return { ok: false, reason: "Назва не може бути порожньою." };
-  h.name = title;
-  return { ok: true, house: h };
 }
 function enterHouse(save, key) {
   const conf = HOUSES[key];
@@ -1135,7 +1127,7 @@ Object.assign(RPG, {
   INV_SIZE, invFree, fitQty,
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
-  HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, renameHouse, enterHouse,
+  HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, enterHouse,
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
   createNewSave, calcStats, clampHpMp, fullHeal, FEMALE_NAMES, heroGender, gw,

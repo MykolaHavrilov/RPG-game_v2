@@ -1401,17 +1401,10 @@
 
     // Власний дім: добудови (кузня, склад — наступні етапи) і вихід у Спальний район
     function renderHouseExtras() {
-      const h = RPG.houseHere(save);
       const box = el("div", "stack house-panel");
       box.append(el("h3", null, "Добудови"));
       box.append(el("p", "house-soon", "Кузня і склад для скринь ремесла з'являться в наступних оновленнях."));
       const row = el("div", "row");
-      row.append(button("Перейменувати дім", "wf wf-link", () => askHouseName(h?.name || "", async name => {
-        const r = RPG.renameHouse(save, locData.house, name);
-        if (!r.ok) { showMsg(msg, r.reason, true); return; }
-        await RPG.saveGame(save);
-        renderAll();
-      })));
       row.append(button("Вийти в Спальний район", "wf wf-secondary", async () => {
         RPG.enterCity(save, RPG.HOUSES[locData.house].district);
         await RPG.saveGame(save);
@@ -1421,7 +1414,7 @@
       place.append(box);
     }
 
-    // Вікно з полем для назви дому (купівля / перейменування)
+    // Вікно з полем для назви дому — лише при купівлі (назву дають один раз)
     function askHouseName(current, onOk, opts = {}) {
       const dlg = el("dialog", "notice-dialog house-dialog");
       const close = button("×", "notice-close", () => dlg.close());
@@ -1434,7 +1427,8 @@
       label.append(input);
       const ok = button(opts.okText || "Зберегти", "wf wf-button", () => { const v = input.value; dlg.close(); onOk(v); });
       input.addEventListener("keydown", e => { if (e.key === "Enter") ok.click(); });
-      dlg.append(label, el("p", "note keep", `До ${RPG.HOUSE_NAME_MAX} символів. Згодом доми будуть і в інших містах — назва допоможе їх розрізняти.`), ok);
+      dlg.append(label, el("p", "note keep", `До ${RPG.HOUSE_NAME_MAX} символів. Назву дають лише раз — змінити її потім не можна. ` +
+        "Згодом доми будуть і в інших містах — назва допоможе їх розрізняти."), ok);
       dlg.addEventListener("close", () => dlg.remove());
       document.body.append(dlg);
       dlg.showModal();
@@ -1455,7 +1449,7 @@
           showMsg(msg, `Дім «${r.house.name}» тепер ваш! −${fmtNum(r.price)} золота.`);
           renderAll();
         }, { title: "Купівля дому", okText: `Купити за ${fmtNum(conf.price)} золота`,
-             text: "Як назвете свій дім? Назву можна буде змінити пізніше." }));
+             text: "Як назвете свій дім? Оберіть уважно: назва дається один раз." }));
         buy.disabled = save.character.gold < conf.price;
         card.append(buy);
       } else {
