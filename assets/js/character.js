@@ -677,13 +677,41 @@ const CHEST_STORAGES = {
 };
 const DEFAULT_CHEST = "main";
 
+// ---------- Скрині ремесла на складі власного дому (план крафту, етап 5) ----------
+// Склад добудовують при домі; на складі купують «меблі» — скрині ремесла. Кожна скриня — окреме
+// сховище з id "<id дому>:<вид>:<номер>" (напр. "h_oak:mat:2"), свої для кожного дому.
+// allow — які типи предметів можна класти; stack — штук в одній клітинці.
+const WAREHOUSE_PRICE = 50000;
+const CRAFT_CHESTS = {
+  mat:  { name: "Скриня для матеріалів", size: 25, max: 4, price: 5000, allow: ["material"], stack: 1000 },
+  pot:  { name: "Скриня для зілля",      size: 10, max: 1, price: 2000, allow: ["consumable"], stack: 1000 },
+  item: { name: "Скриня для речей",      size: 25, max: 4, price: 5000, allow: ["weapon", "shield", "offhand", "armor", "accessory"], stack: 1 }
+};
+const CRAFT_CHEST_ALLOW_TEXT = { mat: "лише матеріали", pot: "лише зілля", item: "лише зброя, броня й прикраси" };
+function parseCraftChest(storageId) {
+  const m = /^([a-z0-9_]+):(mat|pot|item):(\d+)$/.exec(String(storageId || ""));
+  return m ? { houseId: m[1], type: m[2], n: Number(m[3]) } : null;
+}
+
 function chestConf(storageId) {
+  const cc = parseCraftChest(storageId);
+  if (cc) {
+    const t = CRAFT_CHESTS[cc.type];
+    const stack = {};
+    for (const type of t.allow) stack[type] = t.stack;
+    return { name: t.max > 1 ? `${t.name} ${cc.n}` : t.name, size: t.size, stack, allow: t.allow, craft: cc.type };
+  }
   const conf = CHEST_STORAGES[storageId] || {};
   return {
     name: conf.name || "Скриня",
     size: conf.size || CHEST_DEFAULTS.size,
     stack: { ...CHEST_DEFAULTS.stack, ...(conf.stack || {}) }
   };
+}
+// Чи можна покласти предмет у сховище (скрині ремесла приймають лише свої типи)
+function chestAllows(storageId, id) {
+  const allow = chestConf(storageId).allow;
+  return !allow || allow.includes(ITEMS[id]?.type);
 }
 // Скільки штук предмета влазить в одну клітинку скрині
 function chestStackMax(id, storageId = DEFAULT_CHEST) {
@@ -701,6 +729,19 @@ function chestList(save, storageId = DEFAULT_CHEST) {
 function chestHere(save) {
   return RPG.getLocation(save.location.map).chest || null;
 }
+// Усі сховища, доступні тут: скриня локації + скрині ремесла складу власного дому
+function chestsHere(save) {
+  const out = [];
+  const main = chestHere(save);
+  if (main) out.push(main);
+  const h = RPG.houseHere?.(save);
+  if (h?.warehouse) {
+    for (const type of Object.keys(CRAFT_CHESTS)) {
+      for (let n = 1; n <= (h.chests?.[type] || 0); n++) out.push(`${h.id}:${type}:${n}`);
+    }
+  }
+  return out;
+}
 // Назви локацій, де стоять скрині цього сховища
 function chestPlaces(storageId = DEFAULT_CHEST) {
   return Object.values(RPG.LOCATIONS).filter(l => l.chest === storageId && !l.locked).map(l => l.name);
@@ -716,11 +757,15 @@ function isAtHome(save) {
 // Покласти клітинку інвентаря в скриню поточної локації.
 // Стопка спершу доповнює неповні стопки в скрині, решта йде у вільні клітинки;
 // що не влізло — лишається в інвентарі.
-function moveToChest(save, invIndex) {
-  const sid = chestHere(save);
-  if (!sid) return { ok: false, reason: "Тут немає скрині." };
+function moveToChest(save, invIndex, storageId = null) {
+  const sid = storageId || chestHere(save);
+  if (!sid || !chestsHere(save).includes(sid)) return { ok: false, reason: "Тут немає скрині." };
   const entry = save.inventory[invIndex];
   if (!entry) return { ok: false, reason: "Порожня клітинка." };
+  if (!chestAllows(sid, entry.id)) {
+    const cc = parseCraftChest(sid);
+    return { ok: false, reason: `${chestConf(sid).name}: ${CRAFT_CHEST_ALLOW_TEXT[cc?.type] || "не для цього предмета"}.` };
+  }
   const list = chestList(save, sid);
   const item = ITEMS[entry.id];
   const free = chestFree(save, sid);
@@ -744,9 +789,9 @@ function moveToChest(save, invIndex) {
 }
 
 // Забрати клітинку скрині в інвентар. Якщо вся стопка не влазить — береться скільки влізе.
-function takeFromChest(save, chestIndex) {
-  const sid = chestHere(save);
-  if (!sid) return { ok: false, reason: "Тут немає скрині." };
+function takeFromChest(save, chestIndex, storageId = null) {
+  const sid = storageId || chestHere(save);
+  if (!sid || !chestsHere(save).includes(sid)) return { ok: false, reason: "Тут немає скрині." };
   const list = chestList(save, sid);
   const entry = list[chestIndex];
   if (!entry) return { ok: false, reason: "Порожня клітинка." };
@@ -998,6 +1043,46 @@ function enterHouse(save, key) {
   return { ok: true };
 }
 
+// Склад при домі: добудова, потім скрині ремесла
+function buildWarehouse(save, key) {
+  const h = houseOf(save, key);
+  if (!h) return { ok: false, reason: "Дім вам не належить." };
+  if (h.warehouse) return { ok: false, reason: "Склад уже збудовано." };
+  if (save.character.gold < WAREHOUSE_PRICE) return { ok: false, reason: `Не вистачає золота (потрібно ${WAREHOUSE_PRICE}).` };
+  save.character.gold -= WAREHOUSE_PRICE;
+  h.warehouse = true;
+  h.chests ??= { mat: 0, pot: 0, item: 0 };
+  return { ok: true, price: WAREHOUSE_PRICE };
+}
+function buyCraftChest(save, key, type) {
+  const h = houseOf(save, key), t = CRAFT_CHESTS[type];
+  if (!h) return { ok: false, reason: "Дім вам не належить." };
+  if (!h.warehouse) return { ok: false, reason: "Спершу збудуйте склад." };
+  if (!t) return { ok: false, reason: "Такої скрині немає." };
+  h.chests ??= { mat: 0, pot: 0, item: 0 };
+  if ((h.chests[type] || 0) >= t.max) return { ok: false, reason: `${t.name}: уже максимум (${t.max}).` };
+  if (save.character.gold < t.price) return { ok: false, reason: `Не вистачає золота (потрібно ${t.price}).` };
+  save.character.gold -= t.price;
+  h.chests[type] = (h.chests[type] || 0) + 1;
+  return { ok: true, price: t.price, n: h.chests[type], name: t.name };
+}
+// «Розкласти все»: матеріали й зілля з інвентаря — у скрині ремесла цього дому (речі не чіпаємо)
+function sortToCraftChests(save) {
+  const ids = chestsHere(save).filter(sid => ["mat", "pot"].includes(parseCraftChest(sid)?.type));
+  let moved = 0;
+  for (let i = save.inventory.length - 1; i >= 0; i--) {
+    const entry = save.inventory[i];
+    if (!entry || entry.r) continue;
+    for (const sid of ids) {
+      if (!chestAllows(sid, entry.id)) continue;
+      const r = moveToChest(save, i, sid);
+      if (r.ok) moved += r.qty;
+      if (save.inventory[i] !== entry) break;         // стопка переїхала повністю
+    }
+  }
+  return { ok: true, moved, chests: ids.length };
+}
+
 // ============================================================
 // ТЕСТ: Іфрит — тимчасовий торговець ресурсами ремесла (Гільдія авантюристів, вкладка «Іфрит (тест)»).
 // Не належить до лору. Щоб прибрати: видалити цей блок (IFRIT, ifritPrice, buyFromIfrit) — вкладка зникне сама.
@@ -1128,6 +1213,7 @@ Object.assign(RPG, {
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
   HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, enterHouse,
+  WAREHOUSE_PRICE, CRAFT_CHESTS, CRAFT_CHEST_ALLOW_TEXT, parseCraftChest, chestAllows, chestsHere, buildWarehouse, buyCraftChest, sortToCraftChests,
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
   createNewSave, calcStats, clampHpMp, fullHeal, FEMALE_NAMES, heroGender, gw,

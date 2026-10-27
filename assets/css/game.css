@@ -1194,3 +1194,7 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .house-dialog .field { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .house-dialog input { font: inherit; padding: 8px 10px; }
 .house-dialog .wf-button { margin-top: 10px; width: 100%; }
+/* Склад і скрині ремесла (план крафту, етап 5) */
+.house-build { gap: 8px; }
+.house-chest { align-items: center; flex-wrap: wrap; gap: 8px; }
+.house-chest .shop-name { flex: 1 1 200px; }

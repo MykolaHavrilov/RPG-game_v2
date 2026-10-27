@@ -1401,9 +1401,46 @@
 
     // Власний дім: добудови (кузня, склад — наступні етапи) і вихід у Спальний район
     function renderHouseExtras() {
+      const key = locData.house, h = RPG.houseOf(save, key);
       const box = el("div", "stack house-panel");
       box.append(el("h3", null, "Добудови"));
-      box.append(el("p", "house-soon", "Кузня і склад для скринь ремесла з'являться в наступних оновленнях."));
+      // Склад і скрині ремесла
+      const wh = el("div", "stack house-build");
+      if (!h?.warehouse) {
+        wh.append(el("p", null, `Склад — місце для скринь ремесла: матеріалів, зілля й речей. Добудова — ${fmtNum(RPG.WAREHOUSE_PRICE)} золота.`));
+        const b = button(`Збудувати склад за ${fmtNum(RPG.WAREHOUSE_PRICE)} золота`, "wf wf-button", async () => {
+          const r = RPG.buildWarehouse(save, key);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          showMsg(msg, `Склад збудовано! −${fmtNum(r.price)} золота. Тепер можна купувати скрині ремесла.`);
+          renderAll();
+        });
+        b.disabled = save.character.gold < RPG.WAREHOUSE_PRICE;
+        wh.append(b);
+      } else {
+        wh.append(el("strong", null, "Склад"));
+        for (const [type, t] of Object.entries(RPG.CRAFT_CHESTS)) {
+          const have = h.chests?.[type] || 0;
+          const r = el("div", "shop-row house-chest");
+          r.append(el("span", "shop-name", `${t.name}: ${have}/${t.max}`),
+            el("small", "shop-lvl", `${t.size} клітинок · ${RPG.CRAFT_CHEST_ALLOW_TEXT[type]}${type === "item" ? "" : `, до ${fmtNum(t.stack)} шт.`}`));
+          if (have < t.max) {
+            const b = button(`Купити · ${fmtNum(t.price)} зол.`, "wf wf-button", async () => {
+              const res = RPG.buyCraftChest(save, key, type);
+              if (!res.ok) { showMsg(msg, res.reason, true); return; }
+              await RPG.saveGame(save);
+              showMsg(msg, `${res.name} №${res.n} стоїть на складі. −${fmtNum(res.price)} золота.`);
+              renderAll();
+            });
+            b.disabled = save.character.gold < t.price;
+            r.append(b);
+          } else r.append(el("span", "shop-price", "максимум"));
+          wh.append(r);
+        }
+        wh.append(link("Відкрити скрині (Інвентар)", "inventory.html"));
+      }
+      box.append(wh);
+      box.append(el("p", "house-soon", "Кузня з'явиться в наступному оновленні."));
       const row = el("div", "row");
       row.append(button("Вийти в Спальний район", "wf wf-secondary", async () => {
         RPG.enterCity(save, RPG.HOUSES[locData.house].district);
@@ -3727,9 +3764,10 @@
     const btnToChest = button("У скриню", "wf wf-secondary");
     const btnFromChest = button("Забрати зі скрині", "wf wf-secondary");
     // Скриня поточної локації (або основна — тоді її можна лише переглянути)
-    const chestId = RPG.chestHere(ms);
-    const atHome = !!chestId;
-    const viewChest = chestId || RPG.DEFAULT_CHEST;
+    // У власному домі зі складом — ще й скрині ремесла (вкладки над скринею)
+    const storages = RPG.chestsHere(ms);
+    const atHome = storages.length > 0;
+    let viewChest = storages[0] || RPG.DEFAULT_CHEST;
     const chestOf = () => RPG.chestList(ms, viewChest);
 
     // selected: { kind: "inv", index } | { kind: "eq", slot } | { kind: "chest", index }
@@ -3776,9 +3814,13 @@
       const conf = RPG.chestConf(viewChest);
       const chest = chestOf();
       $("chest-title").textContent = conf.name;
-      $("chest-note").textContent = `Клітинок: ${chest.length}/${conf.size} · ` + (atHome
-        ? `Матеріали — до ${fmtNum(conf.stack.material)} шт., зілля — до ${fmtNum(conf.stack.consumable)} шт. в клітинці. Речі тут не зникають навіть після загибелі.`
+      const cc = RPG.parseCraftChest(viewChest);
+      $("chest-note").textContent = `Клітинок: ${chest.length}/${conf.size} · ` + (cc
+        ? `${RPG.CRAFT_CHEST_ALLOW_TEXT[cc.type]}${cc.type === "item" ? "" : `, до ${fmtNum(RPG.CRAFT_CHESTS[cc.type].stack)} шт. в клітинці`}. Скриня ремесла цього дому.`
+        : atHome
+        ? `Матеріали — до ${fmtNum(conf.stack.material)} шт., зілля — до ${fmtNum(conf.stack.consumable)} шт. в клітинці. Речі тут не зникають навіть після загибелі. Ця скриня спільна для Домівки й усіх ваших домів.`
         : `Скриня стоїть тут: ${RPG.chestPlaces(viewChest).join(", ") || "Домівка"} — звідси її можна лише переглянути.`);
+      renderChestTabs();
       $("chest-note").classList.toggle("is-full", chest.length >= conf.size);
       gridOf(chest, conf.size, "chest", $("chest-grid"));
 
@@ -3790,6 +3832,28 @@
       if (filterBtn) filterBtn.onclick = () => showLootFilter(save, () => renderFilterBtn(filterBtn, save));
       $("gold").classList.toggle("is-full", !RPG.invFree(ms));
       renderDesc();
+    }
+
+    // Вкладки сховищ (спільна скриня + скрині ремесла складу) і «Розкласти все»
+    function renderChestTabs() {
+      const box = $("chest-tabs");
+      if (!box) return;
+      box.innerHTML = "";
+      box.hidden = storages.length < 2;
+      if (box.hidden) return;
+      for (const sid of storages) {
+        const conf = RPG.chestConf(sid);
+        const used = RPG.chestList(ms, sid).length;
+        box.append(button(`${conf.name} · ${used}/${conf.size}`, "wf " + (sid === viewChest ? "wf-button" : "wf-link") + " chest-tab",
+          () => { viewChest = sid; selected = null; RPG.popover.hide(); render(); }));
+      }
+      if (storages.some(sid => ["mat", "pot"].includes(RPG.parseCraftChest(sid)?.type))) {
+        box.append(button("Розкласти все", "wf wf-secondary chest-tab", async () => {
+          const r = RPG.sortToCraftChests(ms);
+          selected = null;
+          await commit(r.moved ? `Розкладено по скринях ремесла: ${fmtNum(r.moved)} шт. матеріалів і зілля.` : "Нічого розкладати: матеріалів і зілля в інвентарі немає або скрині повні.", !r.moved);
+        }));
+      }
     }
 
     // Клік по предмету: виділити його і показати вікно з описом та діями.
@@ -3899,14 +3963,14 @@
     });
 
     btnToChest.addEventListener("click", async () => {
-      const r = RPG.moveToChest(ms, selected.index);
+      const r = RPG.moveToChest(ms, selected.index, viewChest);
       selected = null;
       await commit(r.ok ? `У скриню: ${RPG.ITEMS[r.id].name}${r.qty > 1 ? ` ×${r.qty}` : ""}` +
         (r.left ? `. Не влізло ${r.left} шт. — скриня повна.` : "") : r.reason, !r.ok);
     });
 
     btnFromChest.addEventListener("click", async () => {
-      const r = RPG.takeFromChest(ms, selected.index);
+      const r = RPG.takeFromChest(ms, selected.index, viewChest);
       selected = null;
       await commit(r.ok ? `Забрано зі скрині: ${RPG.ITEMS[r.id].name}${r.qty > 1 ? ` ×${r.qty}` : ""}` +
         (r.left ? `. У скрині лишилось ${r.left} шт. — інвентар повний.` : "") : r.reason, !r.ok);

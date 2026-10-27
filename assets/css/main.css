@@ -713,3 +713,6 @@ a, button, input, label, select, [tabindex] { touch-action: manipulation; -webki
 .gender-pick legend { padding: 0 6px; color: var(--text-dim); }
 .gender-pick label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .gender-pick input { accent-color: var(--accent); }
+/* Вкладки скринь на сторінці «Інвентар» (скрині ремесла в домі) */
+.chest-tabs { flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.chest-tabs .chest-tab { flex: 0 1 auto; min-height: 36px; padding: 4px 10px; font-size: .9rem; }
