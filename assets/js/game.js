@@ -1309,6 +1309,83 @@
       });
     }
 
+    // ---------- Автозілля (core.js → getAutoPotion, character.js → autoPotion) ----------
+    // Окреме вікно: два блоки (здоров'я, мана) + спільні параметри. Зберігається на пристрої, не в сейві.
+    const SIZE_NAMES = { auto: "Авто — найменше, якого вистачить", small: "Мале", medium: "Середнє", large: "Велике" };
+    function autoPotionSummary() {
+      const c = RPG.getAutoPotion();
+      const side = (s, name) => (c[s].on
+        ? `${name}: нижче ${c[s].below}% — пити до ${c[s].upTo}% (${c[s].size === "auto" ? "авто" : SIZE_NAMES[c[s].size].toLowerCase()}, ` +
+          `до ${c[s].maxPer} за раз${c[s].magic ? ", з Чарівним" : ""})`
+        : `${name}: вимкнено`);
+      const box = $("autopotion-summary");
+      if (box) box.textContent = `${side("hp", "Здоров'я")}. ${side("mp", "Мана")}. Діє на цьому пристрої для всіх збережень.`;
+    }
+    function openAutoPotion() {
+      const c = RPG.getAutoPotion();
+      let dlg = $("autopotion-dialog");
+      if (!dlg) { dlg = el("dialog", "autopotion-dialog"); dlg.id = "autopotion-dialog"; document.body.append(dlg); }
+      dlg.innerHTML = "";
+      const form = el("div", "stack");
+      const range = (label, min, max, step, value, fmt = v => v + "%") => {
+        const wrap = el("label", "field");
+        const cap = el("span"), val = el("b", null, fmt(value));
+        cap.append(label + " ", val);
+        const input = el("input");
+        Object.assign(input, { type: "range", min, max, step, value });
+        input.addEventListener("input", () => { val.textContent = fmt(input.value); });
+        wrap.append(cap, input);
+        return { wrap, input };
+      };
+      const check = (label, on) => {
+        const wrap = el("label", "choice"), input = el("input");
+        input.type = "checkbox"; input.checked = on;
+        wrap.append(input, document.createTextNode(" " + label));
+        return { wrap, input };
+      };
+      const block = (key, title) => {
+        const s = c[key];
+        const box = el("fieldset", "panel stack autopotion-side");
+        box.append(el("legend", null, title));
+        const on = check("Увімкнено", s.on);
+        const below = range("Пити, коли нижче", 5, 95, 5, s.below);
+        const upTo = range("Пити, поки не стане", 10, 100, 5, Math.max(s.upTo, s.below));
+        // Ціль не може бути меншою за поріг
+        below.input.addEventListener("input", () => { if (+upTo.input.value < +below.input.value) { upTo.input.value = below.input.value; upTo.input.dispatchEvent(new Event("input")); } });
+        upTo.input.addEventListener("input", () => { if (+upTo.input.value < +below.input.value) { below.input.value = upTo.input.value; below.input.dispatchEvent(new Event("input")); } });
+        const sizeWrap = el("label", "field");
+        const size = el("select");
+        for (const [v, n] of Object.entries(SIZE_NAMES)) { const o = el("option", null, n); o.value = v; size.append(o); }
+        size.value = s.size;
+        sizeWrap.append(el("span", null, "Розмір зілля"), size);
+        const fallback = check("Якщо обраного розміру немає — брати інший", s.fallback);
+        const sync = () => { fallback.wrap.hidden = size.value === "auto"; };
+        size.addEventListener("change", sync); sync();
+        const maxPer = range(`Не більше зілль ${key === "hp" ? "здоров'я" : "мани"} за раз для одного героя`, 1, 20, 1, s.maxPer, v => String(v));
+        const magic = check(`Дозволити Чарівне зілля (лише коли звичайних зілль ${key === "hp" ? "здоров'я" : "мани"} немає)`, s.magic);
+        box.append(on.wrap, below.wrap, upTo.wrap, sizeWrap, fallback.wrap, maxPer.wrap, magic.wrap);
+        form.append(box);
+        return () => ({ on: on.input.checked, below: +below.input.value, upTo: +upTo.input.value, size: size.value,
+          fallback: fallback.input.checked, maxPer: +maxPer.input.value, magic: magic.input.checked });
+      };
+      const readHp = block("hp", "Здоров'я (HP)");
+      const readMp = block("mp", "Мана (MP)");
+      form.append(
+        el("p", "note", "Перевірка — перед кожним боєм і після нього, для кожного живого героя групи. Зілля беруться лише з інвентаря. " +
+          "Останнє зілля може відновити трохи більше за ціль. У данжі зілля не діють."));
+      const row = el("div", "dialog-actions");
+      row.append(button("Зберегти", "wf wf-button", () => {
+        RPG.setSettings({ autoPotion: { hp: readHp(), mp: readMp() } });
+        dlg.close();
+        autoPotionSummary();
+        showMsg(msg, "Налаштування автозілля збережено.");
+      }), button("Скасувати", "wf wf-link", () => dlg.close()));
+      dlg.append(el("h2", null, "Автозілля"), form, row);
+      dlg.showModal();
+    }
+    autoPotionSummary();
+    $("autopotion-btn")?.addEventListener("click", openAutoPotion);
+
     const exportBtn = $("export-btn");
     const current = await RPG.loadCurrentGame().catch(() => null);
     if (!current) {
@@ -3588,6 +3665,24 @@
       if (fb) fb.disabled = on;
     }
 
+    // Автозілля (налаштування на пристрої — core.js → getAutoPotion; пиття — character.js → autoPotion):
+    // перед боєм і після бою. «Немає зілля» пишемо один раз, поки зілля цього виду знову не з'явиться.
+    const potionWarned = { hp: false, mp: false };
+    function runAutoPotion() {
+      const cfg = RPG.getAutoPotion();
+      const r = RPG.autoPotion(save, cfg);
+      const lines = r.lines.slice();
+      for (const stat of ["hp", "mp"]) {
+        const set = RPG.AUTO_POTIONS[stat];
+        if (["small", "medium", "large"].some(k => RPG.countItem(save, set[k]) > 0)) potionWarned[stat] = false;
+        if (cfg[stat].on && r.missing[stat] && !potionWarned[stat]) {
+          potionWarned[stat] = true;
+          lines.push(`Автозілля: в інвентарі закінчилось ${stat === "hp" ? "зілля здоров'я" : "зілля мани"}.`);
+        }
+      }
+      return lines;
+    }
+
     async function startBattle() {
       if (fighting) return;
       const team = fighters();
@@ -3595,6 +3690,8 @@
       if (mode === "dungeon" && !dungeonOn()) { showMsg(msg, "Спершу відчиніть ворота данжу ключем.", true); return; }
       const dun = dungeonOn() ? RPG.activeDungeon(save) : null;   // бій у данжі: { stage, stages, ... }
       const rewarded = !dun || dun.stage === dun.stages;          // нагорода — лише за боса данжу
+      // Автозілля перед боєм (у данжі не діє — character.js → autoPotion)
+      const prePotion = runAutoPotion().map(l => l.replace(/^Автозілля:/, "Автозілля перед боєм:"));
       setFighting(true);
       renderEnemy();
       logBox.innerHTML = "";
@@ -3710,6 +3807,8 @@
         if (result.win && dunNext.done && RPG.chronicleRecord) chron = RPG.chronicleRecord(save, dun.id, team, result);
       }
       if (!result.draw || result.win) fieldLootAdd(save, { win: result.win, exp: battleExp, gold: battleGold, items: got, lost, filtered });
+      // Автозілля після бою (не після загибелі всієї групи; у данжі між боями не діє)
+      const postPotion = deaths ? [] : runAutoPotion();
 
       // Підсумок бою (заголовок + рядки) — рахуємо одразу, щоб записати в журнал разом із ходом бою
       let outcome;
@@ -3739,6 +3838,7 @@
       } else {
         outcome = { title: foes.length > 1 ? "Вороги втекли" : "Ворог утік", lines: ["Нагороди немає."], state: "draw" };
       }
+      outcome.lines.push(...prePotion, ...postPotion);
       const fightTitle = `${team.map(ms => ms.character.name).join(", ")} проти: ${foesText()}`;
       // Журнал бою (journal.js): увесь хід бою + підсумок; найстаріший запис понад 100 затирається
       liveEntry = RPG.journalAdd(save, { kind: "battle", lines: [

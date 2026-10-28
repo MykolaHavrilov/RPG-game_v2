@@ -716,3 +716,14 @@ a, button, input, label, select, [tabindex] { touch-action: manipulation; -webki
 /* Вкладки скринь на сторінці «Інвентар» (скрині ремесла в домі) */
 .chest-tabs { flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
 .chest-tabs .chest-tab { flex: 0 1 auto; min-height: 36px; padding: 4px 10px; font-size: .9rem; }
+
+/* ---------- Вікно «Автозілля» (сторінка «Налаштування», game.js → openAutoPotion) ---------- */
+.autopotion-dialog { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; }
+.autopotion-dialog h2 { margin-top: 0; }
+.autopotion-side { margin: 0; border: 1px solid var(--border-color); }
+.autopotion-side legend { padding: 0 6px; font-weight: 700; color: var(--accent); }
+.autopotion-dialog select {
+  min-height: 40px; padding: 6px 10px; font: inherit; color: inherit;
+  background: rgba(0, 0, 0, .35); border: 1px solid var(--border-color); border-radius: var(--radius-sm, 6px);
+}
+.autopotion-dialog .field b { color: var(--accent); }

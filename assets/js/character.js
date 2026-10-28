@@ -1039,6 +1039,77 @@ function useItem(save, id) {
   return result;
 }
 
+// ---------- Автозілля ----------
+// Налаштування — core.js → RPG.getAutoPotion() (на пристрої, не в сейві). Викликається зі сторінки гри
+// перед боєм і після бою (game.js → runAutoPotion). Зілля беруться лише з інвентаря групи.
+// Для кожного живого героя: якщо HP (потім MP) нижче below% — п'є, поки не стане upTo% або більше
+// (останнє зілля може дати більше), але не більше maxPer зілль цього виду. Усі параметри — окремо для HP і MP.
+// У данжі не діє (як і ручне пиття).
+// Повертає { lines: [текст для підсумку], missing: { hp, mp } — чи бракувало зілля, drank — скільки випито }.
+const AUTO_POTIONS = {
+  hp: { small: "potion_hp_small", medium: "potion_hp_medium", large: "potion_hp_large", amount: e => e.healHp || 0, pct: e => e.healHpPct || 0 },
+  mp: { small: "potion_mp_small", medium: "potion_mp_medium", large: "potion_mp_large", amount: e => e.healMp || 0, pct: e => e.healMpPct || 0 }
+};
+const AUTO_MAGIC = "potion_magic";
+
+// Скільки відновить зілля id для цього показника (stat — "hp" | "mp") при максимумі max
+function potionGain(id, stat, max) {
+  const e = ITEMS[id]?.effect || {};
+  return AUTO_POTIONS[stat].amount(e) + AUTO_POTIONS[stat].pct(e) * max;
+}
+
+// Яке зілля пити: need — скільки ще бракує до цілі. null — нема чого пити
+function pickAutoPotion(save, stat, side, need, max, allowMagic) {
+  const set = AUTO_POTIONS[stat];
+  const has = id => countItem(save, id) > 0;
+  if (side.size !== "auto") {
+    if (has(set[side.size])) return set[side.size];
+    if (!side.fallback) return null;
+  }
+  // Авто: найменше зілля, якого одного вистачить до цілі; якщо такого немає — найбільше з наявних
+  const avail = ["small", "medium", "large"].map(k => set[k]).filter(has)
+    .sort((a, b) => potionGain(a, stat, max) - potionGain(b, stat, max));
+  if (avail.length) return avail.find(id => potionGain(id, stat, max) >= need) || avail[avail.length - 1];
+  return allowMagic && has(AUTO_MAGIC) ? AUTO_MAGIC : null;   // Чарівне — лише коли звичайних немає
+}
+
+function autoPotion(save, cfg = RPG.getAutoPotion()) {
+  const out = { lines: [], missing: { hp: false, mp: false }, drank: 0 };
+  if (save.dungeon || (!cfg.hp.on && !cfg.mp.on)) return out;
+  const members = RPG.aliveMembers ? RPG.aliveMembers(save) : [save];
+  const group = members.length > 1;
+  for (const ms of members) {
+    const ch = ms.character;
+    const used = {};                       // id → скільки випито
+    const change = {};                     // stat → [було %, стало %]
+    for (const stat of ["hp", "mp"]) {
+      const side = cfg[stat];
+      if (!side.on) continue;
+      const max = calcStats(ms)[stat];
+      if (!max || ch.hp <= 0) continue;
+      const pct = () => (ch[stat] / max) * 100;
+      if (pct() >= side.below) continue;   // поріг ще не перейдено
+      const from = pct();
+      const target = (max * side.upTo) / 100;
+      for (let n = 0; n < side.maxPer && ch[stat] < target - 1e-9; n++) {
+        const id = pickAutoPotion(ms, stat, side, target - ch[stat], max, side.magic);
+        if (!id) { out.missing[stat] = true; break; }
+        const r = useItem(ms, id);
+        if (!r.ok) break;
+        used[id] = (used[id] || 0) + 1;
+        out.drank++;
+      }
+      if (ch[stat] > (from * max) / 100) change[stat] = [Math.floor(from), Math.floor(pct())];
+    }
+    const ids = Object.keys(used);
+    if (!ids.length) continue;
+    const what = ids.map(id => `${used[id]}× ${ITEMS[id].name}`).join(", ");
+    const delta = Object.entries(change).map(([s, [a, b]]) => `${s === "hp" ? "HP" : "MP"} ${a}% → ${b}%`).join(", ");
+    out.lines.push(`Автозілля: ${group ? ch.name + " — " : ""}${what}${delta ? ` (${delta})` : ""}`);
+  }
+  return out;
+}
+
 // ---------- Торгівля в Шинку ----------
 
 // Шинок — свій асортимент; Дубова Застава — торговець Гільдії авантюристів
@@ -1324,7 +1395,7 @@ function applyReward(save, exp, loot) {
 }
 
 Object.assign(RPG, {
-  INV_SIZE, invFree, fitQty, invSize, BELT_SLOTS, POUCH_DROP, beltOf, beltBonus, putOnBelt, takeFromBelt, rollPouchDrop,
+  autoPotion, AUTO_POTIONS, INV_SIZE, invFree, fitQty, invSize, BELT_SLOTS, POUCH_DROP, beltOf, beltBonus, putOnBelt, takeFromBelt, rollPouchDrop,
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
   HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, enterHouse,
