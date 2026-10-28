@@ -1,8 +1,11 @@
 // ============================================================
 // craft.js — КУВАННЯ В КУЗНІ ВЛАСНОГО ДОМУ (план крафту, етап 7)
 //
-// Майстерність коваля — лише в головного героя (save.character.craft = { level, exp }), а речі носить уся група.
-// Рівні 1–30: шанс успіху росте з 10% на 1 рівні до 95% на 30-му (+2,93% за рівень).
+// Майстерність коваля — лише в головного героя (save.character.craft = { level, exp, cats }), а речі носить уся група.
+// Загальна майстерність 1–30: шанс успіху росте з 10% на 1 рівні до 95% на 30-му (+2,93% за рівень) і частки рідкостей.
+// Тіри вона НЕ відкриває — це робить майстерність виду (cats.weapon / armor / jewel, data/recipes.js → RECIPE_GROUPS):
+// у кожного виду свій рівень 1–30, що росте від кування й розбору речей цього виду; максимум виду —
+// рівень, на якому відкривається його найвищий наявний тір (зараз тір 3 → 20), з новими тірами він зросте.
 // Невдача — річ виходить ЗЛАМАНОЮ (матеріали витрачено). Успіх — рідкість за таблицею RARITY_ANCHORS
 // (опорні рівні 1, 5, 10, 15, 20, 25, 30, між ними — плавно). Числа — з «Небесна_кузня_крафт_v2.xlsx».
 //
@@ -32,7 +35,36 @@
   function craftState(save) {
     const ch = save.character;
     ch.craft ??= { level: 1, exp: 0 };
+    ch.craft.cats ??= {};
+    for (const g of RPG.RECIPE_GROUPS) ch.craft.cats[g.id] ??= { level: 1, exp: 0 };
     return ch.craft;
+  }
+  // ---------- Майстерність виду (Зброя / Броня / Ювелір) ----------
+  function catState(save, cat) { return craftState(save).cats[cat] || null; }
+  // Найвищий рівень виду: рівень, що відкриває найвищий наявний тір цього виду (не більше 30)
+  function catMaxLevel(cat) {
+    const g = RPG.RECIPE_GROUPS.find(x => x.id === cat);
+    let tier = 1;
+    for (const [id, r] of Object.entries(RPG.RECIPES)) if (g?.types.includes(RPG.ITEMS[id]?.type)) tier = Math.max(tier, r.tier);
+    return Math.min(MAX_LEVEL, RPG.CRAFT_TIER_LEVEL[tier] || MAX_LEVEL);
+  }
+  // Найвищий тір, відкритий рівнем виду
+  function catOpenTier(level) {
+    let t = 1;
+    for (const [tier, lvl] of Object.entries(RPG.CRAFT_TIER_LEVEL)) if (level >= lvl) t = Math.max(t, Number(tier));
+    return t;
+  }
+  function addCatExp(save, cat, amount) {
+    const st = catState(save, cat), max = catMaxLevel(cat), ups = [];
+    if (!st || st.level >= max) { if (st) st.exp = 0; return ups; }
+    st.exp += Math.max(0, Math.floor(amount));
+    while (st.level < max && st.exp >= expToNext(st.level)) {
+      st.exp -= expToNext(st.level);
+      st.level++;
+      ups.push(st.level);
+    }
+    if (st.level >= max) st.exp = 0;
+    return ups;
   }
   function baseChance(level) {
     return Math.min(MAX_CHANCE, MIN_CHANCE + (level - 1) * (MAX_CHANCE - MIN_CHANCE) / (MAX_LEVEL - 1));
@@ -117,18 +149,20 @@
   function recipeInfo(save, itemId) {
     const recipe = RPG.RECIPES[itemId];
     if (!recipe) return null;
-    const st = craftState(save);
+    const cat = RPG.recipeGroupOf(itemId);
+    const st = catState(save, cat) || { level: 1 };
+    const g = RPG.RECIPE_GROUPS.find(x => x.id === cat);
     const house = RPG.houseHere(save);
     const tierLevel = RPG.CRAFT_TIER_LEVEL[recipe.tier];
     const mats = recipe.mats.map(([id, need]) => ({ id, need, have: haveMaterial(save, id) }));
     const tools = recipe.tools.map(id => ({ id, have: !!house?.forge?.tools?.[id] }));
     const ready = forgeReady(save, recipe.tools);
     let reason = "";
-    if (st.level < tierLevel) reason = `Потрібна майстерність ${tierLevel}.`;
+    if (st.level < tierLevel) reason = `Потрібен рівень «${g?.name || "майстерності"}» ${tierLevel}.`;
     else if (!ready.ok) reason = ready.reason;
     else if (mats.some(m => m.have < m.need)) reason = "Бракує матеріалів.";
     else if (!RPG.invFree(save)) reason = "Інвентар повний.";
-    return { recipe, tierLevel, levelOk: st.level >= tierLevel, mats, tools, canCraft: !reason, reason };
+    return { recipe, cat, tierLevel, levelOk: st.level >= tierLevel, mats, tools, canCraft: !reason, reason };
   }
 
   function addCraftExp(save, amount) {
@@ -180,7 +214,8 @@
     save.inventory.push(ref);
     const exp = Math.round(CRAFT_EXP[info.recipe.tier] * (rarity === "broken" ? 0.5 : 1));
     const levelUps = addCraftExp(save, exp);
-    return { ok: true, ref, rarity, exp, levelUps, spark };
+    const catUps = addCatExp(save, info.cat, exp);
+    return { ok: true, ref, rarity, exp, levelUps, cat: info.cat, catUps, spark };
   }
 
   // ---------- Переплавка руди ----------
@@ -273,13 +308,16 @@
     if ((ref.qty || 1) > 1) ref.qty--; else save.inventory.splice(index, 1);
     for (const [id, q] of got) RPG.addItem(save, id, q);
     const levelUps = addCraftExp(save, info.exp);
-    return { ok: true, got, exp: info.exp, levelUps, name, rarity: info.rarity };
+    const cat = RPG.recipeGroupOf(info.ref.id);
+    const catUps = addCatExp(save, cat, info.exp);
+    return { ok: true, got, exp: info.exp, levelUps, cat, catUps, name, rarity: info.rarity };
   }
 
   Object.assign(RPG, {
     CRAFT_MAX_LEVEL: MAX_LEVEL, CRAFT_EXP, craftState, craftExpToNext: expToNext, baseCraftChance: baseChance,
     craftSuccessChance: successChance, craftRarityTable: rarityTable, craftOdds, haveMaterial, recipeInfo,
     craftForgeReady: forgeReady, craftItem, addCraftExp, smeltInfo, smelt,
-    DISASSEMBLE_SHARE, DISASSEMBLE_EXP, disassembleInfo, disassemble
+    DISASSEMBLE_SHARE, DISASSEMBLE_EXP, disassembleInfo, disassemble,
+    craftCat: catState, craftCatMaxLevel: catMaxLevel, craftCatOpenTier: catOpenTier, addCraftCatExp: addCatExp
   });
 })(window.RPG);

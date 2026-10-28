@@ -2,7 +2,7 @@
 // data/recipes.js — РЕЦЕПТИ КУЗНІ (план крафту, етап 7; книга «Небесна кузня. Настанова»)
 //
 // RECIPES[<id речі>] = { tier, mats: [[id матеріалу, кількість], …], tools: [id знаряддя, …] }
-//   tier  — 1 / 2 / 3: потрібна майстерність CRAFT_TIER_LEVEL[tier] (1 / 10 / 20)
+//   tier  — 1 / 2 / 3: потрібен рівень майстерності ВИДУ (Зброя / Броня / Ювелір) CRAFT_TIER_LEVEL[tier] (1 / 10 / 20)
 //   mats  — базові ID матеріалів; підходить будь-яка рідкість (craft.js сам підбирає стопки)
 //   tools — знаряддя понад обов'язкові (горно, ковадло, молот, кліщі, діжка — потрібні завжди)
 // SMELT[<id злитка>] = { ore, oreQty, coal, tools } — переплавка руди в горні (завжди вдається).
@@ -11,7 +11,8 @@
 // ============================================================
 
 (function (RPG) {
-  const CRAFT_TIER_LEVEL = { 1: 1, 2: 10, 3: 20 };
+  // Тір відкривається рівнем майстерності свого виду. Тір 4 — на майбутнє (рівень 30).
+  const CRAFT_TIER_LEVEL = { 1: 1, 2: 10, 3: 20, 4: 30 };
 
   const RECIPES = {
     // ---------- Тір 1 (дерево, льон, мідь) ----------
@@ -80,13 +81,20 @@
     gold_ingot:   { ore: "gold_ore",   oreQty: 2, coal: 0, tools: [] }
   };
 
-  // Групи для вкладок кузні
+  // Види ремесла = вкладки кузні. У кожного виду — свій рівень майстерності 1–30 (craft.js → craftCat):
+  // він відкриває вищі тіри цього виду. Нові види речей додаються сюди за типом предмета (types).
+  //   weapon — уся зброя, і для правої, і для лівої руки (щити, колчани, сфери, малі кинджали)
+  //   armor  — уся броня; jewel — кільця, амулети, сережки
   const RECIPE_GROUPS = [
-    { id: "weapon", name: "Зброя", types: ["weapon"] },
-    { id: "offhand", name: "Ліва рука", types: ["shield", "offhand"] },
-    { id: "armor", name: "Броня", types: ["armor"] },
-    { id: "accessory", name: "Прикраси", types: ["accessory"] }
+    { id: "weapon", name: "Зброя", master: "Зброяр", types: ["weapon", "shield", "offhand"] },
+    { id: "armor", name: "Броня", master: "Бронник", types: ["armor"] },
+    { id: "jewel", name: "Ювелір", master: "Ювелір", types: ["accessory"] }
   ];
+  // Вид ремесла речі (id групи) або null
+  function recipeGroupOf(itemId) {
+    const t = RPG.ITEMS[itemId]?.type;
+    return RECIPE_GROUPS.find(g => g.types.includes(t))?.id || null;
+  }
 
-  Object.assign(RPG, { CRAFT_TIER_LEVEL, RECIPES, SMELT, RECIPE_GROUPS });
+  Object.assign(RPG, { CRAFT_TIER_LEVEL, RECIPES, SMELT, RECIPE_GROUPS, recipeGroupOf });
 })(window.RPG);

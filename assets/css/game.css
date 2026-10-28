@@ -1212,6 +1212,7 @@ main > a.location { display: flex; margin-bottom: 10px; }
 /* Вікно кузні (план крафту, етап 7) */
 .forge-dialog { max-width: min(760px, calc(100vw - 24px)); max-height: 88vh; overflow-y: auto; }
 .forge-mastery { margin: 0 0 6px; font-weight: 700; color: var(--gold); }
+.forge-cat { margin: 0 0 6px; font-size: .92rem; color: var(--text-dim, #c9b48a); }
 .forge-result { margin: 6px 0; padding: 6px 10px; border-radius: 4px; background: rgba(95, 138, 82, .18); border: 1px solid #5f8a52; }
 .forge-result.is-error { background: rgba(160, 72, 58, .18); border-color: #a0483a; }
 .forge-tabs { flex-wrap: wrap; gap: 6px; margin: 6px 0; }

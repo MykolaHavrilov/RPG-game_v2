@@ -614,7 +614,7 @@
           cell.append(el("small", "fbook-mats", mats.join(", ")));
           rows.push([`${tier} (з ${RPG.CRAFT_TIER_LEVEL[tier]})`, cell]);
         }
-        frag.append(forgeBookTable(["Тір", "Речі й матеріали"], rows, "is-recipes"));
+        frag.append(forgeBookTable(["Тір (рівень)", "Речі й матеріали"], rows, "is-recipes"));
       }
     } else if (kind === "tools") {
       frag.append(forgeBookTable(["Знаряддя", "Для чого", "Ціна, зол."], Object.values(RPG.FORGE_TOOLS).map(t => {
@@ -623,9 +623,14 @@
         return [n, t.text + (t.for ? ` Потрібне для: ${t.for}.` : ""), fmtNum(t.price)];
       }), "is-priced"));
     } else if (kind === "ranks") {
-      frag.append(forgeBookTable(["Звання", "Рівні", "Відкриває"], [
-        ["Учень", "1–9", "тір 1"], ["Підмайстер", "10–19", "тір 2"], ["Майстер", "20–29", "тір 3"], ["Небесний коваль", "30", "успіх 95%"]
-      ]));
+      frag.append(forgeBookTable(["Звання", "Рівні", "Успіх"], [["Учень", 1, 9], ["Підмайстер", 10, 19], ["Майстер", 20, 29], ["Небесний коваль", 30, 30]]
+        .map(([n, a, b]) => [n, a === b ? String(a) : `${a}–${b}`, a === b ? pc(RPG.baseCraftChance(a)) : `${pc(RPG.baseCraftChance(a))}–${pc(RPG.baseCraftChance(b))}`])));
+    } else if (kind === "cats") {
+      frag.append(forgeBookTable(["Вид", "Що входить", "Тіри (рівень виду)"], RPG.RECIPE_GROUPS.map(g => {
+        const tiers = [...new Set(Object.keys(RPG.RECIPES).filter(id => g.types.includes(RPG.ITEMS[id]?.type)).map(id => RPG.RECIPES[id].tier))].sort();
+        const what = { weapon: "зброя для правої й лівої руки", armor: "уся броня", jewel: "кільця, амулети, сережки" }[g.id] || "";
+        return [g.name, what, tiers.map(t => `${t} — з ${RPG.CRAFT_TIER_LEVEL[t]}`).join(", ") + `; максимум ${RPG.craftCatMaxLevel(g.id)}`];
+      })));
     } else if (kind === "odds") {
       const R = ["broken", "common", "magic", "epic", "legendary"];
       const head = ["Рів.", "Успіх", ...R.map(r => { const s = el("span", "rt-" + r, RPG.RARITIES[r].name.slice(0, 4) + "."); s.title = RPG.RARITIES[r].name; return s; })];
@@ -1529,22 +1534,25 @@
         wh.append(b);
       } else {
         wh.append(el("strong", null, "Склад"));
-        for (const [type, t] of Object.entries(RPG.CRAFT_CHESTS)) {
+        // Куплені до максимуму скрині з переліку покупок зникають; коли куплено все — лишається тільки підсумок
+        const chestTypes = Object.entries(RPG.CRAFT_CHESTS);
+        const left = chestTypes.filter(([type, t]) => (h.chests?.[type] || 0) < t.max);
+        if (!left.length) wh.append(el("small", "shop-lvl", "Усі скрині ремесла куплено: " +
+          chestTypes.map(([, t]) => `${t.name.replace("Скриня ", "").toLowerCase()} ×${t.max}`).join(", ") + "."));
+        for (const [type, t] of left) {
           const have = h.chests?.[type] || 0;
           const r = el("div", "shop-row house-chest");
           r.append(el("span", "shop-name", `${t.name}: ${have}/${t.max}`),
             el("small", "shop-lvl", `${t.size} клітинок · ${RPG.CRAFT_CHEST_ALLOW_TEXT[type]}${type === "item" ? "" : `, до ${fmtNum(t.stack)} шт.`}`));
-          if (have < t.max) {
-            const b = button(`Купити · ${fmtNum(t.price)} зол.`, "wf wf-button", async () => {
-              const res = RPG.buyCraftChest(save, key, type);
-              if (!res.ok) { showMsg(msg, res.reason, true); return; }
-              await RPG.saveGame(save);
-              showMsg(msg, `${res.name} №${res.n} стоїть на складі. −${fmtNum(res.price)} золота.`);
-              renderAll();
-            });
-            b.disabled = save.character.gold < t.price;
-            r.append(b);
-          } else r.append(el("span", "shop-price", "максимум"));
+          const b = button(`Купити · ${fmtNum(t.price)} зол.`, "wf wf-button", async () => {
+            const res = RPG.buyCraftChest(save, key, type);
+            if (!res.ok) { showMsg(msg, res.reason, true); return; }
+            await RPG.saveGame(save);
+            showMsg(msg, `${res.name} №${res.n} стоїть на складі. −${fmtNum(res.price)} золота.`);
+            renderAll();
+          });
+          b.disabled = save.character.gold < t.price;
+          r.append(b);
           wh.append(r);
         }
         wh.append(link("Відкрити скрині (Інвентар)", "inventory.html"));
@@ -1566,12 +1574,13 @@
         fg.append(b);
       } else {
         fg.append(el("strong", null, "Кузня"));
-        const tools = el("div", "tool-grid");
-        for (const [id, t] of Object.entries(RPG.FORGE_TOOLS)) {
-          const have = !!h.forge.tools[id];
-          tools.append(el("span", "tool-chip" + (have ? " is-have" : "") + (t.need ? " is-need" : ""), (have ? "✓ " : "✗ ") + t.name));
+        // Знаряддя: показуємо лише те, чого ще бракує; коли куплено все — перелік зникає
+        const lacking = Object.entries(RPG.FORGE_TOOLS).filter(([id]) => !h.forge.tools[id]);
+        if (lacking.length) {
+          const tools = el("div", "tool-grid");
+          for (const [, t] of lacking) tools.append(el("span", "tool-chip" + (t.need ? " is-need" : ""), "✗ " + t.name));
+          fg.append(el("small", "shop-lvl", "Ще не куплено:"), tools);
         }
-        fg.append(tools);
         const miss = RPG.forgeMissing(h);
         if (miss.length) fg.append(el("p", "house-soon",
           `Щоб почати кувати, бракує: ${miss.map(id => RPG.FORGE_TOOLS[id].name.toLowerCase()).join(", ")}. Знаряддя — у коваля Кузьми (Торговий район).`));
@@ -1581,6 +1590,7 @@
           const book = RPG.hasForgeBook(save);
           if (!book) fg.append(el("p", "house-soon", `Першу науку коваля — книгу «${RPG.FORGE_BOOK.title}» — продає Кузьма в Гільдії ремісників (Торговий район). Без неї кувати не вийде.`));
           fg.append(el("p", "forge-mastery", `Майстерність коваля: ${st.level} (${craftRank(st.level)}) · шанс успіху ${pct(RPG.craftSuccessChance(save, h))}`));
+          fg.append(el("p", "forge-cat", RPG.RECIPE_GROUPS.map(g => `${g.name} ${RPG.craftCat(save, g.id).level}/${RPG.craftCatMaxLevel(g.id)}`).join(" · ")));
           const row = el("div", "row forge-open-row");
           const open = button("Кувати", "wf wf-button", () => showForge());
           open.disabled = !!miss.length || !book;
@@ -1606,6 +1616,14 @@
       return lvl >= 30 ? "Небесний коваль" : lvl >= 20 ? "Майстер" : lvl >= 10 ? "Підмайстер" : "Учень";
     }
     const RARITY_LABEL = { broken: "зламана", common: "звичайна", magic: "магічна", epic: "епічна", legendary: "легендарна" };
+    // Підвищення рівнів після кування/розбору: загальна майстерність і майстерність виду
+    function craftUpsText(r) {
+      const parts = [];
+      if (r.levelUps?.length) parts.push(`Майстерність ${r.levelUps.at(-1)}!`);
+      const g = RPG.RECIPE_GROUPS.find(x => x.id === r.cat);
+      if (g && r.catUps?.length) parts.push(`${g.name}: рівень ${r.catUps.at(-1)}!`);
+      return parts.length ? ". " + parts.join(" ") : ".";
+    }
     let forgeTab = "weapon", forgePreferRare = false, forgeSpark = false, forgeResult = null, disConfirm = null;
     function showForge() {
       document.querySelector(".forge-dialog")?.remove();
@@ -1627,6 +1645,14 @@
           tabs.append(button(gr.name, "wf " + (forgeTab === gr.id ? "wf-button" : "wf-link"), () => { forgeTab = gr.id; forgeResult = null; disConfirm = null; draw(); }));
         }
         dlg.append(tabs);
+        // рівень майстерності виду (відкриває тіри); загальна майстерність — лише шанс успіху й рідкість
+        const curGroup = RPG.RECIPE_GROUPS.find(x => x.id === forgeTab);
+        if (curGroup) {
+          const cs = RPG.craftCat(save, curGroup.id), cmax = RPG.craftCatMaxLevel(curGroup.id);
+          dlg.append(el("p", "forge-cat", `${curGroup.name}: рівень ${cs.level}/${cmax}` +
+            (cs.level < cmax ? ` · досвід ${fmtNum(cs.exp)}/${fmtNum(RPG.craftExpToNext(cs.level))}` : " · максимум") +
+            ` · відкрито тір ${RPG.craftCatOpenTier(cs.level)}`));
+        }
         if (forgeTab === "smelt") { drawSmelt(); return; }
         if (forgeTab === "dis") { drawDis(); return; }
         // параметри
@@ -1662,12 +1688,12 @@
             row.append(el("p", "forge-odds", ["broken", "common", "magic", "epic", "legendary"]
               .filter(r => odds[r] >= 0.005).map(r => `${RARITY_LABEL[r]} ${pct(odds[r])}`).join(" · ")));
           }
-          const b = button(info.levelOk ? "Кувати" : `Майстерність ${info.tierLevel}`, "wf wf-button forge-btn", async () => {
+          const b = button(info.levelOk ? "Кувати" : `${group.name} ${info.tierLevel}`, "wf wf-button forge-btn", async () => {
             const r = RPG.craftItem(save, id, { preferRare: forgePreferRare, spark: forgeSpark });
             if (!r.ok) { forgeResult = { text: r.reason, error: true }; draw(); return; }
             await RPG.saveGame(save);
             forgeResult = { text: `Викувано: ${RPG.itemFullName(r.ref)} (${RARITY_LABEL[r.rarity]}). +${r.exp} досвіду майстерності` +
-              (r.spark ? ", Небесна іскра згоріла" : "") + (r.levelUps.length ? `. Майстерність ${r.levelUps.at(-1)}!` : ".") };
+              (r.spark ? ", Небесна іскра згоріла" : "") + craftUpsText(r) };
             draw();
           });
           b.disabled = !info.canCraft;
@@ -1743,7 +1769,7 @@
             if (!r.ok) { forgeResult = { text: r.reason, error: true }; draw(); return; }
             await RPG.saveGame(save);
             forgeResult = { text: `Розібрано: ${r.name}. Отримано: ${r.got.map(([id, q]) => `${RPG.ITEMS[id].name} ×${q}`).join(", ")}. +${r.exp} досвіду майстерності` +
-              (r.levelUps.length ? `. Майстерність ${r.levelUps.at(-1)}!` : ".") };
+              craftUpsText(r) };
             draw();
           });
           b.disabled = !ready.ok;
@@ -2305,27 +2331,26 @@
         wrap.append(r);
       }
       wrap.append(el("h3", null, "Знаряддя для кузні"));
+      const toolsLeft = Object.entries(RPG.FORGE_TOOLS).filter(([id]) => !h?.forge?.tools?.[id]);
       if (!h) wrap.append(el("p", "tool-hint", "Спершу збудуйте кузню при своєму домі в Спальному районі — Кузьма поставить знаряддя туди."));
+      else if (!toolsLeft.length) wrap.append(el("p", "tool-hint", `Усі знаряддя вже стоять у кузні «${h.name}».`));
       else wrap.append(el("p", "tool-hint", `Куплене Кузьма поставить у кузню дому «${h.name}».`));
-      for (const [id, t] of Object.entries(RPG.FORGE_TOOLS)) {
-        const have = !!h?.forge?.tools?.[id];
+      // уже куплені знаряддя з переліку зникають
+      for (const [id, t] of toolsLeft) {
         const r = el("div", "shop-row tool-row");
         const info = el("div", "tool-info");
         info.append(el("strong", null, t.name + (t.need ? " · обов'язкове" : "")),
           el("small", null, t.text + (t.for ? ` Потрібне для: ${t.for}.` : "")));
         r.append(info);
-        if (have) r.append(el("span", "shop-price tool-have", "✓ у кузні"));
-        else {
-          const b = button(`Купити · ${fmtNum(t.price)} зол.`, "wf wf-button", async () => {
-            const res = RPG.buyForgeTool(save, id);
-            if (!res.ok) { showMsg(msg, res.reason, true); return; }
-            await RPG.saveGame(save);
-            showMsg(msg, `Куплено: ${res.name}. Кузьма поставив у кузню «${res.house}». −${fmtNum(res.price)} золота.`);
-            renderAll();
-          });
-          b.disabled = !h || save.character.gold < t.price;
-          r.append(b);
-        }
+        const b = button(`Купити · ${fmtNum(t.price)} зол.`, "wf wf-button", async () => {
+          const res = RPG.buyForgeTool(save, id);
+          if (!res.ok) { showMsg(msg, res.reason, true); return; }
+          await RPG.saveGame(save);
+          showMsg(msg, `Куплено: ${res.name}. Кузьма поставив у кузню «${res.house}». −${fmtNum(res.price)} золота.`);
+          renderAll();
+        });
+        b.disabled = !h || save.character.gold < t.price;
+        r.append(b);
         wrap.append(r);
       }
       box.append(wrap);
