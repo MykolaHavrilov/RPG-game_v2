@@ -660,15 +660,16 @@
     }
     return frag;
   }
-  function forgeBookSection(save, key, { go, paged = false } = {}) {
-    const B = RPG.FORGE_BOOK;
+  // Розділ книги з даних (data/books.js): FORGE_BOOK, GODS_BOOK… — B передається через bookFrom(B)
+  function forgeBookSection(save, key, opts = {}) { return dataBookSection(RPG.FORGE_BOOK, key, opts); }
+  function dataBookSection(B, key, { go, paged = false } = {}) {
     const frag = document.createDocumentFragment();
     if (key === "toc") {
       frag.append(el("p", "fbook-kicker", B.kicker), el("div", "chronicle-cover", B.title), el("p", "chronicle-epigraph", B.epigraph));
       const list = el("nav", "chronicle-toc-list");
       for (const sct of B.sections) list.append(button(sct.title, "chronicle-toc-item", () => go(sct.key)));
       frag.append(list, el("p", "fbook-authors", B.authors));
-      if (paged) frag.append(el("div", "book-col-break"), el("div", "book-vignette", "⚒"), el("p", "book-vignette-text", B.vignette));
+      if (paged) frag.append(el("div", "book-col-break"), el("div", "book-vignette", B.vignetteSign || "⚒"), el("p", "book-vignette-text", B.vignette));
       return frag;
     }
     const sct = B.sections.find(x => x.key === key);
@@ -684,6 +685,13 @@
       else if (b.note) frag.append(el("p", "chronicle-note", b.note));
       else if (b.end) frag.append(el("p", "chronicle-end", b.end));
       else if (b.auto) frag.append(forgeBookAuto(b.auto));
+      else if (b.god) {
+        const sec = el("section", "fbook-god");
+        const rel = el("p", "chronicle-p fbook-rel");
+        rel.append(el("strong", null, "Стосунки: "), document.createTextNode(b.rel || ""));
+        sec.append(el("h3", "chronicle-sub fbook-h", b.god), el("p", "chronicle-p", b.sphere || ""), rel);
+        frag.append(sec);
+      }
     });
     return frag;
   }
@@ -691,6 +699,16 @@
   function openLibraryBook(save, id) {
     if (id === "chronicle") showChronicle(save);
     else if (id === "forge") showForgeBook(save);
+    else if (id === "gods") showDataBook(save, RPG.GODS_BOOK, "world", "is-gods-book");
+  }
+  // Будь-яка книга з даних у вікні-книзі (як літопис)
+  function showDataBook(save, B, startKey, cls = "") {
+    if (!B) return;
+    showChronicle(save, startKey, { book: {
+      title: B.title, cls,
+      contents: () => B.sections.map(x => ({ key: x.key, title: x.title, open: true })),
+      section: (sv, key, o) => dataBookSection(B, key, o)
+    } });
   }
   function showForgeBook(save, startKey = "prologue") {
     if (!RPG.FORGE_BOOK) return;

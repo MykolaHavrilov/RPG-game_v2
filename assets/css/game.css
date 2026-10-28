@@ -1278,3 +1278,9 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .belt-bag { font-size: .95rem; color: var(--gold); }
 .belt-pick { gap: 6px; margin-bottom: 8px; }
 .inv-tools .belt-btn { margin-left: auto; margin-right: 6px; }
+
+/* ---------- Книга «Кров Іггдрасиля — Боги пантеонів» (data/books.js → GODS_BOOK) ---------- */
+.fbook-god { margin: 0 0 .9em; break-inside: avoid; }
+.fbook-god .fbook-h { margin: .2em 0 .25em; }
+.fbook-god .chronicle-p { margin-bottom: .45em; }
+.fbook-rel { font-size: .95em; color: #4e3016; }
