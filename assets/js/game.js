@@ -2502,6 +2502,30 @@
           box.append(mt);
         }
         renderNpc(box, "steward");
+        // Книга «Кров Іггдрасиля — Боги пантеонів» — продається власникам дому (data/books.js → GODS_BOOK)
+        if (RPG.GODS_BOOK) {
+          const B = RPG.GODS_BOOK, has = RPG.hasGodsBook(save), owner = (save.houses || []).length > 0;
+          const r = el("div", "shop-row tool-row fbook-row");
+          const info = el("div", "tool-info");
+          info.append(el("strong", null, `Книга «${B.title}»`), el("small", null, has
+            ? "Книга ваша — читати її можна в бібліотеці свого дому."
+            : owner ? "Довідник Мерії про богів Ірію, Асгарду й сили темряви. Ляже на полицю бібліотеки у вашому домі."
+            : "Мерія продає цей довідник лише власникам дому в Заставі (Спальний район)."));
+          r.append(info);
+          if (has) r.append(el("span", "shop-price tool-have", "✓ ваша"));
+          else {
+            const b = button(`Купити · ${fmtNum(B.price)} зол.`, "wf wf-button", async () => {
+              const res = RPG.buyGodsBook(save);
+              if (!res.ok) { showMsg(msg, res.reason, true); return; }
+              await RPG.saveGame(save);
+              showMsg(msg, `Куплено книгу «${res.name}». −${fmtNum(res.price)} золота. Вона вже на полиці бібліотеки вашого дому.`);
+              renderAll();
+            });
+            b.disabled = !owner || save.character.gold < B.price;
+            r.append(b);
+          }
+          box.append(r);
+        }
         return;
       }
       if (!RPG.isHiringOpen(save)) {

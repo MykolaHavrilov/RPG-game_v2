@@ -1252,6 +1252,20 @@ function buyForgeTool(save, toolId) {
 // Книга «Небесна кузня. Настанова» (data/books.js) — «перша наука»: без неї кувати не можна.
 // Не предмет: save.books.forge = true.
 function hasForgeBook(save) { return !!save.books?.forge; }
+// Книга «Кров Іггдрасиля — Боги пантеонів» (data/books.js → GODS_BOOK): продається в Мерії за GODS_BOOK.price,
+// лише власникам дому; читати — у бібліотеці дому. save.books.gods = true
+function hasGodsBook(save) { return !!save.books?.gods; }
+function buyGodsBook(save) {
+  const B = RPG.GODS_BOOK;
+  if (!B) return { ok: false, reason: "Книги немає." };
+  if (hasGodsBook(save)) return { ok: false, reason: "Ця книга у вас уже є." };
+  if (!(save.houses || []).length) return { ok: false, reason: "Мерія продає цю книгу лише власникам дому в Заставі." };
+  if (save.character.gold < B.price) return { ok: false, reason: `Не вистачає золота (потрібно ${B.price}).` };
+  save.character.gold -= B.price;
+  save.books ??= {};
+  save.books.gods = true;
+  return { ok: true, price: B.price, name: B.title };
+}
 function buyForgeBook(save) {
   const B = RPG.FORGE_BOOK;
   if (!B) return { ok: false, reason: "Книги немає." };
@@ -1401,7 +1415,7 @@ Object.assign(RPG, {
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
   HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, enterHouse,
-  FORGE_PRICE, FORGE_TOOLS, hasCraftAccess, forgeHouse, buildForge, buyForgeTool, forgeMissing, hasForgeBook, buyForgeBook,
+  FORGE_PRICE, FORGE_TOOLS, hasCraftAccess, forgeHouse, buildForge, buyForgeTool, forgeMissing, hasForgeBook, buyForgeBook, hasGodsBook, buyGodsBook,
   WAREHOUSE_PRICE, CRAFT_CHESTS, CRAFT_CHEST_ALLOW_TEXT, parseCraftChest, chestAllows, chestsHere, buildWarehouse, buyCraftChest, sortToCraftChests,
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
