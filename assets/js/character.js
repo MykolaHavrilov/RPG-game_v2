@@ -641,8 +641,55 @@ function addItem(save, id, qty = 1)    { return addToList(save.inventory, id, qt
 // 36 клітинок. Коли вільних немає — трофеї, яким нема місця, пропадають (стопки ще доповнюються),
 // а купити чи взяти зі скрині не вийде. Старі сейви з понад 36 речами нічого не втрачають.
 const INV_SIZE = 36;
+// ---------- Пояс: 5 слотів для мішечків (type: "pouch") ----------
+// save.belt = [id | null, ...] — спільний для групи, як і інвентар. Кожен мішечок додає ITEMS[id].bag комірок.
+const BELT_SLOTS = 5;
+const POUCH_DROP = { chance: 0.01, weights: { pouch_small: 60, pouch_medium: 30, pouch_large: 10 } };
+function beltOf(save) {
+  if (!Array.isArray(save.belt)) save.belt = [];
+  while (save.belt.length < BELT_SLOTS) save.belt.push(null);
+  return save.belt;
+}
+function beltBonus(save) {
+  return (Array.isArray(save.belt) ? save.belt : []).reduce((n, id) => n + (ITEMS[id]?.bag || 0), 0);
+}
+// Місткість інвентаря: 36 + мішечки на поясі
+function invSize(save) { return INV_SIZE + beltBonus(save); }
 function invFree(save) {
-  return Math.max(0, INV_SIZE - save.inventory.length);
+  return Math.max(0, invSize(save) - save.inventory.length);
+}
+// Повісити мішечок з інвентаря на пояс (у слот slot; зайнятий — мішечки міняються місцями)
+function putOnBelt(save, invIndex, slot) {
+  const belt = beltOf(save);
+  const entry = save.inventory[invIndex];
+  if (!entry || ITEMS[entry.id]?.type !== "pouch") return { ok: false, reason: "Це не мішечок на пояс." };
+  if (!(slot >= 0 && slot < BELT_SLOTS)) return { ok: false, reason: "Немає такого слота." };
+  const old = belt[slot];
+  if (old && save.inventory.length > INV_SIZE + beltBonus(save) - (ITEMS[old].bag || 0) + (ITEMS[entry.id].bag || 0))
+    return { ok: false, reason: "Після заміни речі не вмістяться в інвентар — спершу звільніть місце." };
+  save.inventory.splice(invIndex, 1);
+  belt[slot] = entry.id;
+  if (old) save.inventory.push({ id: old, qty: 1 });
+  return { ok: true, id: entry.id, old };
+}
+// Зняти мішечок з пояса в інвентар (якщо після цього все вміститься)
+function takeFromBelt(save, slot) {
+  const belt = beltOf(save);
+  const id = belt[slot];
+  if (!id) return { ok: false, reason: "Слот порожній." };
+  if (save.inventory.length + 1 > invSize(save) - (ITEMS[id].bag || 0))
+    return { ok: false, reason: "Без цього мішечка речі не вмістяться в інвентар — спершу звільніть місце." };
+  belt[slot] = null;
+  save.inventory.push({ id, qty: 1 });
+  return { ok: true, id };
+}
+// Трофей з боса: 1% на мішечок (окремо від звичайної здобичі). Повертає id або null
+function rollPouchDrop(enemyId) {
+  if (!RPG.ENEMIES?.[enemyId]?.boss || Math.random() >= POUCH_DROP.chance) return null;
+  const w = Object.entries(POUCH_DROP.weights);
+  let x = Math.random() * w.reduce((n, [, v]) => n + v, 0);
+  for (const [id, v] of w) { if (x < v) return id; x -= v; }
+  return w[0][0];
 }
 // Скільки штук id ще влізе в інвентар
 function fitQty(save, id, qty) {
@@ -1277,7 +1324,7 @@ function applyReward(save, exp, loot) {
 }
 
 Object.assign(RPG, {
-  INV_SIZE, invFree, fitQty,
+  INV_SIZE, invFree, fitQty, invSize, BELT_SLOTS, POUCH_DROP, beltOf, beltBonus, putOnBelt, takeFromBelt, rollPouchDrop,
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
   HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, enterHouse,

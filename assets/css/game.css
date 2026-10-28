@@ -1265,3 +1265,16 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .qty-dialog input { width: 100%; box-sizing: border-box; }
 .qty-quick { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
 .qty-quick .wf { flex: 1 1 0; min-width: 44px; padding: 6px 4px; }
+
+/* ---------- Пояс: 5 слотів для мішечків (game.js → showBelt) ---------- */
+.belt-btn.is-on { opacity: 1; color: var(--gold); border-color: var(--gold); }
+.belt-dialog { max-width: 520px; }
+.belt-sum { margin: 0 0 10px; color: var(--gold); font-weight: 700; }
+.belt-slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+.belt-slot { aspect-ratio: 1; min-height: 0; padding: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
+.belt-slot.is-pick { outline: 2px solid var(--gold); outline-offset: 1px; }
+.belt-empty { font-size: .75rem; opacity: .6; }
+.belt-name { font-size: .72rem; line-height: 1.15; }
+.belt-bag { font-size: .95rem; color: var(--gold); }
+.belt-pick { gap: 6px; margin-bottom: 8px; }
+.inv-tools .belt-btn { margin-left: auto; margin-right: 6px; }

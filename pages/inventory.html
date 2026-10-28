@@ -46,6 +46,15 @@
           <!-- праворуч — фільтр здобичі за рідкістю (game.js → showLootFilter) -->
           <div class="inv-tools">
             <button class="wf wf-link key-pocket-btn" id="key-pocket-btn" type="button">Кишеня для ключів</button>
+            <!-- пояс: 5 слотів для мішечків, що додають комірки (game.js → showBelt) -->
+            <button class="wf loot-filter-btn belt-btn" id="belt-btn" type="button" title="Пояс" aria-label="Пояс: мішечки">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+                <rect x="1.5" y="9" width="21" height="6" rx="1.5" fill="currentColor" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"/>
+                <rect x="9" y="7.5" width="6" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M12 9.5v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <circle cx="4.5" cy="12" r=".9" fill="currentColor"/><circle cx="19.5" cy="12" r=".9" fill="currentColor"/>
+              </svg>
+            </button>
             <button class="wf loot-filter-btn" id="loot-filter-btn" type="button" title="Фільтр здобичі" aria-label="Фільтр здобичі">
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
                 <path d="M3 4h18l-7 8.5V19l-4 2v-8.5z" fill="currentColor" fill-opacity=".25" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>

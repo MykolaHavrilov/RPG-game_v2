@@ -3659,6 +3659,19 @@
             const b = RPG.addChampionBounty(save, e.id);
             summary.push(`Гільдія авантюристів заплатить ${b.exp} EXP і ${b.gold} золота (нагорода ×5)`);
           }
+          // Мішечок на пояс: 1% з кожного переможеного боса, окремо від звичайної здобичі
+          const pouch = RPG.rollPouchDrop?.(e.id);
+          if (pouch) {
+            const n = RPG.ITEMS[pouch].name;
+            if (RPG.invFree(save)) {
+              save.inventory.push({ id: pouch, qty: 1 });
+              summary.push(`Рідкісний трофей боса: ${n}!`);
+              got[n] = (got[n] || 0) + 1;
+            } else {
+              summary.push(`Рідкісний трофей боса: ${n} — пропав, інвентар повний!`);
+              lost[n] = (lost[n] || 0) + 1;
+            }
+          }
         }
         // Досвід (рішення 2б): +10% за кожного героя групи понад першого,
         // і вся сума ділиться порівну між тими, хто вижив
@@ -3803,7 +3816,7 @@
       // Інвентар заповнився (або щось уже пропало) — окреме повідомлення, щоб не пропустити
       if (result.win && (Object.keys(lost).length || (freeBefore > 0 && !RPG.invFree(save)))) {
         showNotice("Інвентар заповнено!", [
-          `Усі ${RPG.INV_SIZE} клітинок інвентаря зайняті. Нові речі та ресурси, яким немає місця, пропадатимуть — ` +
+          `Усі ${RPG.invSize(save)} клітинок інвентаря зайняті. Нові речі та ресурси, яким немає місця, пропадатимуть — ` +
           "доповнюються лише неповні стопки.",
           Object.keys(lost).length ? `Уже пропало: ${Object.entries(lost).map(([k, n]) => `${k} ×${n}`).join(", ")}.` : "",
           "Продайте зайве торговцю або покладіть у скриню в Домівці."
@@ -4252,7 +4265,7 @@
         eq.append(cell);
       }
 
-      gridOf(ms.inventory, 36, "inv", $("item-grid"));
+      gridOf(ms.inventory, RPG.invSize(ms), "inv", $("item-grid"));
       const conf = RPG.chestConf(viewChest);
       const chest = chestOf();
       $("chest-title").textContent = conf.name;
@@ -4266,7 +4279,14 @@
       $("chest-note").classList.toggle("is-full", chest.length >= conf.size);
       gridOf(chest, conf.size, "chest", $("chest-grid"));
 
-      $("gold").textContent = `Клітинок: ${ms.inventory.length}/${RPG.INV_SIZE} · Золото: ${fmtNum(ms.character.gold)}`;
+      $("gold").textContent = `Клітинок: ${ms.inventory.length}/${RPG.invSize(ms)} · Золото: ${fmtNum(ms.character.gold)}`;
+      const beltBtn = $("belt-btn");
+      if (beltBtn) {
+        const bonus = RPG.beltBonus(ms);
+        beltBtn.title = `Пояс: мішечки (+${bonus} комірок)`;
+        beltBtn.classList.toggle("is-on", bonus > 0);
+        beltBtn.onclick = () => showBelt();
+      }
       const pocketBtn = $("key-pocket-btn");
       if (pocketBtn) pocketBtn.onclick = () => showKeyPocket(save);
       const filterBtn = $("loot-filter-btn");
@@ -4367,6 +4387,61 @@
       const isStack = !ref.r && item.stackable && (ref.qty || 1) > 1;
       if (isStack && selected.kind === "inv" && atHome) btnToChestPart.disabled = false;
       if (isStack && selected.kind === "chest" && atHome) btnFromChestPart.disabled = false;
+    }
+
+    // Пояс: 5 слотів для мішечків (character.js → putOnBelt / takeFromBelt). Порожній слот — вибрати мішечок з інвентаря.
+    function showBelt() {
+      document.querySelector(".belt-dialog")?.remove();
+      const dlg = el("dialog", "notice-dialog belt-dialog");
+      let pick = null, note = null;
+      const draw = () => {
+        dlg.innerHTML = "";
+        const close = button("×", "notice-close", () => dlg.close());
+        close.setAttribute("aria-label", "Закрити пояс");
+        dlg.append(close, el("h3", null, "Пояс"));
+        dlg.append(el("p", "belt-sum", `Інвентар: ${RPG.invSize(ms)} комірок (36 + ${RPG.beltBonus(ms)} від мішечків) · зайнято ${ms.inventory.length}`));
+        if (note) dlg.append(el("p", "forge-result" + (note.error ? " is-error" : ""), note.text));
+        const slots = el("div", "belt-slots");
+        RPG.beltOf(ms).forEach((id, i) => {
+          const cell = button("", "wf wf-slot belt-slot" + (id ? " is-filled" : "") + (pick === i ? " is-pick" : ""), () => {
+            if (id) {
+              const r = RPG.takeFromBelt(ms, i);
+              note = { text: r.ok ? `Знято: ${RPG.ITEMS[r.id].name}.` : r.reason, error: !r.ok };
+              if (r.ok) RPG.saveGame(save).catch(e => console.error(e));
+              pick = null;
+            } else pick = pick === i ? null : i;
+            draw();
+          });
+          if (id) {
+            cell.append(el("span", "belt-name", RPG.ITEMS[id].name), el("b", "belt-bag", `+${RPG.ITEMS[id].bag}`));
+            cell.title = `${RPG.ITEMS[id].name}: +${RPG.ITEMS[id].bag} комірок. Натисніть, щоб зняти.`;
+          } else {
+            cell.append(el("span", "belt-empty", "порожньо"));
+            cell.title = "Порожній слот — натисніть і виберіть мішечок";
+          }
+          slots.append(cell);
+        });
+        dlg.append(slots);
+        if (pick !== null) {
+          const pouches = ms.inventory.map((e, idx) => ({ e, idx })).filter(x => RPG.ITEMS[x.e.id]?.type === "pouch");
+          const box = el("div", "stack belt-pick");
+          box.append(el("strong", null, `Слот ${pick + 1}: виберіть мішечок`));
+          if (!pouches.length) box.append(el("p", "house-soon", "В інвентарі немає мішечків. Їх можна вибити з босів — шанс 1% з кожного переможеного боса."));
+          for (const { e, idx } of pouches) {
+            box.append(button(`${RPG.ITEMS[e.id].name} · +${RPG.ITEMS[e.id].bag} комірок`, "wf wf-button", () => {
+              const r = RPG.putOnBelt(ms, idx, pick);
+              note = { text: r.ok ? `На поясі: ${RPG.ITEMS[r.id].name} (+${RPG.ITEMS[r.id].bag} комірок).` : r.reason, error: !r.ok };
+              if (r.ok) { RPG.saveGame(save).catch(e => console.error(e)); pick = null; }
+              draw();
+            }));
+          }
+          dlg.append(box);
+        } else dlg.append(el("p", "note", "Натисніть порожній слот, щоб повісити мішечок з інвентаря, або зайнятий — щоб зняти його."));
+      };
+      dlg.addEventListener("close", () => { dlg.remove(); selected = null; RPG.popover.hide(); render(); });
+      document.body.append(dlg);
+      draw();
+      dlg.showModal();
     }
 
     // Вікно «Скільки перекласти?»: число + швидкі кнопки. Повертає Promise<кількість | null>

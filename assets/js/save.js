@@ -12,7 +12,7 @@
   const STORE = "saves";
   const LS_PREFIX = "rpg_save_"; // запасне сховище в localStorage
 
-  const SAVE_VERSION = 8;        // версія ФОРМАТУ сейву (полів усередині)
+  const SAVE_VERSION = 9;        // версія ФОРМАТУ сейву (полів усередині)
   const CURRENT_SLOT_KEY = "rpg_current_slot";
 
   // ---------- Відкриття бази ----------
@@ -185,6 +185,10 @@
     save.inventory ??= [];
     // Версія 7: власні доми (character.js → HOUSES) — список, бо згодом будуть доми в інших містах
     if (!Array.isArray(save.houses)) save.houses = [];
+    // Версія 9: пояс з 5 слотами для мішечків (character.js → BELT_SLOTS)
+    if (!Array.isArray(save.belt)) save.belt = [];
+    save.belt = save.belt.slice(0, RPG.BELT_SLOTS || 5).map(id => (ITEMS[id]?.type === "pouch" ? id : null));
+    while (save.belt.length < (RPG.BELT_SLOTS || 5)) save.belt.push(null);
     // Версія 8: куплені книги (data/books.js) — { forge: true }
     if (!save.books || typeof save.books !== "object" || Array.isArray(save.books)) save.books = {};
     // Версія 6: скрині — окремі сховища save.chests = { main: [...] } (пов'язані скрині ділять одне сховище).
