@@ -4,7 +4,7 @@
 // FORGE_BOOK — «Небесна кузня. Настанова» (Книга Сварога · перша). Купується в коваля Кузьми
 // (Торговий район → Гільдія ремісників) за FORGE_BOOK.price золота і дає «першу науку»:
 // без неї кувати, переплавляти й розбирати речі не вийде. Куплена книга — save.books.forge = true
-// (не предмет інвентаря: її не продати й не загубити). Читати — у Кузьми та в кузні власного дому.
+// (не предмет інвентаря: її не продати й не загубити). Читати — у Кузьми, у кузні та в бібліотеці власного дому.
 //
 // sections — розділи книги в порядку читання: { key, title, blocks: [...] }
 // Види блоків:
@@ -129,5 +129,24 @@
     ]
   };
 
-  Object.assign(RPG, { FORGE_BOOK });
+  // ---------- Бібліотека дому (game.js → renderHouseExtras) ----------
+  // Усі книги, які герой зустрів за сюжетом або купив, — їх можна перечитати в будь-якому власному домі.
+  // has(save) — чи книга вже в бібліотеці. Нова книга = новий запис тут + спосіб її відкрити в game.js (openBook).
+  // На майбутнє (оновлення рун): «Руни Небесної Кузні» — після ПЕРШОЇ перемоги над фінальним босом Темного лісу (dark_throne).
+  const LIBRARY = [
+    { id: "chronicle", title: "Предки Минулих та Майбутніх часів", note: "Літопис героїв. Оригінал зберігає Захар у Мерії, тут — список, що пише себе сам.",
+      has: save => !!save.books?.chronicle || save.story?.parchment === "given" },
+    { id: "forge", title: FORGE_BOOK.title, note: "Книга Сварога · перша. Куплена в коваля Кузьми.",
+      has: save => !!save.books?.forge }
+  ];
+  const libraryBooks = save => LIBRARY.filter(b => b.has(save));
+  // Позначити книгу як знайдену (save.books[id] = true)
+  function addToLibrary(save, id) {
+    save.books ??= {};
+    const fresh = !save.books[id];
+    save.books[id] = true;
+    return fresh;
+  }
+
+  Object.assign(RPG, { FORGE_BOOK, LIBRARY, libraryBooks, addToLibrary });
 })(window.RPG);

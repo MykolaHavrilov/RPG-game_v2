@@ -687,6 +687,11 @@
     });
     return frag;
   }
+  // Відкрити книгу з бібліотеки за id (data/books.js → LIBRARY)
+  function openLibraryBook(save, id) {
+    if (id === "chronicle") showChronicle(save);
+    else if (id === "forge") showForgeBook(save);
+  }
   function showForgeBook(save, startKey = "prologue") {
     if (!RPG.FORGE_BOOK) return;
     showChronicle(save, startKey, { book: {
@@ -1600,6 +1605,21 @@
         }
       }
       box.append(fg);
+      // Бібліотека: усі знайдені за сюжетом і куплені книги (data/books.js → LIBRARY)
+      if (RPG.libraryBooks) {
+        const lib = el("div", "stack house-build house-library");
+        lib.append(el("strong", null, "Бібліотека"));
+        const books = RPG.libraryBooks(save);
+        if (!books.length) lib.append(el("p", "house-soon", "Полиці ще порожні. Сюди ляже кожна книга, яку ви знайдете в мандрах чи купите в торговців."));
+        for (const bk of books) {
+          const r = el("div", "shop-row tool-row library-row");
+          const info = el("div", "tool-info");
+          info.append(el("strong", null, `«${bk.title}»`), el("small", null, bk.note));
+          r.append(info, button("Читати", "wf wf-secondary", () => openLibraryBook(save, bk.id)));
+          lib.append(r);
+        }
+        box.append(lib);
+      }
       const row = el("div", "row");
       row.append(button("Вийти в Спальний район", "wf wf-secondary", async () => {
         RPG.enterCity(save, RPG.HOUSES[locData.house].district);
@@ -2026,6 +2046,8 @@
           `«Велес бачить… — шепоче Захар. — Книга знову ціла. Дякую ${RPG.gw(save, "тобі, друже", "тобі, подруго")}».` };
       },
       async chronicle() {
+        // герой побачив літопис — його список з'являється в бібліотеці власного дому
+        if (RPG.addToLibrary?.(save, "chronicle")) await RPG.saveGame(save);
         showChronicle(save);
         return { text: "Захар обережно розгортає перед вами книгу. Від пергаменту пахне димом і старим дубом." };
       },
@@ -2309,7 +2331,7 @@
         const r = el("div", "shop-row tool-row fbook-row");
         const info = el("div", "tool-info");
         info.append(el("strong", null, `Книга «${B.title}»`),
-          el("small", null, has ? "Перша наука коваля вже ваша. Перечитувати можна тут і в кузні свого дому."
+          el("small", null, has ? "Перша наука коваля вже ваша. Перечитувати можна тут і в бібліотеці свого дому."
             : "Перша наука коваля від Сварога, Брокка й Ейтрі. Без неї не викувати й не розібрати жодної речі."));
         r.append(info);
         const btns = el("div", "row fbook-btns");
