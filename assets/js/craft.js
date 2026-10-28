@@ -223,9 +223,62 @@
     return { ok: true, made, exp: made * SMELT_EXP, levelUps };
   }
 
+  // ---------- Розбір речей (етап 8) ----------
+  // Будь-яку річ, що має рецепт, можна розібрати в кузні з 1 рівня майстерності.
+  // Повертається частка матеріалів рецепта (звичайної якості, з округленням униз, але не менше 1 шт)
+  // + бонус за рідкість: магічна — 1 магічний матеріал, епічна — 1 епічний, легендарна — Небесна іскра.
+  // Досвід — за кожен повернутий матеріал за його якістю: 1 / 3 / 8 / 25 (Небесна іскра — 25).
+  const DISASSEMBLE_SHARE = { broken: 0.25, common: 0.40, magic: 0.50, epic: 0.60, legendary: 0.70 };
+  const DISASSEMBLE_BONUS = { magic: "magic", epic: "epic", legendary: "spark" };
+  const DISASSEMBLE_EXP = { common: 1, magic: 3, epic: 8, legendary: 25, spark: 25 };
+
+  // Що дасть розбір речі з інвентаря (index). Бонусний матеріал обирається випадково при розборі.
+  function disassembleInfo(save, index) {
+    const ref = save.inventory[index];
+    const recipe = ref && RPG.RECIPES[ref.id];
+    if (!recipe) return null;
+    const rarity = RPG.rarityOf(ref);
+    const share = DISASSEMBLE_SHARE[rarity];
+    const mats = recipe.mats.map(([id, q]) => [id, Math.floor(q * share)]).filter(m => m[1] > 0);
+    if (!mats.length) {
+      const [id] = recipe.mats.reduce((a, b) => (b[1] > a[1] ? b : a));
+      mats.push([id, 1]);
+    }
+    const bonus = DISASSEMBLE_BONUS[rarity] || null;
+    const exp = mats.reduce((n, m) => n + m[1], 0) * DISASSEMBLE_EXP.common + (bonus ? DISASSEMBLE_EXP[bonus] : 0);
+    const ready = forgeReady(save);
+    return { ref, recipe, rarity, share, mats, bonus, exp, ready, confirm: rarity === "epic" || rarity === "legendary" };
+  }
+
+  // Розібрати річ з інвентаря. Повертає { ok, reason } або { ok, got: [[id, qty]], exp, levelUps, name }
+  function disassemble(save, index) {
+    const info = disassembleInfo(save, index);
+    if (!info) return { ok: false, reason: "Цю річ не можна розібрати." };
+    if (!info.ready.ok) return { ok: false, reason: info.ready.reason };
+    const got = info.mats.map(m => [...m]);
+    if (info.bonus === "spark") got.push(["heavenly_spark", 1]);
+    else if (info.bonus) {
+      const [baseId] = info.recipe.mats[Math.floor(Math.random() * info.recipe.mats.length)];
+      got.push([RPG.materialOfGrade(baseId, info.bonus), 1]);
+    }
+    // перевірка місця: річ звільняє клітинку, матеріали мають влізти
+    const limit = save.inventory.length + RPG.invFree(save);
+    const tmp = { inventory: JSON.parse(JSON.stringify(save.inventory)) };
+    tmp.inventory.splice(index, 1);
+    for (const [id, q] of got) RPG.addItem(tmp, id, q);
+    if (tmp.inventory.length > limit) return { ok: false, reason: "Інвентар повний — нікуди скласти матеріали." };
+    const name = RPG.itemFullName(info.ref);
+    const ref = save.inventory[index];
+    if ((ref.qty || 1) > 1) ref.qty--; else save.inventory.splice(index, 1);
+    for (const [id, q] of got) RPG.addItem(save, id, q);
+    const levelUps = addCraftExp(save, info.exp);
+    return { ok: true, got, exp: info.exp, levelUps, name, rarity: info.rarity };
+  }
+
   Object.assign(RPG, {
     CRAFT_MAX_LEVEL: MAX_LEVEL, CRAFT_EXP, craftState, craftExpToNext: expToNext, baseCraftChance: baseChance,
     craftSuccessChance: successChance, craftRarityTable: rarityTable, craftOdds, haveMaterial, recipeInfo,
-    craftForgeReady: forgeReady, craftItem, addCraftExp, smeltInfo, smelt
+    craftForgeReady: forgeReady, craftItem, addCraftExp, smeltInfo, smelt,
+    DISASSEMBLE_SHARE, DISASSEMBLE_EXP, disassembleInfo, disassemble
   });
 })(window.RPG);

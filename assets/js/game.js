@@ -1491,7 +1491,7 @@
       return lvl >= 30 ? "Небесний коваль" : lvl >= 20 ? "Майстер" : lvl >= 10 ? "Підмайстер" : "Учень";
     }
     const RARITY_LABEL = { broken: "зламана", common: "звичайна", magic: "магічна", epic: "епічна", legendary: "легендарна" };
-    let forgeTab = "weapon", forgePreferRare = false, forgeSpark = false, forgeResult = null;
+    let forgeTab = "weapon", forgePreferRare = false, forgeSpark = false, forgeResult = null, disConfirm = null;
     function showForge() {
       document.querySelector(".forge-dialog")?.remove();
       const dlg = el("dialog", "notice-dialog forge-dialog");
@@ -1508,11 +1508,12 @@
           ` · успіх ${pct(RPG.craftSuccessChance(save, house))}`));
         if (forgeResult) dlg.append(el("p", "forge-result" + (forgeResult.error ? " is-error" : ""), forgeResult.text));
         const tabs = el("div", "row npc-tabs forge-tabs");
-        for (const gr of [...RPG.RECIPE_GROUPS, { id: "smelt", name: "Переплавка" }]) {
-          tabs.append(button(gr.name, "wf " + (forgeTab === gr.id ? "wf-button" : "wf-link"), () => { forgeTab = gr.id; forgeResult = null; draw(); }));
+        for (const gr of [...RPG.RECIPE_GROUPS, { id: "smelt", name: "Переплавка" }, { id: "dis", name: "Розбір" }]) {
+          tabs.append(button(gr.name, "wf " + (forgeTab === gr.id ? "wf-button" : "wf-link"), () => { forgeTab = gr.id; forgeResult = null; disConfirm = null; draw(); }));
         }
         dlg.append(tabs);
         if (forgeTab === "smelt") { drawSmelt(); return; }
+        if (forgeTab === "dis") { drawDis(); return; }
         // параметри
         const optRow = el("div", "forge-opts");
         const cb = (label, val, set) => {
@@ -1596,7 +1597,49 @@
         }
         dlg.append(list);
       };
-      dlg.addEventListener("close", () => { dlg.remove(); forgeResult = null; renderAll(); });
+      // Розбір речей з інвентаря (craft.js → disassemble). Вдягнені речі не показуються.
+      const drawDis = () => {
+        const list = el("div", "stack forge-list");
+        list.append(el("p", "forge-why", "Розбір повертає частину матеріалів рецепта: зламана річ — 25%, звичайна — 40%, магічна — 50% + 1 магічний матеріал, " +
+          "епічна — 60% + 1 епічний, легендарна — 70% + Небесна іскра. Досвід — за кожен матеріал: 1 / 3 / 8 / 25. Вдягнені речі спершу зніміть."));
+        const ready = RPG.craftForgeReady(save);
+        if (!ready.ok) list.append(el("small", "forge-why", ready.reason));
+        let any = false;
+        save.inventory.forEach((ref, index) => {
+          const info = RPG.disassembleInfo(save, index);
+          if (!info) return;
+          any = true;
+          const row = el("div", "forge-row");
+          const head = el("div", "forge-head");
+          head.append(smallIcon(ref), el("strong", "forge-dis-name" + rarityTextClass(ref), RPG.itemFullName(ref)),
+            el("small", "forge-tier", `${RARITY_LABEL[info.rarity]} · ${pct(info.share)}`));
+          row.append(head);
+          const mats = el("div", "forge-mats");
+          for (const [id, q] of info.mats) mats.append(el("span", "forge-mat is-ok", `${RPG.ITEMS[id].name} ×${q}`));
+          if (info.bonus === "spark") mats.append(el("span", "forge-mat is-ok rt-legendary", "Небесна іскра ×1"));
+          else if (info.bonus) mats.append(el("span", "forge-mat is-ok rt-" + info.bonus, `+1 ${info.bonus === "magic" ? "магічний" : "епічний"} матеріал`));
+          mats.append(el("span", "forge-mat", `+${info.exp} досвіду`));
+          row.append(mats);
+          const asking = disConfirm === index;
+          const b = button(asking ? "Так, розібрати" : "Розібрати", "wf " + (asking ? "wf-danger" : "wf-button") + " forge-btn", async () => {
+            if (info.confirm && !asking) { disConfirm = index; forgeResult = { text: `${RPG.itemFullName(ref)} — ${RARITY_LABEL[info.rarity]} річ. Натисніть ще раз, щоб розібрати.`, error: true }; draw(); return; }
+            disConfirm = null;
+            const r = RPG.disassemble(save, index);
+            if (!r.ok) { forgeResult = { text: r.reason, error: true }; draw(); return; }
+            await RPG.saveGame(save);
+            forgeResult = { text: `Розібрано: ${r.name}. Отримано: ${r.got.map(([id, q]) => `${RPG.ITEMS[id].name} ×${q}`).join(", ")}. +${r.exp} досвіду майстерності` +
+              (r.levelUps.length ? `. Майстерність ${r.levelUps.at(-1)}!` : ".") };
+            draw();
+          });
+          b.disabled = !ready.ok;
+          row.append(b);
+          if (asking) row.append(button("Скасувати", "wf wf-link", () => { disConfirm = null; forgeResult = null; draw(); }));
+          list.append(row);
+        });
+        if (!any) list.append(el("p", "house-soon", "В інвентарі немає речей, які можна розібрати. Розбираються зброя, щити, броня й прикраси, що мають рецепт у кузні."));
+        dlg.append(list);
+      };
+      dlg.addEventListener("close", () => { dlg.remove(); forgeResult = null; disConfirm = null; renderAll(); });
       document.body.append(dlg);
       draw();
       dlg.showModal();
