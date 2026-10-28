@@ -1463,10 +1463,16 @@
         }
         fg.append(tools);
         const miss = RPG.forgeMissing(h);
-        fg.append(el("p", "house-soon", miss.length
-          ? `Щоб почати кувати, бракує: ${miss.map(id => RPG.FORGE_TOOLS[id].name.toLowerCase()).join(", ")}. Знаряддя — у коваля Кузьми (Торговий район).`
-          : "Усі обов'язкові знаряддя на місці. Кування з'явиться в наступному оновленні."));
+        if (miss.length) fg.append(el("p", "house-soon",
+          `Щоб почати кувати, бракує: ${miss.map(id => RPG.FORGE_TOOLS[id].name.toLowerCase()).join(", ")}. Знаряддя — у коваля Кузьми (Торговий район).`));
         if (!RPG.hasCraftAccess(save)) fg.append(el("p", "house-soon", "Кувати й купувати знаряддя можна, коли головний герой має професію."));
+        if (RPG.craftState && RPG.hasCraftAccess(save)) {
+          const st = RPG.craftState(save);
+          fg.append(el("p", "forge-mastery", `Майстерність коваля: ${st.level} (${craftRank(st.level)}) · шанс успіху ${pct(RPG.craftSuccessChance(save, h))}`));
+          const open = button("Кувати", "wf wf-button", () => showForge());
+          open.disabled = !!miss.length;
+          fg.append(open);
+        }
       }
       box.append(fg);
       const row = el("div", "row");
@@ -1477,6 +1483,123 @@
       }));
       box.append(row);
       place.append(box);
+    }
+
+    // ---------- Кузня: кування і переплавка (craft.js, data/recipes.js) ----------
+    const pct = x => `${Math.round(x * 100)}%`;
+    function craftRank(lvl) {
+      return lvl >= 30 ? "Небесний коваль" : lvl >= 20 ? "Майстер" : lvl >= 10 ? "Підмайстер" : "Учень";
+    }
+    const RARITY_LABEL = { broken: "зламана", common: "звичайна", magic: "магічна", epic: "епічна", legendary: "легендарна" };
+    let forgeTab = "weapon", forgePreferRare = false, forgeSpark = false, forgeResult = null;
+    function showForge() {
+      document.querySelector(".forge-dialog")?.remove();
+      const dlg = el("dialog", "notice-dialog forge-dialog");
+      const draw = () => {
+        dlg.innerHTML = "";
+        const close = button("×", "notice-close", () => dlg.close());
+        close.setAttribute("aria-label", "Закрити кузню");
+        const st = RPG.craftState(save);
+        const house = RPG.houseHere(save);
+        const next = RPG.craftExpToNext(st.level);
+        dlg.append(close, el("h3", null, "Кузня"));
+        dlg.append(el("p", "forge-mastery", `Майстерність ${st.level} — ${craftRank(st.level)}` +
+          (st.level < RPG.CRAFT_MAX_LEVEL ? ` · досвід ${fmtNum(st.exp)}/${fmtNum(next)}` : "") +
+          ` · успіх ${pct(RPG.craftSuccessChance(save, house))}`));
+        if (forgeResult) dlg.append(el("p", "forge-result" + (forgeResult.error ? " is-error" : ""), forgeResult.text));
+        const tabs = el("div", "row npc-tabs forge-tabs");
+        for (const gr of [...RPG.RECIPE_GROUPS, { id: "smelt", name: "Переплавка" }]) {
+          tabs.append(button(gr.name, "wf " + (forgeTab === gr.id ? "wf-button" : "wf-link"), () => { forgeTab = gr.id; forgeResult = null; draw(); }));
+        }
+        dlg.append(tabs);
+        if (forgeTab === "smelt") { drawSmelt(); return; }
+        // параметри
+        const optRow = el("div", "forge-opts");
+        const cb = (label, val, set) => {
+          const l = el("label", "forge-opt");
+          const i = el("input"); i.type = "checkbox"; i.checked = val;
+          i.addEventListener("change", () => { set(i.checked); draw(); });
+          l.append(i, document.createTextNode(" " + label));
+          return l;
+        };
+        optRow.append(cb("Спершу рідкісніші матеріали (кращі шанси)", forgePreferRare, v => forgePreferRare = v));
+        const sparks = RPG.countItem(save, "heavenly_spark");
+        if (sparks) optRow.append(cb(`Додати Небесну іскру (до +10% до легендарної; є ${sparks})`, forgeSpark, v => forgeSpark = v));
+        else forgeSpark = false;
+        dlg.append(optRow);
+        const group = RPG.RECIPE_GROUPS.find(x => x.id === forgeTab);
+        const list = el("div", "stack forge-list");
+        for (const [id, rc] of Object.entries(RPG.RECIPES).sort((a, b) => a[1].tier - b[1].tier)) {
+          const item = RPG.ITEMS[id];
+          if (!item || !group.types.includes(item.type)) continue;
+          const info = RPG.recipeInfo(save, id);
+          const row = el("div", "forge-row" + (info.levelOk ? "" : " is-locked"));
+          const head = el("div", "forge-head");
+          head.append(smallIcon(id), el("strong", null, item.name), el("small", "forge-tier", `тір ${rc.tier}`));
+          row.append(head);
+          const mats = el("div", "forge-mats");
+          for (const m of info.mats) mats.append(el("span", "forge-mat" + (m.have >= m.need ? " is-ok" : " is-short"), `${RPG.ITEMS[m.id].name} ${fmtNum(m.have)}/${m.need}`));
+          for (const t of info.tools) mats.append(el("span", "forge-mat" + (t.have ? " is-ok" : " is-short"), `знаряддя: ${RPG.FORGE_TOOLS[t.id].name}`));
+          row.append(mats);
+          if (info.levelOk) {
+            const odds = RPG.craftOdds(save, id, { preferRare: forgePreferRare, spark: forgeSpark });
+            row.append(el("p", "forge-odds", ["broken", "common", "magic", "epic", "legendary"]
+              .filter(r => odds[r] >= 0.005).map(r => `${RARITY_LABEL[r]} ${pct(odds[r])}`).join(" · ")));
+          }
+          const b = button(info.levelOk ? "Кувати" : `Майстерність ${info.tierLevel}`, "wf wf-button forge-btn", async () => {
+            const r = RPG.craftItem(save, id, { preferRare: forgePreferRare, spark: forgeSpark });
+            if (!r.ok) { forgeResult = { text: r.reason, error: true }; draw(); return; }
+            await RPG.saveGame(save);
+            forgeResult = { text: `Викувано: ${RPG.itemFullName(r.ref)} (${RARITY_LABEL[r.rarity]}). +${r.exp} досвіду майстерності` +
+              (r.spark ? ", Небесна іскра згоріла" : "") + (r.levelUps.length ? `. Майстерність ${r.levelUps.at(-1)}!` : ".") };
+            draw();
+          });
+          b.disabled = !info.canCraft;
+          if (!info.canCraft && info.reason) b.title = info.reason;
+          row.append(b);
+          if (!info.canCraft && info.levelOk) row.append(el("small", "forge-why", info.reason));
+          list.append(row);
+        }
+        dlg.append(list);
+      };
+      const drawSmelt = () => {
+        const list = el("div", "stack forge-list");
+        list.append(el("p", "forge-why", "Переплавка завжди вдається: 2 руди → 1 злиток тієї ж рідкості (залізо — ще й 1 вугілля та міхи). +1 досвіду за злиток."));
+        for (const ingot of Object.keys(RPG.SMELT)) {
+          const info = RPG.smeltInfo(save, ingot);
+          const row = el("div", "forge-row");
+          const head = el("div", "forge-head");
+          head.append(smallIcon(ingot), el("strong", null, RPG.ITEMS[ingot].name));
+          row.append(head);
+          const mats = el("div", "forge-mats");
+          const oreTotal = info.byGrade.reduce((n, b) => n + RPG.countItem(save, b.ore), 0);
+          mats.append(el("span", "forge-mat" + (oreTotal >= info.s.oreQty ? " is-ok" : " is-short"), `${RPG.ITEMS[info.s.ore].name}: ${fmtNum(oreTotal)}`));
+          if (info.s.coal) mats.append(el("span", "forge-mat" + (info.coalHave >= info.s.coal ? " is-ok" : " is-short"), `Вугілля: ${fmtNum(info.coalHave)}`));
+          for (const t of info.s.tools) mats.append(el("span", "forge-mat" + (RPG.houseHere(save)?.forge?.tools?.[t] ? " is-ok" : " is-short"), `знаряддя: ${RPG.FORGE_TOOLS[t].name}`));
+          row.append(mats);
+          const btns = el("div", "row forge-smelt-btns");
+          for (const n of [1, 10, info.max]) {
+            if (n < 1 || (n === info.max && (n === 1 || n === 10))) continue;
+            const b = button(n === info.max ? `Усе (${fmtNum(n)})` : `×${n}`, "wf wf-button", async () => {
+              const r = RPG.smelt(save, ingot, n);
+              if (!r.ok) { forgeResult = { text: r.reason, error: true }; draw(); return; }
+              await RPG.saveGame(save);
+              forgeResult = { text: `Переплавлено: ${RPG.ITEMS[ingot].name} ×${fmtNum(r.made)}. +${r.exp} досвіду майстерності` + (r.levelUps.length ? `. Майстерність ${r.levelUps.at(-1)}!` : ".") };
+              draw();
+            });
+            b.disabled = !info.ready.ok || info.max < n;
+            btns.append(b);
+          }
+          if (!info.ready.ok) row.append(el("small", "forge-why", info.ready.reason));
+          row.append(btns);
+          list.append(row);
+        }
+        dlg.append(list);
+      };
+      dlg.addEventListener("close", () => { dlg.remove(); forgeResult = null; renderAll(); });
+      document.body.append(dlg);
+      draw();
+      dlg.showModal();
     }
 
     // Вікно з полем для назви дому — лише при купівлі (назву дають один раз)

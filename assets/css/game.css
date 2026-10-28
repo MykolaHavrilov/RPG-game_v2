@@ -1209,3 +1209,25 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .tool-chip { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--link-border); font-size: .9rem; color: var(--text-dim); }
 .tool-chip.is-have { color: #cfe8c3; border-color: #5f8a52; background: rgba(95, 138, 82, .15); }
 .tool-chip.is-need:not(.is-have) { border-color: #a0483a; color: #f0b1a6; }
+/* Вікно кузні (план крафту, етап 7) */
+.forge-dialog { max-width: min(760px, calc(100vw - 24px)); max-height: 88vh; overflow-y: auto; }
+.forge-mastery { margin: 0 0 6px; font-weight: 700; color: var(--gold); }
+.forge-result { margin: 6px 0; padding: 6px 10px; border-radius: 4px; background: rgba(95, 138, 82, .18); border: 1px solid #5f8a52; }
+.forge-result.is-error { background: rgba(160, 72, 58, .18); border-color: #a0483a; }
+.forge-tabs { flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.forge-opts { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; font-size: .95rem; }
+.forge-opt { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.forge-list { gap: 8px; }
+.forge-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--link-border); border-radius: var(--radius); }
+.forge-row.is-locked { opacity: .6; }
+.forge-head { display: flex; align-items: center; gap: 8px; }
+.forge-head .mini-icon { width: 34px; height: 34px; }
+.forge-tier { margin-left: auto; color: var(--text-dim); }
+.forge-mats { display: flex; flex-wrap: wrap; gap: 6px; }
+.forge-mat { padding: 2px 8px; border-radius: 4px; font-size: .88rem; border: 1px solid var(--link-border); }
+.forge-mat.is-ok { color: #cfe8c3; border-color: #5f8a52; }
+.forge-mat.is-short { color: #f0b1a6; border-color: #a0483a; }
+.forge-odds { margin: 0; font-size: .88rem; color: var(--text-dim); }
+.forge-why { color: #f0b1a6; }
+.forge-btn { align-self: flex-start; }
+.forge-smelt-btns { gap: 6px; flex-wrap: wrap; }

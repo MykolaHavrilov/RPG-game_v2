@@ -2,7 +2,7 @@
 // HTML / JS / CSS: спершу мережа (щоб оновлення гри підтягувались одразу),
 // а без інтернету — з кешу. Картинки: спершу кеш.
 // Після великих змін можна збільшити номер версії — старий кеш видалиться.
-const CACHE = "rpg-game-v79";
+const CACHE = "rpg-game-v80";
 const PRECACHE = [
   "./",
   "./assets/css/game.css",
@@ -183,6 +183,8 @@ const PRECACHE = [
   "./assets/js/core.js",
   "./assets/js/data/chronicle.js",
   "./assets/js/data/classes.js",
+  "./assets/js/data/recipes.js",
+  "./assets/js/craft.js",
   "./assets/js/data/enemies.js",
   "./assets/js/data/items.js",
   "./assets/js/data/levels.js",
