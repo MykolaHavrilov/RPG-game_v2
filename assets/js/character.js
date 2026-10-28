@@ -1128,6 +1128,20 @@ function buyForgeTool(save, toolId) {
   h.forge.tools[toolId] = true;
   return { ok: true, price: t.price, name: t.name, house: h.name };
 }
+// Книга «Небесна кузня. Настанова» (data/books.js) — «перша наука»: без неї кувати не можна.
+// Не предмет: save.books.forge = true.
+function hasForgeBook(save) { return !!save.books?.forge; }
+function buyForgeBook(save) {
+  const B = RPG.FORGE_BOOK;
+  if (!B) return { ok: false, reason: "Книги немає." };
+  if (hasForgeBook(save)) return { ok: false, reason: "Ця книга у вас уже є." };
+  if (!hasCraftAccess(save)) return { ok: false, reason: "Кузьма продає книгу лише тим, хто вже має професію." };
+  if (save.character.gold < B.price) return { ok: false, reason: `Не вистачає золота (потрібно ${B.price}).` };
+  save.character.gold -= B.price;
+  save.books ??= {};
+  save.books.forge = true;
+  return { ok: true, price: B.price, name: B.title };
+}
 // Чого бракує в кузні для початку роботи (обов'язкові знаряддя)
 function forgeMissing(house) {
   const tools = house?.forge?.tools || {};
@@ -1264,7 +1278,7 @@ Object.assign(RPG, {
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
   HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, enterHouse,
-  FORGE_PRICE, FORGE_TOOLS, hasCraftAccess, forgeHouse, buildForge, buyForgeTool, forgeMissing,
+  FORGE_PRICE, FORGE_TOOLS, hasCraftAccess, forgeHouse, buildForge, buyForgeTool, forgeMissing, hasForgeBook, buyForgeBook,
   WAREHOUSE_PRICE, CRAFT_CHESTS, CRAFT_CHEST_ALLOW_TEXT, parseCraftChest, chestAllows, chestsHere, buildWarehouse, buyCraftChest, sortToCraftChests,
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,

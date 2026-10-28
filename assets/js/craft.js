@@ -102,6 +102,7 @@
   // Перевірка, чи можна кувати тут і зараз. Повертає { ok, reason, house }
   function forgeReady(save, toolsNeeded = []) {
     if (!RPG.hasCraftAccess(save)) return { ok: false, reason: "Кувати можна, коли головний герой має професію." };
+    if (!RPG.hasForgeBook(save)) return { ok: false, reason: "Спершу придбайте в коваля Кузьми книгу «Небесна кузня. Настанова» — першу науку коваля." };
     const house = RPG.houseHere(save);
     if (!house) return { ok: false, reason: "Кувати можна лише у власному домі з кузнею." };
     if (!house.forge) return { ok: false, reason: "Спершу збудуйте кузню при домі." };

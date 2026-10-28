@@ -1231,3 +1231,30 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .forge-why { color: #f0b1a6; }
 .forge-btn { align-self: flex-start; }
 .forge-smelt-btns { gap: 6px; flex-wrap: wrap; }
+
+/* ---------- Книга «Небесна кузня. Настанова» (data/books.js → showForgeBook) ---------- */
+.fbook-kicker { margin: .4em 0 0; text-align: center; font-size: .8em; letter-spacing: .25em; text-transform: uppercase; color: #8a4a1e; }
+.fbook-authors { margin: 1em 0 0; text-align: center; font-size: .78em; letter-spacing: .22em; text-transform: uppercase; color: #8a4a1e; }
+.fbook-h { margin: .9em 0 .35em; }
+.fbook-group { margin: .8em 0 .2em; font-weight: 700; color: #4a160c; break-after: avoid; }
+.fbook-list { margin: 0 0 .8em; padding-left: 1.4em; }
+.fbook-list li { margin: 0 0 .3em; }
+.fbook-table { width: 100%; margin: .2em 0 .9em; border-collapse: collapse; font-size: .86em; line-height: 1.3; }
+.fbook-table tr { break-inside: avoid; }
+.fbook-table.is-odds, .fbook-table.is-recipes { break-inside: avoid; }
+.fbook-table.is-priced td:last-child, .fbook-table.is-priced th:last-child { white-space: nowrap; text-align: right; }
+.fbook-table th, .fbook-table td { padding: .32em .4em; border-bottom: 1px solid rgba(90, 55, 25, .3); text-align: left; vertical-align: top; }
+.fbook-table th { font-size: .92em; color: #6b4a28; }
+.fbook-table.is-odds th, .fbook-table.is-odds td { padding: .3em .2em; text-align: right; white-space: nowrap; }
+.fbook-table.is-odds th:first-child, .fbook-table.is-odds td:first-child { text-align: left; }
+.fbook-table.is-recipes td:first-child { white-space: nowrap; font-weight: 700; color: #4a160c; }
+.fbook-mats { display: block; font-style: italic; color: #7a5530; font-size: .92em; }
+/* кольори рідкостей на пергаменті — темніші */
+.chronicle-dialog .fbook-table .rt-broken    { color: #6e6e6e; text-shadow: none; }
+.chronicle-dialog .fbook-table .rt-common    { color: #3a2614; text-shadow: none; }
+.chronicle-dialog .fbook-table .rt-magic     { color: #1d4fb8; text-shadow: none; }
+.chronicle-dialog .fbook-table .rt-epic      { color: #7a2bb8; text-shadow: none; }
+.chronicle-dialog .fbook-table .rt-legendary { color: #b55e00; text-shadow: none; }
+.fbook-row { flex-wrap: wrap; }
+.fbook-btns { gap: 8px; align-items: center; flex-wrap: wrap; }
+.forge-open-row { gap: 8px; flex-wrap: wrap; }

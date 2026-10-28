@@ -385,10 +385,13 @@
     return frag;
   }
 
+  // opts.book — інша книга в тому ж вікні: { title, cls, contents(save) → [{ key, title, open }], section(save, key, o) }
+  // (за замовчуванням — літопис Захара). Обгорілі корінці Прологу — лише в літописі.
   function showChronicle(save, startKey = "prologue", opts = {}) {
     document.querySelector(".chronicle-dialog")?.remove();
+    const src = opts.book || { title: RPG.CHRONICLE.TITLE, contents: RPG.chronicleContents, section: chronicleSection, torn: true };
     const wide = bookWide();
-    const dlg = el("dialog", "chronicle-dialog" + (wide ? " is-3d" : ""));
+    const dlg = el("dialog", "chronicle-dialog" + (wide ? " is-3d" : "") + (src.cls ? " " + src.cls : ""));
     dlg.lang = "uk";
     const close = button("×", "notice-close chronicle-close", () => dlg.close());
     close.setAttribute("aria-label", "Закрити книгу");
@@ -408,17 +411,17 @@
       const page = el("article", "chronicle-page");
       book.append(toc, page);
       let key = startKey, glow = restoring;
-      const keys = () => RPG.chronicleContents(save).filter(c => c.open).map(c => c.key);
+      const keys = () => src.contents(save).filter(c => c.open).map(c => c.key);
       const go = k => { key = k; draw(); };
       function draw() {
         toc.innerHTML = "";
-        toc.append(el("div", "chronicle-cover", RPG.CHRONICLE.TITLE));
-        for (const c of RPG.chronicleContents(save)) {
+        toc.append(el("div", "chronicle-cover", src.title));
+        for (const c of src.contents(save)) {
           if (!c.open) { toc.append(el("span", "chronicle-toc-item is-sealed", `${c.title} — запечатано`)); continue; }
           toc.append(button(c.title, "chronicle-toc-item" + (c.key === key ? " is-current" : ""), () => go(c.key)));
         }
         page.innerHTML = "";
-        page.append(chronicleSection(save, key, { go, glow }));
+        page.append(src.section(save, key, { go, glow }));
         glow = false;
         const ks = keys(), i = ks.indexOf(key);
         const nav = el("div", "row chronicle-nav");
@@ -450,14 +453,14 @@
       footR.append(numR, nextB);
       book.append(spread, footL, footR);
 
-      const sections = () => ["toc", ...RPG.chronicleContents(save).filter(c => c.open).map(c => c.key)];
+      const sections = () => ["toc", ...src.contents(save).filter(c => c.open).map(c => c.key)];
       let secs = sections();
-      let key = secs.includes(startKey) ? startKey : "prologue";
+      let key = secs.includes(startKey) ? startKey : (secs[1] || "toc");
       let sp = 0;                                  // розворот усередині розділу
       let counts = {};                             // розділ → кількість розворотів
       let glow = restoring;
       let geo = null;
-      const isTornSpread = () => key === "prologue" && sp === 0 && RPG.prologueFor(save).torn;
+      const isTornSpread = () => !!src.torn && key === "prologue" && sp === 0 && RPG.prologueFor(save).torn;
 
       function measure() {
         const w = book.clientWidth, h = book.clientHeight;
@@ -478,7 +481,7 @@
       }
       function fill(k) {
         flow.innerHTML = "";
-        flow.append(chronicleSection(save, k, { go: kk => jump(kk, 0), glow: k === "prologue" && glow, torn: true, paged: true }));
+        flow.append(src.section(save, k, { go: kk => jump(kk, 0), glow: k === "prologue" && glow, torn: true, paged: true }));
         flow.scrollLeft = 0;
         const cols = Math.max(1, Math.round((flow.scrollWidth + geo.gap) / (geo.colW + geo.gap)));
         return Math.ceil(cols / 2);
@@ -579,6 +582,113 @@
     document.body.append(dlg);
     dlg.showModal();
     intro();
+  }
+
+  // ---------- Книга «Небесна кузня. Настанова» (data/books.js) — те саме вікно-книга, що й літопис ----------
+  // Таблиці { auto: … } будуються з даних гри (рецепти, знаряддя, шанси, ціни), тож книга завжди збігається з грою.
+  function forgeBookTable(head, rows, cls = "") {
+    const t = el("table", "fbook-table" + (cls ? " " + cls : ""));
+    if (head) { const tr = el("tr"); head.forEach(h => tr.append(el("th", null, h))); const th = el("thead"); th.append(tr); t.append(th); }
+    const tb = el("tbody");
+    for (const r of rows) {
+      const tr = el("tr");
+      r.forEach(c => { const td = el("td"); if (c instanceof Node) td.append(c); else td.textContent = c; tr.append(td); });
+      tb.append(tr);
+    }
+    t.append(tb);
+    return t;
+  }
+  function forgeBookAuto(kind) {
+    const pc = x => `${Math.round(x * 100)}%`;
+    const gold = n => `${fmtNum(n)} зол.`;
+    const frag = document.createDocumentFragment();
+    if (kind === "recipes") {
+      for (const g of RPG.RECIPE_GROUPS) {
+        frag.append(el("p", "fbook-group", g.name));
+        const rows = [];
+        for (const tier of [1, 2, 3]) {
+          const ids = Object.keys(RPG.RECIPES).filter(id => RPG.RECIPES[id].tier === tier && g.types.includes(RPG.ITEMS[id]?.type));
+          if (!ids.length) continue;
+          const mats = [...new Set(ids.flatMap(id => RPG.RECIPES[id].mats.map(([m]) => RPG.ITEMS[m]?.name.toLowerCase())))];
+          const cell = el("span", null, ids.map(id => RPG.ITEMS[id].name).join(", "));
+          cell.append(el("small", "fbook-mats", mats.join(", ")));
+          rows.push([`${tier} (з ${RPG.CRAFT_TIER_LEVEL[tier]})`, cell]);
+        }
+        frag.append(forgeBookTable(["Тір", "Речі й матеріали"], rows, "is-recipes"));
+      }
+    } else if (kind === "tools") {
+      frag.append(forgeBookTable(["Знаряддя", "Для чого", "Ціна, зол."], Object.values(RPG.FORGE_TOOLS).map(t => {
+        const n = el("strong", null, t.name);
+        if (t.need) n.append(el("small", "fbook-mats", "обов'язкове"));
+        return [n, t.text + (t.for ? ` Потрібне для: ${t.for}.` : ""), fmtNum(t.price)];
+      }), "is-priced"));
+    } else if (kind === "ranks") {
+      frag.append(forgeBookTable(["Звання", "Рівні", "Відкриває"], [
+        ["Учень", "1–9", "тір 1"], ["Підмайстер", "10–19", "тір 2"], ["Майстер", "20–29", "тір 3"], ["Небесний коваль", "30", "успіх 95%"]
+      ]));
+    } else if (kind === "odds") {
+      const R = ["broken", "common", "magic", "epic", "legendary"];
+      const head = ["Рів.", "Успіх", ...R.map(r => { const s = el("span", "rt-" + r, RPG.RARITIES[r].name.slice(0, 4) + "."); s.title = RPG.RARITIES[r].name; return s; })];
+      const t = forgeBookTable(null, [1, 5, 10, 15, 20, 25, 30].map(L => {
+        const b = RPG.baseCraftChance(L), tab = RPG.craftRarityTable(L, b);
+        return [String(L), pc(b), ...R.map(r => pc(tab[r]))];
+      }), "is-odds");
+      const thead = el("thead"), tr = el("tr");
+      head.forEach(h => { const th = el("th"); if (h instanceof Node) th.append(h); else th.textContent = h; tr.append(th); });
+      thead.append(tr); t.prepend(thead);
+      frag.append(t);
+    } else if (kind === "prices") {
+      const C = RPG.CRAFT_CHESTS;
+      frag.append(forgeBookTable(["Що", "Ціна"], [
+        ["Дім на околиці", gold(RPG.HOUSES.oak.price)], ["Склад", gold(RPG.WAREHOUSE_PRICE)], ["Кузня", gold(RPG.FORGE_PRICE)],
+        [C.mat.name, gold(C.mat.price)], [C.pot.name, gold(C.pot.price)], [C.item.name, gold(C.item.price)],
+        ["Ця книга", gold(RPG.FORGE_BOOK.price)]
+      ], "is-priced"));
+    } else if (kind === "chests") {
+      const rows = [["Скриня Домівки (спільна)", "50", "як в інвентарі", "1"]];
+      for (const [k, c] of Object.entries(RPG.CRAFT_CHESTS)) rows.push([`${c.name} (${RPG.CRAFT_CHEST_ALLOW_TEXT[k]})`, String(c.size), c.stack > 1 ? `${fmtNum(c.stack)} шт` : "1 річ", String(c.max)]);
+      frag.append(forgeBookTable(["Скриня", "Комірок", "У комірці", "Скринь"], rows));
+    } else if (kind === "disassemble") {
+      const extra = { broken: "—", common: "—", magic: "1 магічний матеріал", epic: "1 епічний матеріал", legendary: "Небесна іскра" };
+      frag.append(forgeBookTable(["Рідкість речі", "Назад", "Додатково"], Object.entries(RPG.DISASSEMBLE_SHARE).map(([r, sh]) =>
+        [el("span", "rt-" + r, RPG.RARITIES[r].name), pc(sh), extra[r]])));
+    }
+    return frag;
+  }
+  function forgeBookSection(save, key, { go, paged = false } = {}) {
+    const B = RPG.FORGE_BOOK;
+    const frag = document.createDocumentFragment();
+    if (key === "toc") {
+      frag.append(el("p", "fbook-kicker", B.kicker), el("div", "chronicle-cover", B.title), el("p", "chronicle-epigraph", B.epigraph));
+      const list = el("nav", "chronicle-toc-list");
+      for (const sct of B.sections) list.append(button(sct.title, "chronicle-toc-item", () => go(sct.key)));
+      frag.append(list, el("p", "fbook-authors", B.authors));
+      if (paged) frag.append(el("div", "book-col-break"), el("div", "book-vignette", "⚒"), el("p", "book-vignette-text", B.vignette));
+      return frag;
+    }
+    const sct = B.sections.find(x => x.key === key);
+    if (!sct) return frag;
+    frag.append(el("h2", "chronicle-title", sct.title));
+    // буквиця — лише в першому абзаці, що відкриває розділ (одразу після назви чи епіграфа)
+    sct.blocks.forEach((b, i) => {
+      if (b.p) frag.append(el("p", "chronicle-p" + (i === 0 || (i === 1 && sct.blocks[0].quote) ? " is-initial" : ""), b.p));
+      else if (b.quote) frag.append(el("p", "chronicle-epigraph", b.quote));
+      else if (b.h) frag.append(el("h3", "chronicle-sub fbook-h", b.h));
+      else if (b.ol || b.ul) { const l = el(b.ol ? "ol" : "ul", "fbook-list"); (b.ol || b.ul).forEach(x => l.append(el("li", null, x))); frag.append(l); }
+      else if (b.table) frag.append(forgeBookTable(b.table.head, b.table.rows));
+      else if (b.note) frag.append(el("p", "chronicle-note", b.note));
+      else if (b.end) frag.append(el("p", "chronicle-end", b.end));
+      else if (b.auto) frag.append(forgeBookAuto(b.auto));
+    });
+    return frag;
+  }
+  function showForgeBook(save, startKey = "prologue") {
+    if (!RPG.FORGE_BOOK) return;
+    showChronicle(save, startKey, { book: {
+      title: RPG.FORGE_BOOK.title, cls: "is-forge-book",
+      contents: () => RPG.FORGE_BOOK.sections.map(x => ({ key: x.key, title: x.title, open: true })),
+      section: forgeBookSection
+    } });
   }
 
   // ---------- Здобич на полі бою (save.fieldLoot) ----------
@@ -1468,10 +1578,15 @@
         if (!RPG.hasCraftAccess(save)) fg.append(el("p", "house-soon", "Кувати й купувати знаряддя можна, коли головний герой має професію."));
         if (RPG.craftState && RPG.hasCraftAccess(save)) {
           const st = RPG.craftState(save);
+          const book = RPG.hasForgeBook(save);
+          if (!book) fg.append(el("p", "house-soon", `Першу науку коваля — книгу «${RPG.FORGE_BOOK.title}» — продає Кузьма в Гільдії ремісників (Торговий район). Без неї кувати не вийде.`));
           fg.append(el("p", "forge-mastery", `Майстерність коваля: ${st.level} (${craftRank(st.level)}) · шанс успіху ${pct(RPG.craftSuccessChance(save, h))}`));
+          const row = el("div", "row forge-open-row");
           const open = button("Кувати", "wf wf-button", () => showForge());
-          open.disabled = !!miss.length;
-          fg.append(open);
+          open.disabled = !!miss.length || !book;
+          row.append(open);
+          if (book) row.append(button("Книга «Небесна кузня»", "wf wf-secondary", () => showForgeBook(save)));
+          fg.append(row);
         }
       }
       box.append(fg);
@@ -2161,8 +2276,35 @@
     function renderToolShop(box) {
       const h = RPG.forgeHouse(save);
       const wrap = el("div", "stack tool-shop");
-      wrap.append(el("h3", null, "Знаряддя для кузні"));
       wrap.append(el("p", "status shop-gold", `Ваше золото: ${fmtNum(save.character.gold)}`));
+      // Книга «Небесна кузня. Настанова» — перша наука коваля (data/books.js)
+      if (RPG.FORGE_BOOK) {
+        const B = RPG.FORGE_BOOK, has = RPG.hasForgeBook(save);
+        const r = el("div", "shop-row tool-row fbook-row");
+        const info = el("div", "tool-info");
+        info.append(el("strong", null, `Книга «${B.title}»`),
+          el("small", null, has ? "Перша наука коваля вже ваша. Перечитувати можна тут і в кузні свого дому."
+            : "Перша наука коваля від Сварога, Брокка й Ейтрі. Без неї не викувати й не розібрати жодної речі."));
+        r.append(info);
+        const btns = el("div", "row fbook-btns");
+        if (has) btns.append(el("span", "shop-price tool-have", "✓ ваша"));
+        else {
+          const b = button(`Купити · ${fmtNum(B.price)} зол.`, "wf wf-button", async () => {
+            const res = RPG.buyForgeBook(save);
+            if (!res.ok) { showMsg(msg, res.reason, true); return; }
+            await RPG.saveGame(save);
+            showMsg(msg, `Куплено книгу «${res.name}». −${fmtNum(res.price)} золота. Кузьма радить почати з Прологу.`);
+            renderAll();
+            showForgeBook(save);
+          });
+          b.disabled = !RPG.hasCraftAccess(save) || save.character.gold < B.price;
+          btns.append(b);
+        }
+        btns.append(button(has ? "Читати" : "Погортати", "wf wf-secondary", () => showForgeBook(save, has ? "prologue" : "toc")));
+        r.append(btns);
+        wrap.append(r);
+      }
+      wrap.append(el("h3", null, "Знаряддя для кузні"));
       if (!h) wrap.append(el("p", "tool-hint", "Спершу збудуйте кузню при своєму домі в Спальному районі — Кузьма поставить знаряддя туди."));
       else wrap.append(el("p", "tool-hint", `Куплене Кузьма поставить у кузню дому «${h.name}».`));
       for (const [id, t] of Object.entries(RPG.FORGE_TOOLS)) {
