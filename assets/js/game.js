@@ -1685,10 +1685,12 @@
           return l;
         };
         optRow.append(cb("Спершу рідкісніші матеріали (кращі шанси)", forgePreferRare, v => forgePreferRare = v));
-        const sparks = RPG.countItem(save, "heavenly_spark");
+        const sparks = RPG.craftCountMat(save, "heavenly_spark");
         if (sparks) optRow.append(cb(`Додати Небесну іскру (до +10% до легендарної; є ${sparks})`, forgeSpark, v => forgeSpark = v));
         else forgeSpark = false;
         dlg.append(optRow);
+        if (RPG.chestsHere(save).some(id => RPG.parseCraftChest(id)?.type === "mat"))
+          dlg.append(el("small", "forge-why", "Матеріали беруться з інвентаря і скринь для матеріалів цього дому."));
         const group = RPG.RECIPE_GROUPS.find(x => x.id === forgeTab);
         const list = el("div", "stack forge-list");
         for (const [id, rc] of Object.entries(RPG.RECIPES).sort((a, b) => a[1].tier - b[1].tier)) {
@@ -1726,7 +1728,8 @@
       };
       const drawSmelt = () => {
         const list = el("div", "stack forge-list");
-        list.append(el("p", "forge-why", "Переплавка завжди вдається: 2 руди → 1 злиток тієї ж рідкості (залізо — ще й 1 вугілля та міхи). +1 досвіду за злиток."));
+        list.append(el("p", "forge-why", "Переплавка завжди вдається: 2 руди → 1 злиток тієї ж рідкості (залізо — ще й 1 вугілля та міхи). +1 досвіду за злиток. " +
+          "Руда й вугілля беруться і зі скринь для матеріалів; злитки, що не влізли в інвентар, лягають туди ж."));
         for (const ingot of Object.keys(RPG.SMELT)) {
           const info = RPG.smeltInfo(save, ingot);
           const row = el("div", "forge-row");
@@ -1734,7 +1737,7 @@
           head.append(smallIcon(ingot), el("strong", null, RPG.ITEMS[ingot].name));
           row.append(head);
           const mats = el("div", "forge-mats");
-          const oreTotal = info.byGrade.reduce((n, b) => n + RPG.countItem(save, b.ore), 0);
+          const oreTotal = info.byGrade.reduce((n, b) => n + RPG.craftCountMat(save, b.ore), 0);
           mats.append(el("span", "forge-mat" + (oreTotal >= info.s.oreQty ? " is-ok" : " is-short"), `${RPG.ITEMS[info.s.ore].name}: ${fmtNum(oreTotal)}`));
           if (info.s.coal) mats.append(el("span", "forge-mat" + (info.coalHave >= info.s.coal ? " is-ok" : " is-short"), `Вугілля: ${fmtNum(info.coalHave)}`));
           for (const t of info.s.tools) mats.append(el("span", "forge-mat" + (RPG.houseHere(save)?.forge?.tools?.[t] ? " is-ok" : " is-short"), `знаряддя: ${RPG.FORGE_TOOLS[t].name}`));
@@ -4199,6 +4202,9 @@
     const btnDrop = button("Викинути", "wf wf-danger");
     const btnToChest = button("У скриню", "wf wf-secondary");
     const btnFromChest = button("Забрати зі скрині", "wf wf-secondary");
+    // Частина стопки: вікно з кількістю (напр. 25 слизу з 200)
+    const btnToChestPart = button("У скриню: частину…", "wf wf-secondary");
+    const btnFromChestPart = button("Забрати частину…", "wf wf-secondary");
     // Скриня поточної локації (або основна — тоді її можна лише переглянути)
     // У власному домі зі складом — ще й скрині ремесла (вкладки над скринею)
     const storages = RPG.chestsHere(ms);
@@ -4314,7 +4320,8 @@
     function invActions() {
       return [
         [btnEquip, "wf-button"], [btnUnequip, "wf-button"], [btnUse, "wf-button"],
-        [btnToChest, "wf-secondary"], [btnFromChest, "wf-secondary"], [btnDrop, "wf-danger"]
+        [btnToChest, "wf-secondary"], [btnToChestPart, "wf-secondary"], [btnFromChest, "wf-secondary"], [btnFromChestPart, "wf-secondary"],
+        [btnDrop, "wf-danger"]
       ].filter(([b]) => !b.disabled)
         .map(([b, cls]) => ({ text: b.textContent, className: cls, onClick: () => { openKey = null; b.click(); } }));
     }
@@ -4334,7 +4341,7 @@
     function renderDesc() {
       const id = selectedItemId();
       desc.innerHTML = "";
-      for (const b of [btnEquip, btnUnequip, btnUse, btnDrop, btnToChest, btnFromChest]) b.disabled = true;
+      for (const b of [btnEquip, btnUnequip, btnUse, btnDrop, btnToChest, btnFromChest, btnToChestPart, btnFromChestPart]) b.disabled = true;
       btnToChest.title = btnFromChest.title = atHome ? "" : "Доступно лише біля скрині";
       if (!id) {
         desc.append(el("div", null, "Оберіть предмет, щоб побачити опис."));
@@ -4357,6 +4364,45 @@
       if (selected.kind === "inv") btnDrop.disabled = false;
       if (selected.kind === "inv" && atHome) btnToChest.disabled = false;
       if (selected.kind === "chest" && atHome) btnFromChest.disabled = false;
+      const isStack = !ref.r && item.stackable && (ref.qty || 1) > 1;
+      if (isStack && selected.kind === "inv" && atHome) btnToChestPart.disabled = false;
+      if (isStack && selected.kind === "chest" && atHome) btnFromChestPart.disabled = false;
+    }
+
+    // Вікно «Скільки перекласти?»: число + швидкі кнопки. Повертає Promise<кількість | null>
+    function askQty(title, max) {
+      return new Promise(resolve => {
+        const dlg = el("dialog", "notice-dialog qty-dialog");
+        let done = false;
+        const finish = v => { if (done) return; done = true; resolve(v); dlg.close(); };
+        const close = button("×", "notice-close", () => finish(null));
+        close.setAttribute("aria-label", "Скасувати");
+        dlg.append(close, el("h3", null, title));
+        const label = el("label", "field", `Кількість (є ${fmtNum(max)})`);
+        const input = el("input");
+        Object.assign(input, { type: "number", min: 1, max, step: 1, value: Math.min(max, Math.max(1, Math.floor(max / 2))), inputMode: "numeric" });
+        label.append(input);
+        dlg.append(label);
+        const quick = el("div", "row qty-quick");
+        for (const [t, v] of [["1", 1], ["10", 10], ["25", 25], ["100", 100], ["½", Math.floor(max / 2)], ["Усе", max]]) {
+          if (v < 1 || v > max) continue;
+          quick.append(button(t, "wf wf-link", () => { input.value = v; input.focus(); }));
+        }
+        dlg.append(quick);
+        const ok = button("Перекласти", "wf wf-button", () => {
+          const n = Math.floor(Number(input.value));
+          if (!(n >= 1)) { input.focus(); return; }
+          finish(Math.min(n, max));
+        });
+        input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); ok.click(); } });
+        const row = el("div", "row");
+        row.append(ok, button("Скасувати", "wf wf-secondary", () => finish(null)));
+        dlg.append(row);
+        dlg.addEventListener("close", () => { if (!done) { done = true; resolve(null); } dlg.remove(); });
+        document.body.append(dlg);
+        dlg.showModal();
+        input.select();
+      });
     }
 
     async function commit(text, isError) {
@@ -4403,6 +4449,28 @@
       selected = null;
       await commit(r.ok ? `У скриню: ${RPG.ITEMS[r.id].name}${r.qty > 1 ? ` ×${r.qty}` : ""}` +
         (r.left ? `. Не влізло ${r.left} шт. — скриня повна.` : "") : r.reason, !r.ok);
+    });
+
+    btnToChestPart.addEventListener("click", async () => {
+      const entry = ms.inventory[selected?.index];
+      if (!entry) return;
+      const n = await askQty(`У скриню: ${RPG.ITEMS[entry.id].name}`, entry.qty);
+      if (!n) return;
+      const r = RPG.moveToChest(ms, selected.index, viewChest, n);
+      selected = null;
+      await commit(r.ok ? `У скриню: ${RPG.ITEMS[r.id].name} ×${r.qty}` +
+        (r.left ? `. Не влізло ${r.left} шт. — скриня повна.` : "") : r.reason, !r.ok);
+    });
+
+    btnFromChestPart.addEventListener("click", async () => {
+      const entry = chestOf()[selected?.index];
+      if (!entry) return;
+      const n = await askQty(`Забрати: ${RPG.ITEMS[entry.id].name}`, entry.qty);
+      if (!n) return;
+      const r = RPG.takeFromChest(ms, selected.index, viewChest, n);
+      selected = null;
+      await commit(r.ok ? `Забрано зі скрині: ${RPG.ITEMS[r.id].name} ×${r.qty}` +
+        (r.left ? `. Не влізло ${r.left} шт. — інвентар повний.` : "") : r.reason, !r.ok);
     });
 
     btnFromChest.addEventListener("click", async () => {

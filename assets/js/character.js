@@ -756,8 +756,8 @@ function isAtHome(save) {
 
 // Покласти клітинку інвентаря в скриню поточної локації.
 // Стопка спершу доповнює неповні стопки в скрині, решта йде у вільні клітинки;
-// що не влізло — лишається в інвентарі.
-function moveToChest(save, invIndex, storageId = null) {
+// що не влізло — лишається в інвентарі. want — скільки штук зі стопки перекласти (null — усю стопку).
+function moveToChest(save, invIndex, storageId = null, want = null) {
   const sid = storageId || chestHere(save);
   if (!sid || !chestsHere(save).includes(sid)) return { ok: false, reason: "Тут немає скрині." };
   const entry = save.inventory[invIndex];
@@ -780,16 +780,18 @@ function moveToChest(save, invIndex, storageId = null) {
   const max = chestStackMax(entry.id, sid);
   let room = free * max;
   for (const e of list) if (e.id === entry.id && !e.r && e.qty < max) room += max - e.qty;
-  const qty = Math.min(entry.qty, room);
+  const ask = want == null ? entry.qty : Math.max(1, Math.min(entry.qty, Math.floor(want)));
+  const qty = Math.min(ask, room);
   if (!qty) return full;
   addToList(list, entry.id, qty, id => chestStackMax(id, sid));
   entry.qty -= qty;
   if (entry.qty <= 0) save.inventory.splice(invIndex, 1);
-  return { ok: true, id: entry.id, qty, left: entry.qty > 0 ? entry.qty : 0 };
+  return { ok: true, id: entry.id, qty, left: qty < ask ? ask - qty : 0 };
 }
 
 // Забрати клітинку скрині в інвентар. Якщо вся стопка не влазить — береться скільки влізе.
-function takeFromChest(save, chestIndex, storageId = null) {
+// want — скільки штук зі стопки взяти (null — усю стопку).
+function takeFromChest(save, chestIndex, storageId = null, want = null) {
   const sid = storageId || chestHere(save);
   if (!sid || !chestsHere(save).includes(sid)) return { ok: false, reason: "Тут немає скрині." };
   const list = chestList(save, sid);
@@ -801,12 +803,13 @@ function takeFromChest(save, chestIndex, storageId = null) {
     save.inventory.push(entry);
     return { ok: true, id: entry.id, qty: entry.qty || 1 };
   }
-  const qty = fitQty(save, entry.id, entry.qty);
+  const ask = want == null ? entry.qty : Math.max(1, Math.min(entry.qty, Math.floor(want)));
+  const qty = fitQty(save, entry.id, ask);
   if (!qty) return { ok: false, reason: "Інвентар повний — звільніть місце." };
   addToList(save.inventory, entry.id, qty);
   entry.qty -= qty;
   if (entry.qty <= 0) list.splice(chestIndex, 1);
-  return { ok: true, id: entry.id, qty, left: entry.qty > 0 ? entry.qty : 0 };
+  return { ok: true, id: entry.id, qty, left: qty < ask ? ask - qty : 0 };
 }
 
 // ---------- Екіпірування ----------

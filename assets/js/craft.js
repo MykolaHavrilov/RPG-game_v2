@@ -108,9 +108,55 @@
     return t;
   }
 
-  // Скільки є матеріалу (усіх рідкостей) в інвентарі
+  // ---------- Матеріали для кузні: інвентар + скрині для матеріалів складу цього дому ----------
+  // Кування й переплавка беруть матеріали і з інвентаря, і зі скринь для матеріалів (спершу зі скринь).
+  // Розбір — ні: річ для розбору має лежати в інвентарі, повернуті матеріали йдуть в інвентар.
+  function matChests(save) {
+    return (RPG.chestsHere?.(save) || []).filter(id => RPG.parseCraftChest(id)?.type === "mat");
+  }
+  function countMat(save, id) {
+    return RPG.countItem(save, id) + matChests(save).reduce((n, sid) => n + RPG.countInList(RPG.chestList(save, sid), id), 0);
+  }
+  function takeMat(save, id, qty) {
+    if (countMat(save, id) < qty) return false;
+    for (const sid of matChests(save)) {
+      const list = RPG.chestList(save, sid);
+      const take = Math.min(qty, RPG.countInList(list, id));
+      if (take > 0) { RPG.removeFromList(list, id, take); qty -= take; }
+      if (!qty) return true;
+    }
+    return RPG.removeItem(save, id, qty);
+  }
+  // Скільки штук влізе: в інвентар, а що не влізло — у скрині для матеріалів
+  function matRoom(save, id, qty) {
+    let room = RPG.fitQty(save, id, qty);
+    for (const sid of matChests(save)) {
+      if (room >= qty) break;
+      const max = RPG.chestStackMax(id, sid);
+      let r = RPG.chestFree(save, sid) * max;
+      for (const e of RPG.chestList(save, sid)) if (e.id === id && !e.r && e.qty < max) r += max - e.qty;
+      room += r;
+    }
+    return Math.min(qty, room);
+  }
+  function putMat(save, id, qty) {
+    const inv = RPG.fitQty(save, id, qty);
+    if (inv) RPG.addItem(save, id, inv);
+    let left = qty - inv;
+    for (const sid of matChests(save)) {
+      if (!left) break;
+      const max = RPG.chestStackMax(id, sid);
+      let r = RPG.chestFree(save, sid) * max;
+      for (const e of RPG.chestList(save, sid)) if (e.id === id && !e.r && e.qty < max) r += max - e.qty;
+      const k = Math.min(left, r);
+      if (k) { RPG.addToList(RPG.chestList(save, sid), id, k, x => RPG.chestStackMax(x, sid)); left -= k; }
+    }
+    return qty - left;
+  }
+
+  // Скільки є матеріалу (усіх рідкостей) в інвентарі і скринях для матеріалів
   function haveMaterial(save, baseId) {
-    return GRADE_ORDER.reduce((n, g) => n + RPG.countItem(save, RPG.materialOfGrade(baseId, g)), 0);
+    return GRADE_ORDER.reduce((n, g) => n + countMat(save, RPG.materialOfGrade(baseId, g)), 0);
   }
   // План витрати: які стопки брати. preferRare — спершу рідкісніші, інакше спершу звичайні
   function pickMaterials(save, mats, mult = 1, preferRare = false) {
@@ -122,7 +168,7 @@
       for (const g of order) {
         const id = RPG.materialOfGrade(baseId, g);
         if (g !== "common" && id === baseId) continue;
-        const take = Math.min(left, RPG.countItem(save, id));
+        const take = Math.min(left, countMat(save, id));
         if (take > 0) { plan.push([id, take]); score += GRADE_SCORE[g] * take; units += take; left -= take; }
         if (!left) break;
       }
@@ -194,7 +240,7 @@
     const house = RPG.houseHere(save);
     const success = successChance(save, house);
     const pick = recipe ? pickMaterials(save, recipe.mats, 1, !!opts.preferRare) : null;
-    const spark = !!opts.spark && RPG.countItem(save, "heavenly_spark") > 0;
+    const spark = !!opts.spark && countMat(save, "heavenly_spark") > 0;
     return applyQuality(rarityTable(craftState(save).level, success), pick?.quality || 0, spark);
   }
 
@@ -205,10 +251,10 @@
     if (!info.canCraft) return { ok: false, reason: info.reason };
     const pick = pickMaterials(save, info.recipe.mats, 1, !!opts.preferRare);
     if (!pick) return { ok: false, reason: "Бракує матеріалів." };
-    const spark = !!opts.spark && RPG.countItem(save, "heavenly_spark") > 0;
+    const spark = !!opts.spark && countMat(save, "heavenly_spark") > 0;
     const tab = craftOdds(save, itemId, opts);
-    for (const [id, qty] of pick.plan) RPG.removeItem(save, id, qty);
-    if (spark) RPG.removeItem(save, "heavenly_spark", 1);
+    for (const [id, qty] of pick.plan) takeMat(save, id, qty);
+    if (spark) takeMat(save, "heavenly_spark", 1);
     const rarity = rollFrom(tab);
     const ref = RPG.makeItem(itemId, rarity);
     save.inventory.push(ref);
@@ -226,7 +272,7 @@
     // скільки злитків можна зробити з руди кожної рідкості
     const byGrade = GRADE_ORDER.map(g => {
       const ore = RPG.materialOfGrade(s.ore, g);
-      const can = ore === s.ore && g !== "common" ? 0 : Math.floor(RPG.countItem(save, ore) / s.oreQty);
+      const can = ore === s.ore && g !== "common" ? 0 : Math.floor(countMat(save, ore) / s.oreQty);
       return { grade: g, ore, ingot: RPG.materialOfGrade(ingotId, g), can };
     });
     const coalHave = haveMaterial(save, "coal");
@@ -245,13 +291,13 @@
     for (const b of info.byGrade) {
       const k = Math.min(left, b.can);
       if (!k) continue;
-      if (RPG.fitQty(save, b.ingot, k) < k) return { ok: false, reason: "Інвентар повний." };
-      RPG.removeItem(save, b.ore, k * info.s.oreQty);
+      if (matRoom(save, b.ingot, k) < k) return { ok: false, reason: "Інвентар і скрині для матеріалів повні." };
+      takeMat(save, b.ore, k * info.s.oreQty);
       if (info.s.coal) {
         const pick = pickMaterials(save, [["coal", info.s.coal]], k, false);
-        for (const [id, q] of pick.plan) RPG.removeItem(save, id, q);
+        for (const [id, q] of pick.plan) takeMat(save, id, q);
       }
-      RPG.addItem(save, b.ingot, k);
+      putMat(save, b.ingot, k);
       made += k; left -= k;
       if (!left) break;
     }
@@ -318,6 +364,7 @@
     craftSuccessChance: successChance, craftRarityTable: rarityTable, craftOdds, haveMaterial, recipeInfo,
     craftForgeReady: forgeReady, craftItem, addCraftExp, smeltInfo, smelt,
     DISASSEMBLE_SHARE, DISASSEMBLE_EXP, disassembleInfo, disassemble,
+    craftCountMat: countMat,
     craftCat: catState, craftCatMaxLevel: catMaxLevel, craftCatOpenTier: catOpenTier, addCraftCatExp: addCatExp
   });
 })(window.RPG);

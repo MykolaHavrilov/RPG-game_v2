@@ -1259,3 +1259,9 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .fbook-row { flex-wrap: wrap; }
 .fbook-btns { gap: 8px; align-items: center; flex-wrap: wrap; }
 .forge-open-row { gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Вікно «Скільки перекласти?» (інвентар ↔ скриня, частина стопки) ---------- */
+.qty-dialog { max-width: 360px; }
+.qty-dialog input { width: 100%; box-sizing: border-box; }
+.qty-quick { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.qty-quick .wf { flex: 1 1 0; min-width: 44px; padding: 6px 4px; }
