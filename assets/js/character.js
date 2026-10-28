@@ -1278,6 +1278,8 @@ const IFRIT = {
   stock: ["coal", "oak_wood", "ash_wood", "flax", "leather_strap", "glass", "copper_ore", "flint",
           "lapis", "silver_ore", "iron_ore", "gold_ore", "onyx", "gem"]
 };
+// Звичайні руни (data/runes.js) — теж у Іфрита, поки руни не падають з ворогів
+if (RPG.RUNE_IDS) IFRIT.stock.push(...RPG.RUNE_IDS);
 function ifritPrice(id) { return ITEMS[id]?.price || 0; }
 function buyFromIfrit(save, id, qty = 1) {
   if (save.location.map !== "city") return { ok: false, reason: "Іфрит — у Гільдії авантюристів Дубової Застави." };
