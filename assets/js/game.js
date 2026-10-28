@@ -1765,7 +1765,7 @@
       const drawDis = () => {
         const list = el("div", "stack forge-list");
         list.append(el("p", "forge-why", "Розбір повертає частину матеріалів рецепта: зламана річ — 25%, звичайна — 40%, магічна — 50% + 1 магічний матеріал, " +
-          "епічна — 60% + 1 епічний, легендарна — 70% + Небесна іскра. Досвід — за кожен матеріал: 1 / 3 / 8 / 25. Вдягнені речі спершу зніміть."));
+          "епічна — 60% + 1 епічний, легендарна — 70% + Небесна іскра. Досвід — за кожен матеріал: 1 / 3 / 8 / 25. Розбираються лише речі з інвентаря — рецепт не потрібен; вдягнені спершу зніміть, зі скринь — заберіть в інвентар."));
         const ready = RPG.craftForgeReady(save);
         if (!ready.ok) list.append(el("small", "forge-why", ready.reason));
         let any = false;
@@ -1800,7 +1800,7 @@
           if (asking) row.append(button("Скасувати", "wf wf-link", () => { disConfirm = null; forgeResult = null; draw(); }));
           list.append(row);
         });
-        if (!any) list.append(el("p", "house-soon", "В інвентарі немає речей, які можна розібрати. Розбираються зброя, щити, броня й прикраси, що мають рецепт у кузні."));
+        if (!any) list.append(el("p", "house-soon", "В інвентарі немає речей, які можна розібрати. Розбираються зброя, щити, броня й прикраси, що лежать в інвентарі (не в скринях)."));
         dlg.append(list);
       };
       dlg.addEventListener("close", () => { dlg.remove(); forgeResult = null; disConfirm = null; renderAll(); });

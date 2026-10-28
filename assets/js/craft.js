@@ -306,7 +306,10 @@
   }
 
   // ---------- Розбір речей (етап 8) ----------
-  // Будь-яку річ, що має рецепт, можна розібрати в кузні з 1 рівня майстерності.
+  // Будь-яку зброю, щит, броню чи прикрасу з ІНВЕНТАРЯ можна розібрати в кузні з 1 рівня майстерності —
+  // рецепт для цього не потрібен. Речі в скринях не розбираються (скрині дають кузні лише матеріали для кування).
+  // Склад речі: її рецепт, а якщо рецепта немає (напр. Слизове кільце) — рецепт схожої речі
+  // того ж слота й тіру (salvageRecipe), інакше — того ж виду ремесла й найближчого тіру.
   // Повертається частка матеріалів рецепта (звичайної якості, з округленням униз, але не менше 1 шт)
   // + бонус за рідкість: магічна — 1 магічний матеріал, епічна — 1 епічний, легендарна — Небесна іскра.
   // Досвід — за кожен повернутий матеріал за його якістю: 1 / 3 / 8 / 25 (Небесна іскра — 25).
@@ -314,10 +317,24 @@
   const DISASSEMBLE_BONUS = { magic: "magic", epic: "epic", legendary: "spark" };
   const DISASSEMBLE_EXP = { common: 1, magic: 3, epic: 8, legendary: 25, spark: 25 };
 
+  const SALVAGE_TYPES = ["weapon", "shield", "offhand", "armor", "accessory"];
+  // Із чого складається річ для розбору: власний рецепт або рецепт найсхожішої речі
+  function salvageRecipe(itemId) {
+    const item = RPG.ITEMS[itemId];
+    if (!item || item.quest || !SALVAGE_TYPES.includes(item.type)) return null;
+    if (RPG.RECIPES[itemId]) return RPG.RECIPES[itemId];
+    const tier = item.tier || 1;
+    const all = Object.entries(RPG.RECIPES).map(([id, r]) => ({ id, r, it: RPG.ITEMS[id] })).filter(x => x.it);
+    const score = x => (x.it.slot === item.slot ? 0 : 10) + (x.it.type === item.type ? 0 : 20) +
+      (RPG.recipeGroupOf(x.id) === RPG.recipeGroupOf(itemId) ? 0 : 100) + Math.abs((x.r.tier || 1) - tier);
+    const best = all.sort((a, b) => score(a) - score(b))[0];
+    return best ? best.r : null;
+  }
+
   // Що дасть розбір речі з інвентаря (index). Бонусний матеріал обирається випадково при розборі.
   function disassembleInfo(save, index) {
     const ref = save.inventory[index];
-    const recipe = ref && RPG.RECIPES[ref.id];
+    const recipe = ref && salvageRecipe(ref.id);
     if (!recipe) return null;
     const rarity = RPG.rarityOf(ref);
     const share = DISASSEMBLE_SHARE[rarity];
@@ -363,7 +380,7 @@
     CRAFT_MAX_LEVEL: MAX_LEVEL, CRAFT_EXP, craftState, craftExpToNext: expToNext, baseCraftChance: baseChance,
     craftSuccessChance: successChance, craftRarityTable: rarityTable, craftOdds, haveMaterial, recipeInfo,
     craftForgeReady: forgeReady, craftItem, addCraftExp, smeltInfo, smelt,
-    DISASSEMBLE_SHARE, DISASSEMBLE_EXP, disassembleInfo, disassemble,
+    DISASSEMBLE_SHARE, DISASSEMBLE_EXP, disassembleInfo, disassemble, salvageRecipe,
     craftCountMat: countMat,
     craftCat: catState, craftCatMaxLevel: catMaxLevel, craftCatOpenTier: catOpenTier, addCraftCatExp: addCatExp
   });
