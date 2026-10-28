@@ -1198,3 +1198,14 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .house-build { gap: 8px; }
 .house-chest { align-items: center; flex-wrap: wrap; gap: 8px; }
 .house-chest .shop-name { flex: 1 1 200px; }
+/* Кузня і знаряддя (план крафту, етап 6) */
+.tool-shop { gap: 6px; }
+.tool-hint { margin: 0; font-style: italic; color: var(--text-dim); }
+.tool-row { align-items: center; gap: 10px; flex-wrap: wrap; }
+.tool-info { display: flex; flex-direction: column; flex: 1 1 240px; min-width: 0; }
+.tool-info small { color: var(--text-dim); }
+.tool-have { color: #8fd18f; }
+.tool-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-chip { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--link-border); font-size: .9rem; color: var(--text-dim); }
+.tool-chip.is-have { color: #cfe8c3; border-color: #5f8a52; background: rgba(95, 138, 82, .15); }
+.tool-chip.is-need:not(.is-have) { border-color: #a0483a; color: #f0b1a6; }

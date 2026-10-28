@@ -1440,7 +1440,35 @@
         wh.append(link("Відкрити скрині (Інвентар)", "inventory.html"));
       }
       box.append(wh);
-      box.append(el("p", "house-soon", "Кузня з'явиться в наступному оновленні."));
+      // Кузня
+      const fg = el("div", "stack house-build");
+      if (!h?.forge) {
+        fg.append(el("p", null, `Кузня — тут куватимете й розбиратимете речі. Добудова — ${fmtNum(RPG.FORGE_PRICE)} золота. ` +
+          "Знаряддя для неї продає коваль Кузьма в Гільдії ремісників (Торговий район)."));
+        const b = button(`Збудувати кузню за ${fmtNum(RPG.FORGE_PRICE)} золота`, "wf wf-button", async () => {
+          const r = RPG.buildForge(save, key);
+          if (!r.ok) { showMsg(msg, r.reason, true); return; }
+          await RPG.saveGame(save);
+          showMsg(msg, `Кузню збудовано! −${fmtNum(r.price)} золота. Тепер купіть знаряддя в коваля Кузьми.`);
+          renderAll();
+        });
+        b.disabled = save.character.gold < RPG.FORGE_PRICE;
+        fg.append(b);
+      } else {
+        fg.append(el("strong", null, "Кузня"));
+        const tools = el("div", "tool-grid");
+        for (const [id, t] of Object.entries(RPG.FORGE_TOOLS)) {
+          const have = !!h.forge.tools[id];
+          tools.append(el("span", "tool-chip" + (have ? " is-have" : "") + (t.need ? " is-need" : ""), (have ? "✓ " : "✗ ") + t.name));
+        }
+        fg.append(tools);
+        const miss = RPG.forgeMissing(h);
+        fg.append(el("p", "house-soon", miss.length
+          ? `Щоб почати кувати, бракує: ${miss.map(id => RPG.FORGE_TOOLS[id].name.toLowerCase()).join(", ")}. Знаряддя — у коваля Кузьми (Торговий район).`
+          : "Усі обов'язкові знаряддя на місці. Кування з'явиться в наступному оновленні."));
+        if (!RPG.hasCraftAccess(save)) fg.append(el("p", "house-soon", "Кувати й купувати знаряддя можна, коли головний герой має професію."));
+      }
+      box.append(fg);
       const row = el("div", "row");
       row.append(button("Вийти в Спальний район", "wf wf-secondary", async () => {
         RPG.enterCity(save, RPG.HOUSES[locData.house].district);
@@ -1930,7 +1958,7 @@
             location.reload();
           }));
         }
-        else if (d.id === "trade") renderTradeGuild(box);
+        else if (d.id === "trade") renderTradeDistrict(box);
         else if (d.id === "north") renderNpc(box, "captain");
         else if (d.id === "center") renderTownHall(box);
         else if (d.id === "rest") renderRestDistrict(box);
@@ -1942,6 +1970,59 @@
     }
 
     // --- Торговий район: Торгова гільдія, управляючий Скрудж ---
+    // Торговий район: Гільдія ремісників (Кузьма — з професією) і Торгова гільдія (Скрудж — з 20 рівня)
+    let tradeNpc = "kuzma";
+    function renderTradeDistrict(box) {
+      const tabs = el("div", "row npc-tabs");
+      for (const [id, name] of [["kuzma", "Гільдія ремісників"], ["scrooge", "Торгова гільдія"]]) {
+        tabs.append(button(name, "wf " + (tradeNpc === id ? "wf-button" : "wf-link"), () => { tradeNpc = id; renderPlace(); }));
+      }
+      box.append(tabs);
+      if (tradeNpc === "scrooge") {
+        if (save.character.level < RPG.TRADE_MIN_LEVEL) {
+          box.append(el("p", "status", `Торгова гільдія Скруджа приймає лише поважних гостей — з ${RPG.TRADE_MIN_LEVEL} рівня.`));
+          return;
+        }
+        renderTradeGuild(box);
+        return;
+      }
+      renderNpc(box, "kuzma");
+      if (!RPG.hasCraftAccess(save)) return;
+      renderToolShop(box);
+    }
+
+    // Знаряддя від Кузьми — одразу стають у кузню вашого дому
+    function renderToolShop(box) {
+      const h = RPG.forgeHouse(save);
+      const wrap = el("div", "stack tool-shop");
+      wrap.append(el("h3", null, "Знаряддя для кузні"));
+      wrap.append(el("p", "status shop-gold", `Ваше золото: ${fmtNum(save.character.gold)}`));
+      if (!h) wrap.append(el("p", "tool-hint", "Спершу збудуйте кузню при своєму домі в Спальному районі — Кузьма поставить знаряддя туди."));
+      else wrap.append(el("p", "tool-hint", `Куплене Кузьма поставить у кузню дому «${h.name}».`));
+      for (const [id, t] of Object.entries(RPG.FORGE_TOOLS)) {
+        const have = !!h?.forge?.tools?.[id];
+        const r = el("div", "shop-row tool-row");
+        const info = el("div", "tool-info");
+        info.append(el("strong", null, t.name + (t.need ? " · обов'язкове" : "")),
+          el("small", null, t.text + (t.for ? ` Потрібне для: ${t.for}.` : "")));
+        r.append(info);
+        if (have) r.append(el("span", "shop-price tool-have", "✓ у кузні"));
+        else {
+          const b = button(`Купити · ${fmtNum(t.price)} зол.`, "wf wf-button", async () => {
+            const res = RPG.buyForgeTool(save, id);
+            if (!res.ok) { showMsg(msg, res.reason, true); return; }
+            await RPG.saveGame(save);
+            showMsg(msg, `Куплено: ${res.name}. Кузьма поставив у кузню «${res.house}». −${fmtNum(res.price)} золота.`);
+            renderAll();
+          });
+          b.disabled = !h || save.character.gold < t.price;
+          r.append(b);
+        }
+        wrap.append(r);
+      }
+      box.append(wrap);
+    }
+
     function renderTradeGuild(box) {
       renderNpc(box, "scrooge");
       box.append(el("p", "note", `Скрудж продає речі 3 виду (з ${RPG.TRADE_MIN_LEVEL} рівня, для зброї — володіння 20) ` +

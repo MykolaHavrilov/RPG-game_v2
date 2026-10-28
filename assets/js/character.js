@@ -1083,6 +1083,57 @@ function sortToCraftChests(save) {
   return { ok: true, moved, chests: ids.length };
 }
 
+// ---------- Кузня при домі і знаряддя (план крафту, етап 6) ----------
+// Кузню добудовують при власному домі. Знаряддя продає коваль Кузьма (Гільдія ремісників, Торговий район)
+// і одразу ставить у кузню. Ремесло доступне героям, які вже мають професію (ранг 2+).
+// Стан: house.forge = { tools: { furnace: true, ... } }
+const FORGE_PRICE = 50000;
+// need: true — без цього не кують нічого; for — для яких рецептів потрібне; bonus — +% до шансу успіху
+const FORGE_TOOLS = {
+  furnace:     { name: "Горно",                    price: 5000, need: true, text: "Вогонь для металу й переплавки руди." },
+  anvil:       { name: "Ковадло",                  price: 3000, need: true, text: "Основа, на якій б'ють метал." },
+  hammer:      { name: "Молот коваля",             price: 2000, need: true, text: "Кує зброю, броню й кільця." },
+  tongs:       { name: "Кліщі",                    price: 1000, need: true, text: "Тримають розпечене залізо." },
+  quench:      { name: "Діжка для гартування",     price: 1000, need: true, text: "Гартування — річ отримує рідкість." },
+  bellows:     { name: "Міхи",                     price: 4000, for: "залізо (тір 3)", text: "Жар для заліза." },
+  leatherwork: { name: "Верстак шкірника",         price: 3000, for: "шкіряна броня, колчани, щити тіру 2", text: "Для роботи зі шкірою." },
+  carving:     { name: "Різці й рубанок",          price: 2000, for: "луки, посохи, дерев'яні речі", text: "Для роботи з деревом." },
+  crucible:    { name: "Тигель і ювелірні щипці",  price: 3000, for: "кільця, амулети, сережки", text: "Для прикрас." },
+  iron_anvil:  { name: "Залізне ковадло",          price: 5000, bonus: 3, text: "Краще ковадло: +3% до успіху кування." }
+};
+// Ремесло — для героїв з професією (головний герой)
+function hasCraftAccess(save) {
+  return getClass(save.character.classId).tier > 1;
+}
+// Дім, у кузню якого Кузьма ставить знаряддя (поки один дім — перший з кузнею)
+function forgeHouse(save) { return (save.houses || []).find(h => h.forge) || null; }
+function buildForge(save, key) {
+  const h = houseOf(save, key);
+  if (!h) return { ok: false, reason: "Дім вам не належить." };
+  if (h.forge) return { ok: false, reason: "Кузню вже збудовано." };
+  if (save.character.gold < FORGE_PRICE) return { ok: false, reason: `Не вистачає золота (потрібно ${FORGE_PRICE}).` };
+  save.character.gold -= FORGE_PRICE;
+  h.forge = { tools: {} };
+  return { ok: true, price: FORGE_PRICE };
+}
+function buyForgeTool(save, toolId) {
+  const t = FORGE_TOOLS[toolId];
+  if (!t) return { ok: false, reason: "Такого знаряддя немає." };
+  if (!hasCraftAccess(save)) return { ok: false, reason: "Кузьма продає знаряддя лише тим, хто вже має професію." };
+  const h = forgeHouse(save);
+  if (!h) return { ok: false, reason: "Спершу збудуйте кузню при своєму домі (Спальний район)." };
+  if (h.forge.tools[toolId]) return { ok: false, reason: `${t.name} уже стоїть у кузні.` };
+  if (save.character.gold < t.price) return { ok: false, reason: `Не вистачає золота (потрібно ${t.price}).` };
+  save.character.gold -= t.price;
+  h.forge.tools[toolId] = true;
+  return { ok: true, price: t.price, name: t.name, house: h.name };
+}
+// Чого бракує в кузні для початку роботи (обов'язкові знаряддя)
+function forgeMissing(house) {
+  const tools = house?.forge?.tools || {};
+  return Object.entries(FORGE_TOOLS).filter(([id, t]) => t.need && !tools[id]).map(([id]) => id);
+}
+
 // ============================================================
 // ТЕСТ: Іфрит — тимчасовий торговець ресурсами ремесла (Гільдія авантюристів, вкладка «Іфрит (тест)»).
 // Не належить до лору. Щоб прибрати: видалити цей блок (IFRIT, ifritPrice, buyFromIfrit) — вкладка зникне сама.
@@ -1127,14 +1178,14 @@ function buyFromTrade(save, id, qty = 1) {
 function isDistrictOpen(save, d) {
   if (!d.locked) return true;
   if (d.id === "center") return RPG.isCentralOpen(save);
-  if (d.id === "trade") return save.character.level >= TRADE_MIN_LEVEL;
+  if (d.id === "trade") return save.character.level >= TRADE_MIN_LEVEL || hasCraftAccess(save);   // з професією — лише Гільдія ремісників
   if (d.id === "north") return getClass(save.character.classId).tier > 1;
   if (d.id === "rest") return !!RPG.isCoalDone?.(save);
   return false;
 }
 function districtLockText(d) {
   if (d.id === "center") return `Варта не пускає до Мерії новачків. Повертайтеся з ${RPG.CENTRAL_MIN_LEVEL} рівня.`;
-  if (d.id === "trade") return `Торгова гільдія приймає лише поважних гостей — з ${TRADE_MIN_LEVEL} рівня.`;
+  if (d.id === "trade") return `Торговий район: Гільдія ремісників пускає героїв, що вже мають професію; Торгова гільдія — з ${TRADE_MIN_LEVEL} рівня.`;
   if (d.id === "north") return "Варта не пускає до брами простих селян. Повертайтеся, коли матимете професію (квест «Шлях професії», з 15 рівня).";
   if (d.id === "rest") return "Спальний район відкривається після завдання Мерії «Збір вугілля» (Розпорядник Захар, Центральний район).";
   return "Закрито — відкриється згодом.";
@@ -1213,6 +1264,7 @@ Object.assign(RPG, {
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
   HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, enterHouse,
+  FORGE_PRICE, FORGE_TOOLS, hasCraftAccess, forgeHouse, buildForge, buyForgeTool, forgeMissing,
   WAREHOUSE_PRICE, CRAFT_CHESTS, CRAFT_CHEST_ALLOW_TEXT, parseCraftChest, chestAllows, chestsHere, buildWarehouse, buyCraftChest, sortToCraftChests,
   QUEUE_SIZE, BUY_MAX, GRACE, graceCost, graceLeft, buyGrace, attrResetCost, attrResetPrice, investedAttrs, resetAttrs,
   REGEN_TICK_MS, HOME_REGEN_PCT, RESPAWN_HP_PCT, DEATH_EXP_MULT, ITEM_LOSS_CHANCE, maxItemLoss,
