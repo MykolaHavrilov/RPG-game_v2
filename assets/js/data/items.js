@@ -700,7 +700,8 @@ function getItem(id) {
   return ITEMS[id] || null;
 }
 
-// Окремі іконки (assets/images/items/icon_<id>.webp, 256×256) — мають перевагу над спрайт-листом
+// Окремі іконки (assets/images/items/icon_<id>.webp, 256×256) — мають перевагу над спрайт-листом.
+// Інші файли даних можуть додавати свої (data/runes.js → іконки рун icon_rune_<знак>.webp).
 const ICON_FILES = new Set(["sword", "dagger", "axe", "bow", "staff", "shield", "quiver", "orb", "knife"]
   .flatMap(w => [1, 2, 3].map(t => `${w}_t${t}`)));
 const ICON_FILE_BASE = RPG.asset("assets/images/items/icon_");
@@ -744,7 +745,7 @@ function shopSellPrice(id) { return Math.ceil((ITEMS[id]?.price || 0) * SHOP_SEL
 function shopBuyPrice(id)  { return Math.max(1, Math.floor((ITEMS[id]?.price || 0) * SHOP_BUY_RATE)); }
 
 Object.assign(RPG, {
-  SLOTS, SLOT_GROUPS, slotsFor, ITEM_RENAMES, STAT_NAMES, ITEMS, getItem, CRAFT_MATERIALS, MATERIAL_GRADES, materialBase, materialOfGrade, itemIconStyle, spriteStyle, ICON_SHEETS, isEquippable,
+  SLOTS, SLOT_GROUPS, slotsFor, ITEM_RENAMES, STAT_NAMES, ITEMS, getItem, ITEM_ICON_FILES: ICON_FILES, CRAFT_MATERIALS, MATERIAL_GRADES, materialBase, materialOfGrade, itemIconStyle, spriteStyle, ICON_SHEETS, isEquippable,
   OFFHAND_RULES, OFF_TYPE_NAMES, offHandAllowed, offHandRuleText, ITEM_SETS, equippedSetCounts,
   SHOP_SELL_RATE, SHOP_BUY_RATE, shopSellPrice, shopBuyPrice
 });

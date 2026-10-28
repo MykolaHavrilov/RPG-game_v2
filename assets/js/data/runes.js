@@ -100,13 +100,15 @@
       const value = g.val >= 0 ? r.vals[g.val] : null;
       ITEMS[runeItemId(key, grade)] = {
         name: `${g.prefix} ${r.name}`, type: "rune", rune: key, runeKind: r.kind, pantheon: r.pantheon,
-        grade, gradeOf: runeItemId(key), price: g.price, stackable: true, maxStack: 100, noShop: true,
+        grade, gradeOf: runeItemId(key), iconFile: runeItemId(key), price: g.price, stackable: true, maxStack: 100, noShop: true,
         description: `${RUNE_KIND_NAME[r.kind]} · ${PANTHEON_NAME[r.pantheon]}. «${r.meaning}». ` +
           (value ? `${r.effect}: ${value}. ` : "Зламана: не дає нічого — годиться лише як паливо для Горна Сварога. ") +
           `Вкладається ${RUNE_KIND_WHERE[r.kind]}.`
       };
     }
   }
+  // Іконки: знак з книги на камені (assets/images/items/icon_rune_<знак>.webp) — одна на всі рідкості, рідкість видно з рамки
+  for (const key of Object.keys(RUNES)) RPG.ITEM_ICON_FILES?.add(runeItemId(key));
   // Звичайні руни (по одній на кожен знак) — для тестового Іфрита
   const RUNE_IDS = Object.keys(RUNES).map(k => runeItemId(k));
 
