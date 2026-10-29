@@ -3585,7 +3585,19 @@
           await RPG.saveGame(save);
           renderQueue();
         });
-        box.append(sel);
+        // Невеличке зображення навички зліва в клітинці (assets/images/skills/<id>.webp), якщо воно є;
+        // для удару, «Іскри» й порожньої клітинки — без зображення
+        const cell = el("div", "queue-cell");
+        if (RPG.SKILLS[action]) {
+          const icon = el("img", "queue-icon");
+          icon.alt = "";
+          icon.onerror = () => { icon.remove(); cell.classList.remove("has-icon"); };
+          icon.src = RPG.asset(`assets/images/skills/${action}.webp`);
+          cell.classList.add("has-icon");
+          cell.append(icon);
+        }
+        cell.append(sel);
+        box.append(cell);
       }
       const who = RPG.partySize(save) > 1 ? `${qms.character.name}: ` : "";
       $("weapon-info").textContent = who + (weaponItem

@@ -89,6 +89,14 @@
   cursor: pointer;
 }
 .queue .queue-select option { color: #111; background: #fff; }
+/* Клітинка черги: невеличке зображення навички зліва поверх списку (game.js → renderQueue) */
+.queue-cell { position: relative; min-width: 0; }
+.queue-icon {
+  position: absolute; left: 4px; top: 50%; transform: translateY(-50%); z-index: 1;
+  width: 24px; height: 24px; border-radius: 4px; object-fit: cover; pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .5);
+}
+.queue-cell.has-icon .queue-select { padding-left: 31px; }
 @media (max-width: 1200px) { .queue { grid-template-columns: repeat(6, 1fr); } }
 
 .queue-head, .inv-head {
