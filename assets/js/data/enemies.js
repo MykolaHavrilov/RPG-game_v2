@@ -1280,12 +1280,14 @@
   }
 
   // Випадкова здобич після перемоги: { gold, items: [{id, qty}] }
-  function rollLoot(enemyId) {
+  // chanceAdd — скільки додати до шансу випадіння кожного предмета (частка: 0.1 = +10 пунктів; Сфера Богів),
+  // не більше 100%. На рідкість речі не впливає — її визначає rarity.js окремо.
+  function rollLoot(enemyId, chanceAdd = 0) {
     const enemy = ENEMIES[enemyId];
     if (!enemy) return { gold: 0, items: [] };
     const items = [];
     for (const drop of enemy.loot) {
-      if (Math.random() < drop.chance) {
+      if (Math.random() < Math.min(1, drop.chance + chanceAdd)) {
         items.push({ id: drop.id, qty: RPG.randInt(drop.qty[0], drop.qty[1]) });
       }
     }

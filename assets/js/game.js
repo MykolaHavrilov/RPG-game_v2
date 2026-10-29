@@ -3826,7 +3826,8 @@
         const totalExp = result.enemies.reduce((sum, e) => sum + (e.exp || 0), 0);
         let gold = 0;
         for (const e of result.enemies) {
-          const loot = RPG.rollLoot(e.id);
+          const lootOrb = RPG.godsOrb(save);              // Сфера Богів: +10 пунктів до шансу кожного предмета (20% → 30%)
+          const loot = RPG.rollLoot(e.id, lootOrb ? lootOrb.lootPct / 100 : 0);
           RPG.applyReward(save, 0, loot);                // золото й речі — у спільний інвентар
           gold += loot.gold || 0;
           for (const it of loot.items) {
