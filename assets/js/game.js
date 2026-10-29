@@ -2809,26 +2809,37 @@
     }
 
     // --- Квест «Шлях професії» (з 12 рівня Селянина; 3 гілки по 10 завдань; професія — на 15 рівні) ---
+    // Кожен герой групи проходить шлях сам (quests.js → professionState): картка на кожного,
+    // умови й професія — за його власними атрибутами. ms — «вигляд» героя (party.js → memberSave).
     function renderProfession(box) {
-      const info = RPG.professionInfo(save);
-      const name = RPG.professionName(save);
-      if (!info) {
-        if (save.character.classId === RPG.DEFAULT_CLASS) {
-          box.append(el("p", "note", `Квест «${name}» — зміна професії — Артеміда дає Селянину з ${RPG.PROFESSION_QUEST_LEVEL} рівня.`));
-        }
-        return;
+      const members = RPG.partyMembers(save);
+      const group = members.length > 1;
+      const waiting = [];
+      for (const ms of members) {
+        if (!renderProfessionFor(box, ms, group) && ms.character.classId === RPG.DEFAULT_CLASS) waiting.push(ms);
       }
+      if (waiting.length) {
+        const who = group ? waiting.map(ms => `${ms.character.name} (${ms.character.level} рів.)`).join(", ") + " — " : "";
+        box.append(el("p", "note", `${who}квест «${RPG.PROFESSION.name}» — зміна професії — Артеміда дає Селянину з ${RPG.PROFESSION_QUEST_LEVEL} рівня.`));
+      }
+    }
+    // Картка квесту одного героя. Повертає false, якщо квест йому ще не доступний
+    function renderProfessionFor(box, ms, group) {
+      const info = RPG.professionInfo(ms);
+      const name = RPG.professionName(ms);
+      const who = group ? `${ms.character.name}: ` : "";
+      if (!info) return false;
       const card = el("div", "stack explore-card");
-      card.append(el("h3", null, `Квест: «${name}»`));
+      card.append(el("h3", null, `${group ? ms.character.name + " — к" : "К"}вест: «${name}»`));
       const levelTxt = lv => lv.length ? ` Новий рівень: ${lv[lv.length - 1]}!` : "";
       if (info.done) {
-        card.append(el("p", null, `Ваша професія: ${RPG.getClass(save.character.classId).name}.`));
+        card.append(el("p", null, `${group ? ms.character.name + " — професія" : "Ваша професія"}: ${RPG.getClass(ms.character.classId).name}.`));
       } else if (info.canStart) {
         card.append(el("p", "note", "«Ти переріс селянське життя. Пройди десять випробувань — і на 15 рівні я скажу, ким тобі судилося стати. " +
           "Яким шляхом ти підеш, залежить від того, що ти в собі розвивав.»"));
         if (!info.branches.length) card.append(el("p", "rt-magic", RPG.PROFESSION_REFUSE));
         const take = async branch => {
-          const r = RPG.startProfession(save, branch);
+          const r = RPG.startProfession(ms, branch);
           if (r.choose) {
             const pick = el("div", "stack");
             pick.append(el("p", null, "«Перед тобою кілька шляхів. Обери, яким підеш, — назад дороги не буде.»"));
@@ -2843,7 +2854,7 @@
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
           await RPG.saveGame(save);
           const B = RPG.PROFESSION_BRANCHES[r.branch];
-          showMsg(msg, `Взято квест «${B.name}». ${B.intro} Завдання 1: ${B.parts[0].title}.`);
+          showMsg(msg, `${who ? who + "в" : "В"}зято квест «${B.name}». ${B.intro} Завдання 1: ${B.parts[0].title}.`);
           renderAll();
         };
         const takeBtn = button("Взяти квест", "wf wf-button", () => take(null));
@@ -2852,7 +2863,7 @@
         card.append(el("p", null, "Усі десять випробувань пройдено. «Ти довів, на що здатен. Час дізнатися, ким ти станеш.»"));
         card.append(el("p", null, "Нагорода за шлях: ???"));
         const finish = async classId => {
-          const r = RPG.turnInProfession(save, classId);
+          const r = RPG.turnInProfession(ms, classId);
           if (r.choose) {
             if (r.choose.length === 1) return finish(r.choose[0]);
             const pick = el("div", "stack");
@@ -2869,9 +2880,9 @@
           }
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
           const c = RPG.getClass(r.classId);
-          journalReward(save, "Шлях професії пройдено", `Нагорода за шлях: ${r.exp ? fmtNum(r.exp) + " EXP (15 рівень) і " : ""}нова професія — ${c.name}.`);
+          journalReward(save, `${who}Шлях професії пройдено`, `Нагорода за шлях: ${r.exp ? fmtNum(r.exp) + " EXP (15 рівень) і " : ""}нова професія — ${c.name}.`);
           await RPG.saveGame(save);
-          showMsg(msg, `Нагорода за шлях: ${r.exp ? fmtNum(r.exp) + " EXP (15 рівень) і " : ""}нова професія — ${c.name}! ${c.description} ` +
+          showMsg(msg, `${who ? who + "н" : "Н"}агорода за шлях: ${r.exp ? fmtNum(r.exp) + " EXP (15 рівень) і " : ""}нова професія — ${c.name}! ${c.description} ` +
             `Рівень професії почався з 1, а бонуси Селянина лишилися. Тренер Брут навчить новим навичкам.` +
             (r.change?.removed?.length ? " Зброю, якою ця професія не користується, знято в інвентар." : ""));
           renderAll();
@@ -2886,13 +2897,13 @@
         }
         card.append(el("div", null, "Нагорода: досвід — скільки, дізнаєтесь при здачі."));
         const b = button("Здати завдання", "wf wf-button", async () => {
-          const r = RPG.turnInProfession(save);
+          const r = RPG.turnInProfession(ms);
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
-          journalReward(save, `Шлях професії: завдання ${info.index} з ${info.total} здано`,
+          journalReward(save, `${who}Шлях професії: завдання ${info.index} з ${info.total} здано`,
             `Нагорода: ${fmtNum(r.exp)} EXP.${levelTxt(r.levelUps)}`);
           await RPG.saveGame(save);
-          const next = RPG.professionInfo(save);
-          showMsg(msg, `Завдання виконано! Нагорода: ${fmtNum(r.exp)} EXP.${levelTxt(r.levelUps)} ` +
+          const next = RPG.professionInfo(ms);
+          showMsg(msg, `${who ? who + "з" : "З"}авдання виконано! Нагорода: ${fmtNum(r.exp)} EXP.${levelTxt(r.levelUps)} ` +
             (r.allDone ? "Усі десять випробувань пройдено — поверніться до Артеміди по нагороду за шлях."
                        : `Далі: ${next.part.title}.`));
           renderAll();
@@ -2901,6 +2912,7 @@
         card.append(b);
       }
       box.append(card);
+      return true;
     }
 
     // --- Тренер: володіння зброєю та навички ---

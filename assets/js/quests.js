@@ -176,12 +176,16 @@
       quest.have++;
       lines.push(`${questTitle(quest)}: ${quest.have}/${quest.need}`);
     }
-    // Квест професії: частина «убити»
-    const ps = professionState(save);
-    const ppart = !ps.result && branchOf(save)?.parts[ps.part - 1];
-    if (ppart?.kill && TARGETS[ppart.kill.target].match(enemyId) && ps.kills < ppart.kill.need) {
-      ps.kills++;
-      lines.push(`«${professionName(save)}»: ${TARGETS[ppart.kill.target].name} ${ps.kills}/${ppart.kill.need}`);
+    // Квест професії: частина «убити» — кожному герою групи, у кого зараз таке завдання
+    const members = RPG.partyMembers ? RPG.partyMembers(save) : [save];
+    for (const ms of members) {
+      const ps = professionState(ms);
+      const ppart = !ps.result && branchOf(ms)?.parts[ps.part - 1];
+      if (ppart?.kill && TARGETS[ppart.kill.target].match(enemyId) && ps.kills < ppart.kill.need) {
+        ps.kills++;
+        const who = members.length > 1 ? `${ms.character.name}, ` : "";
+        lines.push(`«${who}${professionName(ms)}»: ${TARGETS[ppart.kill.target].name} ${ps.kills}/${ppart.kill.need}`);
+      }
     }
     // Квест капітана варти: частина «убити»
     const gs = gateState(save);
@@ -296,8 +300,13 @@
   //   Після 10-го завдання герой рівно на 14 рівні 80% (якщо не набив більше сам — тоді мінімум MIN_REWARD).
   // Нагороди НЕ показуються до здачі. Нагорода за весь шлях (11-й крок, з PROFESSION_LEVEL — 15 рівня):
   //   досвід до 15 рівня і нова професія (з професій гілки, під які герой підходить; вибір — за гравцем).
-  // Стан: save.story.profession = { part: 0 | 1..10 | 11 (усе виконано, лишилось завершити), kills,
+  // Стан: { part: 0 | 1..10 | 11 (усе виконано, лишилось завершити), kills,
   //        branch, startExp, rewards: [EXP за кожне], result: ID професії (квест завершено) }
+  //   Головний герой — save.story.profession; напарник — його character.profQuest (party.js → memberSave).
+  // КОЖЕН ГЕРОЙ ГРУПИ проходить шлях сам: усі функції нижче приймають «вигляд» героя (memberSave),
+  //   умови й гілки — за його власними вкладеними атрибутами, професію обирає гравець для кожного окремо.
+  //   Кілька героїв можуть іти шляхом одночасно: убиті групою вороги зараховуються кожному, у кого таке
+  //   завдання (questOnKill); речі «принести» кожен здає окремо зі спільного інвентаря.
   const PROFESSION_QUEST_LEVEL = 12;
   const PROFESSION_END = { level: 14, pct: 0.8 };
   const PROFESSION_WEIGHTS = [6, 7, 8, 9, 10, 10, 11, 12, 13, 14];   // частки (%) шляху 12 → 14,80% для завдань 1–10
@@ -361,8 +370,9 @@
   const PROFESSION = { name: "Шлях професії", branches: PROFESSION_BRANCHES, total: PROFESSION_TOTAL };
 
   function professionState(save) {
-    save.story ??= {};
-    const st = save.story.profession ??= { part: 0, kills: 0, result: null };
+    let st;
+    if (save.memberIndex) st = save.character.profQuest ??= { part: 0, kills: 0, result: null };   // напарник
+    else { save.story ??= {}; st = save.story.profession ??= { part: 0, kills: 0, result: null }; }
     // Старі збереження: квест з 2 частин без гілки — починається заново (професію, якщо вже отримана, не чіпаємо)
     if (!st.result && st.part > 0 && !st.branch) { st.part = 0; st.kills = 0; }
     st.rewards ??= [];
@@ -670,12 +680,17 @@
     const ex = exploreInfo(save);
     if (ex?.part) out.push({ title: `«${EXPLORE.name}» (${ex.index}/${ex.total}): ${ex.part.title}`, special: true,
       lines: ex.progress.map(p => `${p.label}: ${p.have}/${p.need}`), where: GUILD_PLACE, ready: ex.complete });
-    const pr = professionInfo(save);
-    if (pr?.part) out.push({ title: `«${professionName(save)}» (${pr.index}/${pr.total}): ${pr.part.title}`, special: true,
-      lines: [...pr.progress.map(p => `${p.label}: ${p.have}/${p.need}`), "Нагорода: досвід (скільки — дізнаєтесь при здачі)"],
-      where: GUILD_PLACE, ready: pr.complete });
-    if (pr?.final) out.push({ title: `«${professionName(save)}»: завершення шляху`, special: true,
-      lines: ["Усі 10 завдань виконано. Нагорода за шлях — ???"], where: GUILD_PLACE, ready: true });
+    // «Шлях професії» — окремо для кожного героя групи
+    const members = RPG.partyMembers ? RPG.partyMembers(save) : [save];
+    for (const ms of members) {
+      const pr = professionInfo(ms);
+      const who = members.length > 1 ? `${ms.character.name}: ` : "";
+      if (pr?.part) out.push({ title: `${who}«${professionName(ms)}» (${pr.index}/${pr.total}): ${pr.part.title}`, special: true,
+        lines: [...pr.progress.map(p => `${p.label}: ${p.have}/${p.need}`), "Нагорода: досвід (скільки — дізнаєтесь при здачі)"],
+        where: GUILD_PLACE, ready: pr.complete });
+      if (pr?.final) out.push({ title: `${who}«${professionName(ms)}»: завершення шляху`, special: true,
+        lines: ["Усі 10 завдань виконано. Нагорода за шлях — ???"], where: GUILD_PLACE, ready: true });
+    }
     const vs = velesState(save);
     if (vs.stage >= 1 && vs.stage <= 4) out.push({ title: `«${VELES.name}»`, special: true,
       lines: [VELES.stages[vs.stage]], where: vs.stage >= 3 ? "Храм" : "Дубова Застава, Шинок біля млина, Храм", ready: false });
