@@ -1304,3 +1304,10 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .chronicle-dialog .fbook-rune-vals .rt-magic     { color: #1d4fb8; text-shadow: none; }
 .chronicle-dialog .fbook-rune-vals .rt-epic      { color: #7a2bb8; text-shadow: none; }
 .chronicle-dialog .fbook-rune-vals .rt-legendary { color: #b55e00; text-shadow: none; }
+
+/* ---------- Горно Сварога (Гільдія ремісників) ---------- */
+.rune-forge-dialog { max-width: 620px; }
+.rune-forge-slots { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.rune-forge-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; margin-top: 6px; max-height: 40vh; overflow-y: auto; }
+.rune-forge-pick { aspect-ratio: 1; min-height: 0; padding: 0; position: relative; }
+.rune-forge-pick.is-empty { opacity: .35; }

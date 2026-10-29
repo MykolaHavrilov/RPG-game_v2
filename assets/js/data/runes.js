@@ -112,5 +112,48 @@
   // Звичайні руни (по одній на кожен знак) — для тестового Іфрита
   const RUNE_IDS = Object.keys(RUNES).map(k => runeItemId(k));
 
-  Object.assign(RPG, { RUNES, RUNE_GRADES, RUNE_GRADE_ORDER, RUNE_KIND_NAME, runeItemId, RUNE_IDS });
+  // ---------- Горно Сварога (Гільдія ремісників, Торговий район) ----------
+  // 6 будь-яких рун (зламані теж) → 1 нова руна від звичайної до епічної (легендарна з горна не виходить).
+  // Кожна руна дає 1/6 свого рядка ODDS. Вид нової: усі шість одного виду → той самий вид, інакше — будь-яка з 28.
+  // За кожне розпалювання — данина fee золота.
+  const RUNE_FORGE = {
+    count: 6, fee: 200,
+    odds: { broken: [0.70, 0.25, 0.05], common: [0.50, 0.40, 0.10], magic: [0.20, 0.55, 0.25], epic: [0, 0.50, 0.50], legendary: [0, 0.50, 0.50] },
+    out: ["common", "magic", "epic"]
+  };
+  // Шанси для набору id рун: { common, magic, epic, kind | null }
+  function runeForgeOdds(ids) {
+    const sum = [0, 0, 0];
+    for (const id of ids) {
+      const row = RUNE_FORGE.odds[RPG.ITEMS[id]?.grade] || RUNE_FORGE.odds.common;
+      row.forEach((v, i) => { sum[i] += v / RUNE_FORGE.count; });
+    }
+    const kinds = new Set(ids.map(id => RPG.ITEMS[id]?.runeKind));
+    return { common: sum[0], magic: sum[1], epic: sum[2], kind: ids.length && kinds.size === 1 ? [...kinds][0] : null };
+  }
+  // Розпалити горно: ids — 6 id рун з інвентаря (можна однакові). Повертає { ok, reason } або { ok, id, grade, price }
+  function runeForge(save, ids) {
+    if (!Array.isArray(ids) || ids.length !== RUNE_FORGE.count) return { ok: false, reason: `Покладіть у горно ${RUNE_FORGE.count} рун.` };
+    if (ids.some(id => RPG.ITEMS[id]?.type !== "rune")) return { ok: false, reason: "У горно кладуть лише руни." };
+    const need = {};
+    for (const id of ids) need[id] = (need[id] || 0) + 1;
+    for (const [id, n] of Object.entries(need)) if (RPG.countItem(save, id) < n) return { ok: false, reason: `Бракує: ${RPG.ITEMS[id].name}.` };
+    if (save.character.gold < RUNE_FORGE.fee) return { ok: false, reason: `Данина горну — ${RUNE_FORGE.fee} золота, а у вас менше.` };
+    const odds = runeForgeOdds(ids);
+    let x = Math.random(), grade = "common";
+    for (const g of RUNE_FORGE.out) { if (x < odds[g]) { grade = g; break; } x -= odds[g]; }
+    const pool = Object.keys(RUNES).filter(k => !odds.kind || RUNES[k].kind === odds.kind);
+    const key = pool[Math.floor(Math.random() * pool.length)];
+    for (const [id, n] of Object.entries(need)) RPG.removeItem(save, id, n);
+    const outId = runeItemId(key, grade);
+    if (RPG.fitQty(save, outId, 1) < 1) {            // місця немає — повертаємо руни, данину не беремо
+      for (const [id, n] of Object.entries(need)) RPG.addItem(save, id, n);
+      return { ok: false, reason: "Інвентар повний — нікуди покласти нову руну." };
+    }
+    save.character.gold -= RUNE_FORGE.fee;
+    RPG.addItem(save, outId, 1);
+    return { ok: true, id: outId, grade, price: RUNE_FORGE.fee };
+  }
+
+  Object.assign(RPG, { RUNES, RUNE_GRADES, RUNE_GRADE_ORDER, RUNE_KIND_NAME, runeItemId, RUNE_IDS, RUNE_FORGE, runeForgeOdds, runeForge });
 })(window.RPG);

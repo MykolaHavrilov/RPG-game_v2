@@ -2461,11 +2461,86 @@
         return;
       }
       renderNpc(box, "kuzma");
+      // Горно Сварога — всередині Гільдії ремісників (data/runes.js → RUNE_FORGE)
+      if (RPG.RUNE_FORGE) {
+        const fr = el("div", "shop-row tool-row fbook-row rune-forge-row");
+        const info = el("div", "tool-info");
+        info.append(el("strong", null, "Горно Сварога"),
+          el("small", null, `Шість рун у вогонь — одна нова з попелу. Данина за кожне розпалювання — ${fmtNum(RPG.RUNE_FORGE.fee)} золота.`));
+        fr.append(info, button("До Горна Сварога", "wf wf-button", () => showRuneForge()));
+        box.append(fr);
+      }
       if (!RPG.hasCraftAccess(save)) return;
       renderToolShop(box);
     }
 
     // Знаряддя від Кузьми — одразу стають у кузню вашого дому
+    // ---------- Горно Сварога: 6 рун → 1 нова (data/runes.js → runeForge) ----------
+    function showRuneForge() {
+      document.querySelector(".rune-forge-dialog")?.remove();
+      const F = RPG.RUNE_FORGE;
+      const dlg = el("dialog", "notice-dialog rune-forge-dialog");
+      let picked = [], note = null;
+      const left = id => RPG.countItem(save, id) - picked.filter(x => x === id).length;
+      const draw = () => {
+        dlg.innerHTML = "";
+        const close = button("×", "notice-close", () => dlg.close());
+        close.setAttribute("aria-label", "Закрити горно");
+        dlg.append(close, el("h3", null, "Горно Сварога"));
+        dlg.append(el("p", "note", `Покладіть у горно ${F.count} будь-яких рун, зламані теж. Сварог переплавить їх в одну нову — від звичайної до епічної. Якщо всі шість одного виду, нова руна буде того ж виду. Данина — ${fmtNum(F.fee)} золота (у вас ${fmtNum(save.character.gold)}).`));
+        if (note) dlg.append(el("p", "forge-result" + (note.error ? " is-error" : ""), note.text));
+        // 6 слотів горна
+        const slots = el("div", "belt-slots rune-forge-slots");
+        for (let i = 0; i < F.count; i++) {
+          const id = picked[i];
+          const cell = button("", "wf wf-slot belt-slot" + (id ? " is-filled" : ""), () => { if (id) { picked.splice(i, 1); note = null; draw(); } });
+          if (id) { fillItemCell(cell, id, 1); cell.title = `${RPG.ITEMS[id].name} — натисніть, щоб вийняти`; }
+          else cell.append(el("span", "belt-empty", "порожньо"));
+          slots.append(cell);
+        }
+        dlg.append(slots);
+        if (picked.length) {
+          const o = RPG.runeForgeOdds(picked);
+          const k = o.kind ? RPG.RUNE_KIND_NAME[o.kind].toLowerCase() : "будь-яка з 28";
+          dlg.append(el("p", "forge-odds", (picked.length < F.count ? `Ще ${F.count - picked.length} — і горно готове. ` : "") +
+            `Вийде: ${F.out.filter(g => o[g] >= 0.005).map(g => `${RPG.RUNE_GRADES[g].prefix.replace(/ руна$/, "").replace(/^Руна$/, "звичайна").toLowerCase()} ${Math.round(o[g] * 100 * (F.count / picked.length))}%`).join(" · ")} · ${k}`));
+        }
+        const go = button(`Розпалити горно · ${fmtNum(F.fee)} зол.`, "wf wf-button", async () => {
+          const r = RPG.runeForge(save, picked);
+          if (!r.ok) { note = { text: r.reason, error: true }; draw(); return; }
+          await RPG.saveGame(save);
+          picked = [];
+          note = { text: `З попелу народилася нова руна: ${RPG.ITEMS[r.id].name}! −${fmtNum(r.price)} золота данини.` };
+          draw();
+        });
+        go.disabled = picked.length !== F.count || save.character.gold < F.fee;
+        const row = el("div", "row");
+        row.append(go);
+        if (picked.length) row.append(button("Вийняти все", "wf wf-secondary", () => { picked = []; note = null; draw(); }));
+        dlg.append(row);
+        // руни з інвентаря
+        const stacks = [];
+        for (const e of save.inventory) if (RPG.ITEMS[e.id]?.type === "rune" && !stacks.includes(e.id)) stacks.push(e.id);
+        const list = el("div", "rune-forge-list");
+        if (!stacks.length) list.append(el("p", "house-soon", "В інвентарі немає рун."));
+        for (const id of stacks) {
+          const n = left(id);
+          const b = button("", "wf wf-slot rune-forge-pick" + (n ? "" : " is-empty"), () => {
+            if (picked.length >= F.count || left(id) < 1) return;
+            picked.push(id); note = null; draw();
+          });
+          fillItemCell(b, id, n);
+          b.disabled = !n || picked.length >= F.count;
+          list.append(b);
+        }
+        dlg.append(el("strong", null, "Ваші руни — натисніть, щоб покласти в горно:"), list);
+      };
+      dlg.addEventListener("close", () => { dlg.remove(); renderAll(); });
+      document.body.append(dlg);
+      draw();
+      dlg.showModal();
+    }
+
     function renderToolShop(box) {
       const h = RPG.forgeHouse(save);
       const wrap = el("div", "stack tool-shop");
