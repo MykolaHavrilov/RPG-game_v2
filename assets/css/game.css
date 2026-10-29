@@ -1292,3 +1292,15 @@ main > a.location { display: flex; margin-bottom: 10px; }
 .fbook-god .fbook-h { margin: .2em 0 .25em; }
 .fbook-god .chronicle-p { margin-bottom: .45em; }
 .fbook-rel { font-size: .95em; color: #4e3016; }
+
+/* ---------- Книга «Руни Небесної Кузні» (data/books.js → RUNE_BOOK, { auto: "runes:<вид>" }) ---------- */
+.fbook-rune { display: grid; grid-template-columns: 3.2em minmax(0, 1fr); gap: .2em .7em; align-items: start; margin: 0 0 .75em; break-inside: avoid; }
+.fbook-rune-icon { width: 3.2em; height: 3.2em; border-radius: 6px; box-shadow: 0 1px 3px rgba(40, 20, 5, .45); }
+.fbook-rune-body { display: flex; flex-direction: column; gap: .1em; }
+.fbook-rune-name { font-size: 1.05em; color: #4a160c; }
+.fbook-rune-fx { line-height: 1.25; }
+.fbook-rune-vals { display: flex; flex-wrap: wrap; gap: .2em .8em; font-weight: 700; font-size: .92em; }
+.chronicle-dialog .fbook-rune-vals .rt-common    { color: #3a2614; text-shadow: none; }
+.chronicle-dialog .fbook-rune-vals .rt-magic     { color: #1d4fb8; text-shadow: none; }
+.chronicle-dialog .fbook-rune-vals .rt-epic      { color: #7a2bb8; text-shadow: none; }
+.chronicle-dialog .fbook-rune-vals .rt-legendary { color: #b55e00; text-shadow: none; }

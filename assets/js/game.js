@@ -653,6 +653,29 @@
       const rows = [["Скриня Домівки (спільна)", "50", "як в інвентарі", "1"]];
       for (const [k, c] of Object.entries(RPG.CRAFT_CHESTS)) rows.push([`${c.name} (${RPG.CRAFT_CHEST_ALLOW_TEXT[k]})`, String(c.size), c.stack > 1 ? `${fmtNum(c.stack)} шт` : "1 річ", String(c.max)]);
       frag.append(forgeBookTable(["Скриня", "Комірок", "У комірці", "Скринь"], rows));
+    } else if (kind.startsWith("runes:")) {
+      // Руни одного виду з data/runes.js: значок (іконка руни), назва, значення знака, ефект і сила за рідкістю
+      const want = kind.slice(6);
+      const R = ["common", "magic", "epic", "legendary"];
+      for (const pan of ["norse", "slavic"]) {
+        const list = Object.entries(RPG.RUNES || {}).filter(([, r]) => r.kind === want && r.pantheon === pan);
+        if (!list.length) continue;
+        if (want !== "universal") frag.append(el("p", "fbook-group", pan === "norse" ? "Скандинавські знаки Футарка — дар Асгарду" : "Слов'янські знаки — дар Ірію"));
+        for (const [key, r] of list) {
+          const card = el("section", "fbook-rune");
+          const icon = el("span", "fbook-rune-icon");
+          Object.assign(icon.style, RPG.itemIconStyle(RPG.runeItemId(key)) || {});
+          icon.setAttribute("role", "img");
+          icon.setAttribute("aria-label", `Знак ${r.name}`);
+          const body = el("div", "fbook-rune-body");
+          body.append(el("strong", "fbook-rune-name", r.name), el("small", "fbook-mats", r.meaning), el("span", "fbook-rune-fx", r.effect));
+          const vals = el("span", "fbook-rune-vals");
+          R.forEach((g, i) => vals.append(el("span", "rt-" + g, r.vals[i])));
+          body.append(vals);
+          card.append(icon, body);
+          frag.append(card);
+        }
+      }
     } else if (kind === "disassemble") {
       const extra = { broken: "—", common: "—", magic: "1 магічний матеріал", epic: "1 епічний матеріал", legendary: "Небесна іскра" };
       frag.append(forgeBookTable(["Рідкість речі", "Назад", "Додатково"], Object.entries(RPG.DISASSEMBLE_SHARE).map(([r, sh]) =>
@@ -700,6 +723,11 @@
     if (id === "chronicle") showChronicle(save);
     else if (id === "forge") showForgeBook(save);
     else if (id === "gods") showDataBook(save, RPG.GODS_BOOK, "world", "is-gods-book");
+    else if (id === "runes") {
+      // прочитана книга рун — гравець починає бачити гнізда в речах (оновлення рун)
+      if (!save.books?.runesRead) { RPG.addToLibrary(save, "runesRead"); RPG.saveGame(save).catch(e => console.error(e)); }
+      showDataBook(save, RPG.RUNE_BOOK, "word", "is-rune-book");
+    }
   }
   // Будь-яка книга з даних у вікні-книзі (як літопис)
   function showDataBook(save, B, startKey, cls = "") {
@@ -3859,6 +3887,10 @@
             }
             const b = RPG.addChampionBounty(save, e.id);
             summary.push(`Гільдія авантюристів заплатить ${b.exp} EXP${group ? " кожному герою" : ""} (+ бонуси) і ${b.gold} золота (нагорода ×5)`);
+          }
+          // Книга «Руни Небесної Кузні»: після ПЕРШОЇ перемоги над Володарем Темного лісу — у бібліотеку дому
+          if (e.id === "forest_lord" && RPG.RUNE_BOOK && RPG.addToLibrary(save, "runes")) {
+            summary.push(`📜 Серед трофеїв Володаря — книга Сварога «${RPG.RUNE_BOOK.title}»! Вона чекатиме в бібліотеці вашого дому (Спальний район Дубової Застави).`);
           }
           // Мішечок на пояс: 1% з кожного переможеного боса, окремо від звичайної здобичі
           const pouch = RPG.rollPouchDrop?.(e.id);
