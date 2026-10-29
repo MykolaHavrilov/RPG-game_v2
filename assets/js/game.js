@@ -2461,8 +2461,9 @@
         return;
       }
       renderNpc(box, "kuzma");
-      // Горно Сварога — всередині Гільдії ремісників (data/runes.js → RUNE_FORGE)
-      if (RPG.RUNE_FORGE) {
+      // Горно Сварога — всередині Гільдії ремісників (data/runes.js → RUNE_FORGE); з'являється лише після знахідки
+      // другої книги Сварога «Руни Небесної Кузні» (save.books.runes)
+      if (RPG.RUNE_FORGE && save.books?.runes) {
         const fr = el("div", "shop-row tool-row fbook-row rune-forge-row");
         const info = el("div", "tool-info");
         info.append(el("strong", null, "Горно Сварога"),

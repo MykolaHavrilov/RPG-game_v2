@@ -116,6 +116,7 @@
   // 6 будь-яких рун (зламані теж) → 1 нова руна від звичайної до епічної (легендарна з горна не виходить).
   // Кожна руна дає 1/6 свого рядка ODDS. Вид нової: усі шість одного виду → той самий вид, інакше — будь-яка з 28.
   // За кожне розпалювання — данина fee золота.
+  // Горно з'являється в гільдії лише після того, як герой знайшов другу книгу Сварога (save.books.runes).
   const RUNE_FORGE = {
     count: 6, fee: 200,
     odds: { broken: [0.70, 0.25, 0.05], common: [0.50, 0.40, 0.10], magic: [0.20, 0.55, 0.25], epic: [0, 0.50, 0.50], legendary: [0, 0.50, 0.50] },
@@ -133,6 +134,7 @@
   }
   // Розпалити горно: ids — 6 id рун з інвентаря (можна однакові). Повертає { ok, reason } або { ok, id, grade, price }
   function runeForge(save, ids) {
+    if (!save.books?.runes) return { ok: false, reason: "Горно Сварога відкривається тим, хто знайшов книгу «Руни Небесної Кузні»." };
     if (!Array.isArray(ids) || ids.length !== RUNE_FORGE.count) return { ok: false, reason: `Покладіть у горно ${RUNE_FORGE.count} рун.` };
     if (ids.some(id => RPG.ITEMS[id]?.type !== "rune")) return { ok: false, reason: "У горно кладуть лише руни." };
     const need = {};
