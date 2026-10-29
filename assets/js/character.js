@@ -742,6 +742,18 @@ function grantGodsOrb(save) {
   addItem(save, GODS_ORB, 1);
   return { ok: true };
 }
+// Прибрати сферу зі збереження (код god.mod.off): з інвентаря й з усіх скринь. Повертає { ok, removed }
+function removeGodsOrb(save) {
+  let removed = 0;
+  const strip = list => {
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i]?.id === GODS_ORB) { removed += list[i].qty || 1; list.splice(i, 1); }
+    }
+  };
+  strip(save.inventory || []);
+  for (const list of Object.values(save.chests || {})) if (Array.isArray(list)) strip(list);
+  return removed ? { ok: true, removed } : { ok: false, reason: "Сфери Богів у цьому збереженні немає." };
+}
 
 // ---------- Скрині ремесла на складі власного дому (план крафту, етап 5) ----------
 // Склад добудовують при домі; на складі купують «меблі» — скрині ремесла. Кожна скриня — окреме
@@ -1434,7 +1446,7 @@ function applyReward(save, exp, loot) {
 }
 
 Object.assign(RPG, {
-  autoPotion, AUTO_POTIONS, GODS_ORB, godsOrb, hasGodsOrb, grantGodsOrb, INV_SIZE, invFree, fitQty, invSize, BELT_SLOTS, POUCH_DROP, beltOf, beltBonus, putOnBelt, takeFromBelt, rollPouchDrop,
+  autoPotion, AUTO_POTIONS, GODS_ORB, godsOrb, hasGodsOrb, grantGodsOrb, removeGodsOrb, INV_SIZE, invFree, fitQty, invSize, BELT_SLOTS, POUCH_DROP, beltOf, beltBonus, putOnBelt, takeFromBelt, rollPouchDrop,
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
   HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, enterHouse,

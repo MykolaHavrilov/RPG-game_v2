@@ -1409,21 +1409,22 @@
     const exportBtn = $("export-btn");
     const current = await RPG.loadCurrentGame().catch(() => null);
 
-    // Рядок коду: єдиний код «god.mod» — Сфера Богів у інвентар поточної гри (одна на збереження).
-    // Будь-який інший текст нічого не виконує.
+    // Рядок коду: «god.mod» — Сфера Богів у інвентар поточної гри (одна на збереження);
+    // «god.mod.off» — прибрати сферу з гри (з інвентаря й скринь). Будь-який інший текст нічого не виконує.
     const codeForm = $("code-form"), codeInput = $("code-input");
     if (codeForm) {
       codeForm.addEventListener("submit", async ev => {
         ev.preventDefault();
         const code = codeInput.value.trim().toLowerCase();
         codeInput.value = "Код";
-        if (code !== "god.mod") { showMsg(msg, "Невірний код.", true); return; }
+        if (code !== "god.mod" && code !== "god.mod.off") { showMsg(msg, "Невірний код.", true); return; }
         const s = await RPG.loadCurrentGame().catch(() => null);
         if (!s) { showMsg(msg, "Немає активної гри.", true); return; }
-        const r = RPG.grantGodsOrb(s);
+        const off = code === "god.mod.off";
+        const r = off ? RPG.removeGodsOrb(s) : RPG.grantGodsOrb(s);
         if (!r.ok) { showMsg(msg, r.reason, true); return; }
         await RPG.saveGame(s);
-        showMsg(msg, "Сфера Богів — в інвентарі.");
+        showMsg(msg, off ? "Сферу Богів прибрано з гри." : "Сфера Богів — в інвентарі.");
       });
     }
     if (!current) {
