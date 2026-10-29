@@ -41,7 +41,10 @@
     return null;
   }
 
-  function travelSeconds(cells, region) {
+  // save — щоб врахувати Сферу Богів (data/items.js → orb_gods: будь-який перехід за gods.travelSec секунд)
+  function travelSeconds(cells, region, save = null) {
+    const orb = save && RPG.godsOrb ? RPG.godsOrb(save) : null;
+    if (orb?.travelSec) return orb.travelSec;
     if (region === "city") return CITY_TRAVEL_SEC;
     return cells * RPG.TRAVEL_SEC_PER_CELL;
   }
@@ -66,7 +69,7 @@
     if (!can.ok) return can;
     const r = route(region, spot, to);
     if (!r) return { ok: false, reason: "Туди немає дороги." };
-    const ms = travelSeconds(r.cells, region) * 1000;
+    const ms = travelSeconds(r.cells, region, save) * 1000;
     save.travel = { region, from: spot, to, cells: r.cells, pts: r.pts, start: now, end: now + ms };
     return { ok: true, cells: r.cells, seconds: ms / 1000 };
   }

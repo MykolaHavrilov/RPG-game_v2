@@ -4863,7 +4863,7 @@
       if (!can.ok) return { kind: "closed", text: can.reason };
       const r = RPG.route(region, here.spot, id);
       if (!r) return { kind: "closed", text: "Туди немає дороги." };
-      return { kind: "open", text: `Час у дорозі: ${RPG.fmtLeft(RPG.travelSeconds(r.cells, region) * 1000)}`, cells: r.cells };
+      return { kind: "open", text: `Час у дорозі: ${RPG.fmtLeft(RPG.travelSeconds(r.cells, region, save) * 1000)}`, cells: r.cells };
     }
 
     function shortText(s, n = 130) {
@@ -5066,7 +5066,7 @@
         return;
       }
       if (st.kind === "open") {
-        details.append(button(`Вирушити · ${RPG.fmtLeft(RPG.travelSeconds(st.cells, region) * 1000)}`, "wf wf-button", () => go(selected)));
+        details.append(button(`Вирушити · ${RPG.fmtLeft(RPG.travelSeconds(st.cells, region, save) * 1000)}`, "wf wf-button", () => go(selected)));
         details.append(el("p", "note", "Переміщення не можна скасувати; у дорозі доступні лише «Персонаж», «Інвентар» і «Мапа»."));
       } else {
         details.append(el("p", "status", st.text));
