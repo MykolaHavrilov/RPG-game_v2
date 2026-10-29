@@ -2072,11 +2072,10 @@
         if (!r.ok) return { text: `«${r.reason}»`, error: true, to: "progress" };
         await RPG.saveGame(save);
         if (!r.finished) return { text: "Капітан задоволено киває. «Добре. Тепер — припаси.»", to: "progress" };
-        journalReward(save, "Завдання «Варта Центральної брами» виконано",
-          `Нагорода: +${fmtNum(RPG.GATE.reward.exp)} досвіду${r.levelUps.length ? `, новий рівень: ${r.levelUps.at(-1)}!` : "."}`);
+        const dot = t => (t.endsWith("!") ? t : t + ".");
+        journalReward(save, "Завдання «Варта Центральної брами» виконано", dot(`Нагорода: досвід — ${r.expText}`));
         await RPG.saveGame(save);
-        return { text: `Капітан віддає наказ відчинити браму. «Ти з наших. Темний ліс чекає.» +${fmtNum(RPG.GATE.reward.exp)} досвіду` +
-          (r.levelUps.length ? `, новий рівень: ${r.levelUps.at(-1)}!` : ".") };
+        return { text: dot(`Капітан віддає наказ відчинити браму. «Ти з наших. Темний ліс чекає.» Досвід — ${r.expText}`) };
       },
       async gate_go() {
         if (!RPG.isGateOpen(save)) return { text: "«Брама зачинена.»", error: true };
@@ -2129,9 +2128,8 @@
         const r = RPG.turnInCoal(save);
         if (!r.ok) return { text: `«${r.reason}»`, error: true };
         await RPG.saveGame(save);
-        const up = r.levelUps.length ? ` Новий рівень: ${r.levelUps.at(-1)}!` : "";
-        return { text: `Вози з вугіллям рушають до складів Мерії. +${fmtNum(RPG.COAL.reward.exp)} досвіду, ` +
-          `срібні злитки ×${RPG.COAL.reward.items[0].qty}. Спальний район відкрито.${up}` };
+        return { text: `Вози з вугіллям рушають до складів Мерії. Срібні злитки ×${RPG.COAL.reward.items[0].qty}. ` +
+          `Спальний район відкрито. Досвід — ${r.expText}${r.expText.endsWith("!") ? "" : "."}` };
       },
       // Віддати Захару обірваний пергамент — книга відновлюється
       async parchment_give() {
@@ -2633,7 +2631,8 @@
       renderExplore(box);
       renderProfession(box);
       box.append(el("p", "note",
-        `«Роботи вистачає — беріть до ${RPG.questMaxActive(save)} завдань одночасно.» Виконано завдань: ${qs.done}.`));
+        `«Роботи вистачає — беріть до ${RPG.questMaxActive(save)} завдань одночасно.» Виконано завдань: ${qs.done}.` +
+        (RPG.partySize(save) > 1 ? " Досвід за завдання отримує кожен герой групи — повністю, ще й з бонусами (група, тимчасові ефекти, руни й речі)." : "")));
 
       // «Здати все»: разом усі виконані завдання гільдії та нагороди за чемпіонів
       if (qs.active.length || qs.bounties.length) {
@@ -2641,7 +2640,7 @@
         const all = button(readyCount ? `Здати все (${readyCount})` : "Здати все", "wf wf-button turn-in-all", async () => {
           let exp = 0, gold = 0, quests = 0, bounties = 0, lastLevel = null;
           const items = {};
-          const bountyExp = {};   // досвід за чемпіонів — кожному герою окремо (з бонусами)
+          const bountyExp = {};   // досвід (чемпіони й завдання) — кожному герою окремо, з бонусами
           const noteLevel = lv => { if (lv.length) lastLevel = lv[lv.length - 1]; };
           for (const bounty of [...qs.bounties]) {
             const res = RPG.claimBounty(save, bounty.id);
@@ -2656,17 +2655,18 @@
             const res = RPG.turnInQuest(save, quest.id);
             if (!res.ok) continue;
             quests++;
-            exp += quest.reward.exp;
             gold += quest.reward.gold;
             for (const it of quest.reward.items) items[it.id] = (items[it.id] || 0) + it.qty;
+            for (const h of res.heroes) bountyExp[h.name] = (bountyExp[h.name] || 0) + h.exp;
             noteLevel(res.levelUps);
-            journalReward(save, `Завдання «${RPG.questTitle(quest)}» здано`, `Нагорода: ${RPG.describeReward(quest.reward)}.`);
+            const t = `Нагорода: ${RPG.describeReward({ ...quest.reward, exp: null })}; досвід — ${res.expText}`;
+            journalReward(save, `Завдання «${RPG.questTitle(quest)}» здано`, t.endsWith("!") ? t : t + ".");
           }
           if (!quests && !bounties) { showMsg(msg, "Немає виконаних завдань.", true); return; }
-          const reward = RPG.describeReward({ exp, gold, items: Object.entries(items).map(([id, qty]) => ({ id, qty })) });
+          const reward = RPG.describeReward({ exp: null, gold, items: Object.entries(items).map(([id, qty]) => ({ id, qty })) });
           const what = [quests ? `завдань: ${quests}` : "", bounties ? `нагород за чемпіонів: ${bounties}` : ""].filter(Boolean).join(", ");
           const names = Object.keys(bountyExp);
-          const bTxt = names.length ? ` За чемпіонів досвід${names.length > 1 ? " кожному" : ""}: ` +
+          const bTxt = names.length ? ` Досвід${names.length > 1 ? " кожному" : ""}: ` +
             names.map(n => names.length > 1 ? `${n} +${fmtNum(bountyExp[n])}` : `+${fmtNum(bountyExp[n])}`).join(", ") + " EXP (з бонусами)." : "";
           const txt = `Здано ${what}. Нагорода: ${reward}.${bTxt}` + (lastLevel ? ` Новий рівень: ${lastLevel}!` : "");
           await RPG.saveGame(save);
@@ -2709,8 +2709,8 @@
         const turnIn = button("Здати", "wf wf-button", async () => {
           const res = RPG.turnInQuest(save, quest.id);
           if (!res.ok) { showMsg(msg, res.reason, true); return; }
-          const txt = `Завдання виконано! Нагорода: ${RPG.describeReward(quest.reward)}.` +
-            (res.levelUps.length ? ` Новий рівень: ${res.levelUps[res.levelUps.length - 1]}!` : "");
+          const t = `Завдання виконано! Нагорода: ${RPG.describeReward({ ...quest.reward, exp: null })}; досвід — ${res.expText}`;
+          const txt = t.endsWith("!") ? t : t + ".";
           journalReward(save, `Завдання «${RPG.questTitle(quest)}» здано`, txt);
           await RPG.saveGame(save);
           showMsg(msg, txt);
@@ -2784,13 +2784,15 @@
         const b = button(info.index < info.total ? "Здати частину" : "Завершити завдання", "wf wf-button", async () => {
           const r = RPG.turnInExplore(save);
           if (!r.ok) { showMsg(msg, r.reason, true); return; }
-          const up = r.levelUps.length ? ` Новий рівень: ${r.levelUps[r.levelUps.length - 1]}!` : "";
+          const rest = RPG.describeExploreReward(r.part || info.part, true);
+          const up = [rest, r.expText ? `досвід — ${r.expText}` : ""].filter(Boolean).join("; ");
+          const upTxt = up ? ` Нагорода: ${up}${up.endsWith("!") ? "" : "."}` : "";
           journalReward(save, r.finished ? `Завдання «${E.name}» виконано` : `«${E.name}»: частину ${info.index} з ${info.total} здано`,
-            `Нагорода: ${RPG.describeExploreReward(r.part || info.part)}.${up}`);
+            upTxt.trim() || "Нагороди немає.");
           if (r.finished) RPG.storyState(save).announced = true;
           await RPG.saveGame(save);
-          if (r.finished) showExploreUnlocked(up);
-          else showMsg(msg, `Частину виконано! Нагорода: ${RPG.describeExploreReward(r.part)}.${up} Далі: ${E.parts[RPG.storyState(save).part - 1].title}.`);
+          if (r.finished) showExploreUnlocked(upTxt);
+          else showMsg(msg, `Частину виконано!${upTxt} Далі: ${E.parts[RPG.storyState(save).part - 1].title}.`);
           renderAll();
         });
         b.disabled = !info.complete;

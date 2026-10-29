@@ -122,7 +122,7 @@
   }
 
   function describeReward(r) {
-    const parts = [`${r.exp} EXP`, `${r.gold} золота`];
+    const parts = r.exp == null ? [`${r.gold} золота`] : [`${r.exp} EXP`, `${r.gold} золота`];
     for (const it of r.items) parts.push(`${RPG.ITEMS[it.id].name} × ${it.qty}`);
     return parts.join(", ");
   }
@@ -162,8 +162,8 @@
     q.done++;
     save.character.gold += quest.reward.gold;
     for (const it of quest.reward.items) RPG.addItem(save, it.id, it.qty);
-    const levelUps = RPG.addExp(save, quest.reward.exp);
-    return { ok: true, quest, levelUps };
+    const g = grantPartyExp(save, quest.reward.exp);
+    return { ok: true, quest, levelUps: g.levelUps, heroes: g.heroes, expText: g.text };
   }
 
   // Після перемоги над ворогом. Повертає рядки прогресу для повідомлення.
@@ -256,10 +256,10 @@
     return { st, total, part, index: st.part, progress, complete: progress.every(p => p.have >= p.need) };
   }
 
-  function describeExploreReward(part) {
+  function describeExploreReward(part, noExp = false) {
     const r = part.reward;
     const out = [];
-    if (r.exp) out.push(`${r.exp} EXP`);
+    if (r.exp && !noExp) out.push(`${r.exp} EXP`);
     for (const it of r.items) out.push(`${RPG.ITEMS[it.id].name} × ${it.qty}`);
     if (r.unlock === "center") out.push("Дошка оголошень біля Мерії (найм у групу)");
     return out.join(", ");
@@ -281,10 +281,10 @@
     const part = info.part;
     for (const b of part.bring || []) RPG.removeItem(save, b.id, b.qty);
     for (const it of part.reward.items) RPG.addItem(save, it.id, it.qty);
-    const levelUps = part.reward.exp ? RPG.addExp(save, part.reward.exp) : [];
+    const g = part.reward.exp ? grantPartyExp(save, part.reward.exp) : { levelUps: [], heroes: [], text: "" };
     info.st.part++;
     info.st.kills = 0;
-    return { ok: true, part, levelUps, finished: info.st.part > EXPLORE.parts.length };
+    return { ok: true, part, levelUps: g.levelUps, heroes: g.heroes, expText: g.text, finished: info.st.part > EXPLORE.parts.length };
   }
 
   // ---------- Квест «Шлях професії» ----------
@@ -514,8 +514,8 @@
     for (const b of info.part.bring || []) RPG.removeItem(save, b.id, b.qty);
     info.st.part++; info.st.kills = 0;
     const finished = info.st.part > GATE.parts.length;
-    const levelUps = finished ? RPG.addExp(save, GATE.reward.exp) : [];
-    return { ok: true, finished, levelUps };
+    const g = finished ? grantPartyExp(save, GATE.reward.exp) : { levelUps: [], heroes: [], text: "" };
+    return { ok: true, finished, levelUps: g.levelUps, heroes: g.heroes, expText: g.text };
   }
 
   // ---------- Квест Мерії «Збір вугілля» (план крафту, етап 3) ----------
@@ -565,8 +565,8 @@
     }
     for (const it of COAL.reward.items) RPG.addItem(save, it.id, it.qty);
     info.st.part = 2;
-    const levelUps = RPG.addExp(save, COAL.reward.exp);
-    return { ok: true, levelUps };
+    const g = grantPartyExp(save, COAL.reward.exp);
+    return { ok: true, levelUps: g.levelUps, heroes: g.heroes, expText: g.text };
   }
 
   // ---------- Нагороди за чемпіонів ----------
@@ -617,6 +617,27 @@
     return { k, j, r, x, total: k + j + r + x, parts };
   }
 
+  // Досвід квесту N — КОЖНОМУ герою групи: 100% + бонуси expBonusParts (у кожного свої руни й речі).
+  // Так нараховують усі квести: завдання гільдії, «Час дослідити», «Варта Центральної брами», «Збір вугілля»,
+  // нагороди за чемпіонів. Виняток — «Шлях професії»: він у кожного героя свій і веде рівно до 14 рівня 80%.
+  // Повертає { heroes: [{ name, exp, bonusPct, parts, levelUps }], levelUps (головного), text — опис для повідомлення }
+  function grantPartyExp(save, N) {
+    const members = RPG.partyMembers ? RPG.partyMembers(save) : [save];
+    const heroes = members.map(ms => {
+      const bonus = expBonusParts(save, ms);
+      const exp = Math.round(N * (1 + bonus.total / 100));
+      const levelUps = RPG.addExp(ms, exp);
+      return { name: ms.character.name, exp, bonusPct: bonus.total, parts: bonus.parts, levelUps };
+    });
+    return { heroes, levelUps: heroes[0].levelUps, text: partyExpText(heroes, N) };
+  }
+  // «640 EXP (200 + 220%: група з 3 героїв +20%, …)» — для одного героя без імені, для групи — з іменами
+  function partyExpText(heroes, N) {
+    const one = h => `${h.exp} EXP` + (h.bonusPct ? ` (${N} + ${h.bonusPct}%: ${h.parts.map(p => `${p.label} +${p.pct}%`).join(", ")})` : "") +
+      (h.levelUps.length ? `, новий рівень ${h.levelUps[h.levelUps.length - 1]}!` : "");
+    return heroes.length > 1 ? heroes.map(h => `${h.name}: ${one(h)}`).join("; ") : one(heroes[0]);
+  }
+
   // Нагорода за чемпіона: золото — у спільний гаманець; досвід — КОЖНОМУ герою групи:
   //   100% досвіду завдання + бонуси (expBonusParts — у кожного свої руни й речі).
   // Повертає { ok, bounty, heroes: [{ name, exp, bonusPct, parts, levelUps }], levelUps (головного) }
@@ -626,22 +647,12 @@
     if (i < 0) return { ok: false, reason: "Нагороди немає." };
     const [b] = q.bounties.splice(i, 1);
     save.character.gold += b.gold;
-    const members = RPG.partyMembers ? RPG.partyMembers(save) : [save];
-    const heroes = members.map(ms => {
-      const bonus = expBonusParts(save, ms);
-      const exp = Math.round(b.exp * (1 + bonus.total / 100));
-      const levelUps = RPG.addExp(ms, exp);
-      return { name: ms.character.name, exp, bonusPct: bonus.total, parts: bonus.parts, levelUps };
-    });
-    return { ok: true, bounty: b, heroes, levelUps: heroes[0].levelUps };
+    const g = grantPartyExp(save, b.exp);
+    return { ok: true, bounty: b, heroes: g.heroes, levelUps: g.levelUps, expText: g.text };
   }
   // Текст нагороди за чемпіона для повідомлення й журналу
   function bountyRewardText(res) {
-    const b = res.bounty;
-    const one = h => `${h.exp} EXP` + (h.bonusPct ? ` (${b.exp} + ${h.bonusPct}%: ${h.parts.map(p => `${p.label} +${p.pct}%`).join(", ")})` : "") +
-      (h.levelUps.length ? `, новий рівень ${h.levelUps[h.levelUps.length - 1]}!` : "");
-    const exp = res.heroes.length > 1 ? res.heroes.map(h => `${h.name}: ${one(h)}`).join("; ") : one(res.heroes[0]);
-    const txt = `Нагорода за чемпіона «${b.name}»: +${b.gold} золота; досвід — ${exp}`;
+    const txt = `Нагорода за чемпіона «${res.bounty.name}»: +${res.bounty.gold} золота; досвід — ${res.expText}`;
     return txt.endsWith("!") ? txt : txt + ".";
   }
 
@@ -770,7 +781,7 @@
   }
 
   Object.assign(RPG, {
-    addChampionBounty, claimBounty, bountyRewardText, expBonusParts, EXP_BONUS_EXTRA, questLog,
+    addChampionBounty, claimBounty, bountyRewardText, expBonusParts, EXP_BONUS_EXTRA, grantPartyExp, partyExpText, questLog,
     QUEST_MAX_ACTIVE: MAX_ACTIVE, QUEST_MAX_ACTIVE_PRO: MAX_ACTIVE_PRO, QUEST_MAX_SAME: MAX_SAME, questMaxActive: maxActive, questSameCount: sameCount,
     questState: state, fillOffers, questTitle, questProgress, isQuestComplete: isComplete,
     describeReward, acceptQuest, abandonQuest, turnInQuest, questOnKill,
