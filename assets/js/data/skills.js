@@ -1,7 +1,7 @@
 // ============================================================
 // data/skills.js — ВОЛОДІННЯ ЗБРОЄЮ та АКТИВНІ НАВИЧКИ
 //
-// Володіння (save.character.mastery): меч, кинджал, сокира, лук, посох.
+// Володіння (save.character.mastery, досвід — masteryExp): меч, кинджал, сокира, лук, посох. Росте за виграні бої (крива 5·n²).
 //   Рівень 0–20. Тренується в Гільдії авантюристів у Тренера (за золото).
 //   Персонаж 1–9 рівня — максимум 10; з 10 рівня — максимум 20.
 //   Володіння 10 потрібне для зброї 2 виду (кам'яної), 20 — для 3 виду (залізної).
@@ -70,14 +70,117 @@
   };
   const DECIMAL = ["crit", "dodge", "attackSpeedPct"];
 
-  // Максимальний рівень володіння для рівня персонажа
-  function masteryCap(charLevel) {
-    return charLevel < 10 ? 10 : MASTERY_MAX;
+  // Найвищий рівень, якого герой досягав (поточна професія або попередні — character.classHistory).
+  // Після нової професії рівень класу починається з 1, але досягнуте раніше не губиться.
+  function peakLevel(save) {
+    const ch = save.character;
+    return Math.max(ch.level || 1, ...(ch.classHistory || []).map(h => h.level || 0));
+  }
+  // Максимальний рівень володіння: до 10 рівня персонажа — 10, далі — 20.
+  // arg — рівень персонажа або сам герой (тоді береться peakLevel: професія межу не знижує)
+  function masteryCap(arg) {
+    const lvl = typeof arg === "object" && arg ? peakLevel(arg) : arg;
+    return lvl < 10 ? 10 : MASTERY_MAX;
   }
 
-  // Ціна тренування до рівня next (у золоті)
+  // Стара ціна тренування за золото (більше не використовується — тепер володіння росте в боях)
   function masteryCost(next) {
     return 2 * next * next + 3 * next;
+  }
+
+  // ---------- Досвід володіння (росте за виграні бої) ----------
+  // Крива B: щоб піднятися з рівня n−1 до n, потрібно 5·n² досвіду володіння
+  //   (1 → 5, 5 → 125, 10 → 500, 20 → 2000; разом до 10 — 1 925, до 20 — 14 350).
+  // Стан: character.mastery[type] — рівень, character.masteryExp[type] — досвід усередині рівня (дробовий).
+  // За кожен ВИГРАНИЙ бій кожен живий герой отримує досвід за зброю у своїй правій руці
+  // (Берсерк із двома сокирами — один раз):
+  //   досвід = (1 + додаткові очки) × (1 + сума % / 100)
+  //   додаткові очки: +0,5 за кожного ворога понад першого; +2 за чемпіона; +5 за боса;
+  //                   +1 — тренування в Брута (тимчасово, уся група, TRAINER_BOOST);
+  //   відсотки: +50% — серед ворогів є сильніший (рівень ≥ героя + 2); +100% — Джерело Велеса;
+  //             стат masteryPct речей і рун героя (поки таких немає — місце під майбутні руни);
+  //   0 — якщо всі вороги слабші за героя на 10+ рівнів (MASTERY_WEAK_GAP, щоб не фармили щурів).
+  // На межі (masteryCap) досвід накопичується лише до повного рівня, далі не росте.
+  const masteryExpNeed = n => 5 * n * n;
+  const TRAINER_BOOST = { cost: 10000, flat: 1, durationMs: 30 * 60 * 1000 };
+  const MASTERY_WEAK_GAP = 10;   // усі вороги слабші на стільки рівнів і більше — досвіду володіння немає
+
+  function masteryProgress(save, type) {
+    const ch = save.character;
+    const level = (ch.mastery || {})[type] || 0;
+    const exp = (ch.masteryExp || {})[type] || 0;
+    return { level, exp, need: level >= MASTERY_MAX ? 0 : masteryExpNeed(level + 1), cap: masteryCap(save) };
+  }
+
+  // Тренування в Брута: save.trainerBoost = { until } — діє на всю групу, лише одне активне
+  function trainerBoostLeft(save, now = Date.now()) {
+    return Math.max(0, (save.trainerBoost?.until || 0) - now);
+  }
+  function buyTrainerBoost(save, now = Date.now()) {
+    if (trainerBoostLeft(save, now)) return { ok: false, reason: `Тренування вже триває — ще ${Math.ceil(trainerBoostLeft(save, now) / 60000)} хв.` };
+    if ((save.character.gold || 0) < TRAINER_BOOST.cost) return { ok: false, reason: `Не вистачає золота (потрібно ${TRAINER_BOOST.cost}).` };
+    save.character.gold -= TRAINER_BOOST.cost;
+    save.trainerBoost = { until: now + TRAINER_BOOST.durationMs };
+    return { ok: true, minutes: TRAINER_BOOST.durationMs / 60000, cost: TRAINER_BOOST.cost };
+  }
+
+  function runeMasteryPct(runeId) {
+    const it = RPG.ITEMS[runeId];
+    const R = it?.type === "rune" && RPG.RUNES?.[it.rune];
+    if (!R || R.stat !== "masteryPct") return 0;
+    const gi = RPG.RUNE_GRADES?.[it.grade]?.val ?? -1;
+    return gi >= 0 ? parseFloat(String(R.vals[gi]).replace(/[^\d.,-]/g, "").replace(",", ".")) || 0 : 0;
+  }
+  // Скільки досвіду володіння отримує герой ms (вигляд героя) за виграний бій.
+  // foes — [{ id, champion }] вороги бою; save — спільний сейв (тренер, Джерело Велеса).
+  // Повертає { type, gain, parts: [підписи бонусів], none: причина, якщо 0 }
+  function masteryGainFor(save, ms, foes) {
+    const type = weaponTypeOf(ms);
+    if (!type) return { type: null, gain: 0, parts: [], none: "без зброї" };
+    const lvl = ms.character.level;
+    const levels = foes.map(f => RPG.ENEMIES[f.id]?.level || 1);
+    if (levels.length && Math.max(...levels) <= lvl - MASTERY_WEAK_GAP) return { type, gain: 0, parts: [], none: "вороги значно слабші" };
+    let flat = 0, pct = 0;
+    const parts = [];
+    if (foes.length > 1) { flat += 0.5 * (foes.length - 1); parts.push(`ворогів ${foes.length}`); }
+    const champs = foes.filter(f => f.champion).length;
+    if (champs) { flat += 2 * champs; parts.push("чемпіон"); }
+    const bosses = foes.filter(f => RPG.ENEMIES[f.id]?.boss).length;
+    if (bosses) { flat += 5 * bosses; parts.push("бос"); }
+    if (trainerBoostLeft(save)) { flat += TRAINER_BOOST.flat; parts.push("тренування"); }
+    if (levels.some(l => l >= lvl + 2)) { pct += 50; parts.push("сильніший ворог"); }
+    if (RPG.springLeft && RPG.springLeft(save)) { pct += 100; parts.push("Джерело Велеса"); }
+    let gear = 0;
+    for (const slot in ms.equipment || {}) {
+      const ref = ms.equipment[slot];
+      if (!ref) continue;
+      gear += (RPG.itemStats ? RPG.itemStats(ref).masteryPct : 0) || 0;
+      for (const rid of (typeof ref === "object" && ref.runes) || []) gear += runeMasteryPct(rid);
+    }
+    if (gear) { pct += gear; parts.push("руни й речі"); }
+    return { type, gain: Math.round((1 + flat) * (1 + pct / 100) * 100) / 100, parts };
+  }
+
+  // Додати досвід володіння зброєю type герою ms. Повертає { type, gained, levelUps: [нові рівні], level, exp, need, capped }
+  function addMasteryExp(ms, type, amount) {
+    const ch = ms.character;
+    ch.mastery ??= {};
+    ch.masteryExp ??= {};
+    const cap = masteryCap(ms);
+    let level = ch.mastery[type] || 0;
+    let exp = (ch.masteryExp[type] || 0) + Math.max(0, amount);
+    const levelUps = [];
+    while (level < cap && level < MASTERY_MAX && exp >= masteryExpNeed(level + 1)) {
+      exp -= masteryExpNeed(level + 1);
+      level++;
+      levelUps.push(level);
+    }
+    const capped = level >= cap;
+    if (level >= MASTERY_MAX) exp = 0;
+    else if (capped) exp = Math.min(exp, masteryExpNeed(level + 1));   // на межі — лише до повного рівня
+    ch.mastery[type] = level;
+    ch.masteryExp[type] = Math.round(exp * 100) / 100;
+    return { type, gained: amount, levelUps, level, exp: ch.masteryExp[type], need: level >= MASTERY_MAX ? 0 : masteryExpNeed(level + 1), capped };
   }
 
   function getMastery(save, type) {
@@ -107,7 +210,7 @@
     const ch = save.character;
     ch.mastery ??= {};
     const cur = ch.mastery[type] || 0;
-    const cap = masteryCap(ch.level);
+    const cap = masteryCap(save);
     if (cur >= cap) {
       return { ok: false, reason: cap < MASTERY_MAX
         ? `Максимум ${cap}. Далі — з 10 рівня персонажа.`
@@ -426,6 +529,7 @@
   Object.assign(RPG, {
     WEAPON_TYPES, MASTERY_MAX, TIER_MASTERY, MASTERY_BONUS, SKILLS, SKILL_MAX,
     masteryCap, masteryCost, getMastery, weaponTypeOf, masteryBonus, trainMastery,
+    peakLevel, masteryExpNeed, masteryProgress, TRAINER_BOOST, trainerBoostLeft, buyTrainerBoost, masteryGainFor, addMasteryExp,
     skillValue, skillTurns, skillCost, skillLevel, skillsForWeapon, skillCap, learnSkill, describeSkill,
     SCHOOLS, skillWeaponOk, actionRange, trainerSkills, skillMastery, passiveBonus, EFFECT_NAMES
   });

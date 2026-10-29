@@ -1044,7 +1044,8 @@
       regen.textContent = `Відновлення за 10 с: +${per.hp.toFixed(1)} HP, +${per.mp.toFixed(1)} MP` +
         (per.home ? " (з бонусом Домівки)" : "") +
         (grace ? ` · Молитва благодаті: ще ${Math.ceil(grace / 60000)} хв (+2% HP за 5 с, +3% MP за 10 с)` : "") +
-        (RPG.springLeft && RPG.springLeft(save) ? ` · Джерело Велеса: +${RPG.VELES.expBonusPct}% досвіду, ще ${Math.ceil(RPG.springLeft(save) / 60000)} хв` : "");
+        (RPG.springLeft && RPG.springLeft(save) ? ` · Джерело Велеса: +${RPG.VELES.expBonusPct}% досвіду, ще ${Math.ceil(RPG.springLeft(save) / 60000)} хв` : "") +
+        (RPG.trainerBoostLeft && RPG.trainerBoostLeft(save) ? ` · Тренування з Брутом: +${RPG.TRAINER_BOOST.flat} досвіду володіння за бій, ще ${Math.ceil(RPG.trainerBoostLeft(save) / 60000)} хв` : "");
     }
     if (!save.memberIndex) renderPartyList(save);
   }
@@ -2937,32 +2938,43 @@
       box.append(tabs);
       const tms = RPG.memberSave(save, trainMember);
       const type = RPG.weaponTypeOf(tms);
-      const cap = RPG.masteryCap(tms.character.level);
-      box.append(el("p", "note", "«Покажи, чим б'єшся, — і я навчу тебе володіти цим краще.» " +
-        "Брут навчає лише тієї зброї, яка зараз у вас у правій руці."));
+      const cap = RPG.masteryCap(tms);
+      box.append(el("p", "note", "«Володіння приходить у бою, а не за золото. За кожен виграний бій росте вміння тією зброєю, " +
+        "що в правій руці. Хочеш швидше — потренуйся зі мною.»"));
       box.append(el("p", "note",
         `Межа володіння зараз: ${cap}` + (cap < RPG.MASTERY_MAX ? " (з 10 рівня персонажа — 20)." : ".") +
-        " Володіння 10 відкриває зброю 2 виду, 20 — 3 виду."));
+        " Володіння 10 відкриває зброю 2 виду, 20 — 3 виду. Більше досвіду володіння — за кількох ворогів, чемпіонів, босів, " +
+        "сильніших ворогів і з Джерелом Велеса; за ворогів, слабших на 10+ рівнів, — нічого."));
+
+      // Тренування: +1 досвіду володіння за кожен виграний бій для всієї групи на 30 хв; лише одне активне
+      const TB = RPG.TRAINER_BOOST;
+      const left = RPG.trainerBoostLeft(save);
+      const boost = el("div", "shop-row skill-row" + (left ? " is-current" : ""));
+      const bInfo = el("span", "shop-name", `Тренування з Брутом: +${TB.flat} досвіду володіння за кожен виграний бій`);
+      bInfo.append(el("small", null, left
+        ? ` · діє ще ${Math.ceil(left / 60000)} хв для всієї групи`
+        : ` · для всієї групи на ${TB.durationMs / 60000} хв`));
+      const bBtn = button(left ? "Триває" : `Тренуватися (${fmtNum(TB.cost)} зол.)`, "wf wf-button", async () => {
+        const res = RPG.buyTrainerBoost(save);
+        if (!res.ok) { showMsg(msg, res.reason, true); return; }
+        journalReward(save, "Тренування з Брутом", `+${TB.flat} досвіду володіння за кожен виграний бій для всієї групи на ${res.minutes} хв (−${fmtNum(res.cost)} золота).`);
+        await RPG.saveGame(save);
+        showMsg(msg, `Брут ганяє вас до сьомого поту. ${res.minutes} хв уся група отримує +${TB.flat} досвіду володіння за кожен виграний бій (−${fmtNum(res.cost)} золота).`);
+        renderAll();
+      });
+      bBtn.disabled = !!left || (save.character.gold || 0) < TB.cost;
+      boost.append(bInfo, bBtn);
+      box.append(boost);
 
       box.append(el("h3", null, "Володіння зброєю"));
       for (const [t, wt] of Object.entries(RPG.WEAPON_TYPES)) {
-        const lvl = RPG.getMastery(tms, t);
+        const pr = RPG.masteryProgress(tms, t);
+        const lvl = pr.level;
         const r = el("div", "shop-row skill-row" + (t === type ? " is-current" : ""));
-        const info = el("span", "shop-name", `${wt.mastery}: ${lvl}/${cap}` + (t === type ? " · у руках" : ""));
+        const expTxt = pr.need ? ` · досвід ${Math.floor(pr.exp)}/${pr.need}` + (lvl >= cap ? " (межа)" : "") : " · найвищий рівень";
+        const info = el("span", "shop-name", `${wt.mastery}: ${lvl}/${cap}` + (t === type ? " · у руках" : "") + expTxt);
         info.append(el("small", null, lvl ? ` · ${masteryBonusText(t, lvl)}` : ` · на 20: ${masteryBonusText(t, RPG.MASTERY_MAX)}`));
         r.append(info);
-        if (t === type) {
-          const cost = RPG.masteryCost(lvl + 1);
-          const b = button(lvl >= cap ? "Максимум" : `Тренувати (${fmtNum(cost)} зол.)`, "wf wf-button", async () => {
-            const res = RPG.trainMastery(tms, t);
-            if (!res.ok) { showMsg(msg, res.reason, true); return; }
-            await RPG.saveGame(save);
-            showMsg(msg, `${wt.mastery}: ${res.level} (−${fmtNum(res.cost)} золота).`);
-            renderAll();
-          });
-          b.disabled = lvl >= cap || tms.character.gold < cost;
-          r.append(b);
-        }
         box.append(r);
       }
 
@@ -3870,6 +3882,22 @@
         RPG.pray(save);   // ті, хто поліг раніше, теж прокидаються в Храмі
       }
       // Данж: перемога — наступний бій (або кінець), поразка чи втеча ворогів — данж провалено
+      // Досвід володіння зброєю (data/skills.js → masteryGainFor / addMasteryExp): кожному живому герою за виграний бій
+      const masteryLines = [];
+      if (result.win) {
+        const fmtM = v => (Math.round(v * 10) / 10).toString().replace(".", ",");
+        team.forEach((ms, k) => {
+          if (result.heroes[k].dead) return;
+          const g = RPG.masteryGainFor(save, ms, foes);
+          if (!g.type || !g.gain) return;
+          const r = RPG.addMasteryExp(ms, g.type, g.gain);
+          const wt = RPG.WEAPON_TYPES[g.type];
+          const prog = r.need ? ` (рівень ${r.level}, ${fmtM(r.exp)}/${r.need}${r.capped ? " — межа" : ""})` : ` (рівень ${r.level} — найвищий)`;
+          masteryLines.push(`${group ? ms.character.name + ": " : ""}${wt.mastery.toLowerCase()} +${fmtM(g.gain)}` +
+            (g.parts.length ? ` [${g.parts.join(", ")}]` : "") + prog +
+            (r.levelUps.length ? ` — новий рівень володіння ${r.levelUps.at(-1)}!` : ""));
+        });
+      }
       let dunNext = null;
       let chron = null;   // запис у книзі «Предки…» (перша перемога над босом данжу)
       if (dun) {
@@ -3909,6 +3937,7 @@
       } else {
         outcome = { title: foes.length > 1 ? "Вороги втекли" : "Ворог утік", lines: ["Нагороди немає."], state: "draw" };
       }
+      if (masteryLines.length) outcome.lines.push("Володіння: " + masteryLines.join("; "));
       outcome.lines.push(...prePotion, ...postPotion);
       const fightTitle = `${team.map(ms => ms.character.name).join(", ")} проти: ${foesText()}`;
       // Журнал бою (journal.js): увесь хід бою + підсумок; найстаріший запис понад 100 затирається
@@ -4335,12 +4364,14 @@
       const mBox = $("mastery-list");
       if (mBox) {
         mBox.innerHTML = "";
-        const cap = RPG.masteryCap(ch.level);
+        const cap = RPG.masteryCap(ms);
         const wtype = RPG.weaponTypeOf(ms);
         for (const [t, wt] of Object.entries(RPG.WEAPON_TYPES)) {
+          const pr = RPG.masteryProgress(ms, t);
           const row = el("div", "stat-row");
           row.append(el("span", null, wt.mastery + (t === wtype ? " (у руках)" : "")),
-                     el("strong", null, `${RPG.getMastery(ms, t)} / ${cap}`));
+                     el("strong", null, `${pr.level} / ${cap}` + (pr.need ? ` · ${Math.floor(pr.exp)}/${pr.need}` : "")));
+          row.title = pr.need ? `Досвід володіння: ${Math.floor(pr.exp)} з ${pr.need} до рівня ${pr.level + 1}. Росте за виграні бої.` : "Найвищий рівень володіння.";
           mBox.append(row);
         }
         const learned = Object.entries(ch.skills || {}).filter(([, l]) => l > 0);
