@@ -2641,16 +2641,16 @@
         const all = button(readyCount ? `Здати все (${readyCount})` : "Здати все", "wf wf-button turn-in-all", async () => {
           let exp = 0, gold = 0, quests = 0, bounties = 0, lastLevel = null;
           const items = {};
+          const bountyExp = {};   // досвід за чемпіонів — кожному герою окремо (з бонусами)
           const noteLevel = lv => { if (lv.length) lastLevel = lv[lv.length - 1]; };
           for (const bounty of [...qs.bounties]) {
             const res = RPG.claimBounty(save, bounty.id);
             if (!res.ok) continue;
             bounties++;
-            exp += bounty.exp;
             gold += bounty.gold;
+            for (const h of res.heroes) bountyExp[h.name] = (bountyExp[h.name] || 0) + h.exp;
             noteLevel(res.levelUps);
-            journalReward(save, `Гільдія: переможено чемпіона «${bounty.name}»`,
-              `Нагорода за чемпіона: +${bounty.exp} EXP, +${bounty.gold} золота.`);
+            journalReward(save, `Гільдія: переможено чемпіона «${bounty.name}»`, RPG.bountyRewardText(res));
           }
           for (const quest of qs.active.filter(q => RPG.isQuestComplete(save, q))) {
             const res = RPG.turnInQuest(save, quest.id);
@@ -2665,7 +2665,10 @@
           if (!quests && !bounties) { showMsg(msg, "Немає виконаних завдань.", true); return; }
           const reward = RPG.describeReward({ exp, gold, items: Object.entries(items).map(([id, qty]) => ({ id, qty })) });
           const what = [quests ? `завдань: ${quests}` : "", bounties ? `нагород за чемпіонів: ${bounties}` : ""].filter(Boolean).join(", ");
-          const txt = `Здано ${what}. Нагорода: ${reward}.` + (lastLevel ? ` Новий рівень: ${lastLevel}!` : "");
+          const names = Object.keys(bountyExp);
+          const bTxt = names.length ? ` За чемпіонів досвід${names.length > 1 ? " кожному" : ""}: ` +
+            names.map(n => names.length > 1 ? `${n} +${fmtNum(bountyExp[n])}` : `+${fmtNum(bountyExp[n])}`).join(", ") + " EXP (з бонусами)." : "";
+          const txt = `Здано ${what}. Нагорода: ${reward}.${bTxt}` + (lastLevel ? ` Новий рівень: ${lastLevel}!` : "");
           await RPG.saveGame(save);
           showMsg(msg, txt);
           renderAll();
@@ -2681,12 +2684,12 @@
         for (const bounty of qs.bounties) {
           const r = el("div", "shop-row quest-row quest-done champion-row");
           const info = el("span", "shop-name", `Переможено чемпіона: ${bounty.name}`);
-          info.append(el("small", null, ` · ${bounty.exp} EXP, ${bounty.gold} золота (×${RPG.CHAMPION.bountyMult})`));
+          const many = RPG.partySize(save) > 1;
+          info.append(el("small", null, ` · ${bounty.exp} EXP${many ? " кожному герою" : ""} + бонуси, ${bounty.gold} золота (×${RPG.CHAMPION.bountyMult})`));
           r.append(info, button("Отримати", "wf wf-button", async () => {
             const res = RPG.claimBounty(save, bounty.id);
             if (!res.ok) { showMsg(msg, res.reason, true); return; }
-            const txt = `Нагорода за чемпіона: +${bounty.exp} EXP, +${bounty.gold} золота.` +
-              (res.levelUps.length ? ` Новий рівень: ${res.levelUps[res.levelUps.length - 1]}!` : "");
+            const txt = RPG.bountyRewardText(res);
             journalReward(save, `Гільдія: переможено чемпіона «${bounty.name}»`, txt);
             await RPG.saveGame(save);
             showMsg(msg, txt);
@@ -3808,7 +3811,7 @@
               summary.push("Трофей чемпіона: цього разу нічого");
             }
             const b = RPG.addChampionBounty(save, e.id);
-            summary.push(`Гільдія авантюристів заплатить ${b.exp} EXP і ${b.gold} золота (нагорода ×5)`);
+            summary.push(`Гільдія авантюристів заплатить ${b.exp} EXP${group ? " кожному герою" : ""} (+ бонуси) і ${b.gold} золота (нагорода ×5)`);
           }
           // Мішечок на пояс: 1% з кожного переможеного боса, окремо від звичайної здобичі
           const pouch = RPG.rollPouchDrop?.(e.id);

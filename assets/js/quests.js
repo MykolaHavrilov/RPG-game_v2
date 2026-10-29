@@ -578,14 +578,71 @@
     return bounty;
   }
 
+  // ---------- Бонуси до досвіду нагород ----------
+  // EXP героя = N + N × (k% + j% + r% + x%), де N — досвід за завдання:
+  //   k — за групу героїв: +10% за кожного героя понад першого (як у боях);
+  //   j — тимчасові ефекти: Джерело Велеса (+VELES.expBonusPct, поки діє);
+  //   r — руни й вдягнені речі цього героя: стат expPct речей (rarity.js → itemStats) і руни в гніздах
+  //       (ref.runes = [id рун] — гнізда з'являться в оновленні рун; руна «Вуньо» дає +4…12%);
+  //   x — інші джерела: RPG.EXP_BONUS_EXTRA — масив функцій (save, ms) → [{ label, pct }] (поки порожній).
+  // Повертає { k, j, r, x, total, parts: [{ label, pct }] } — total у відсотках.
+  const EXP_BONUS_EXTRA = [];
+  function runeExpPct(runeId) {
+    const it = RPG.ITEMS[runeId];
+    const R = it?.type === "rune" && RPG.RUNES?.[it.rune];
+    if (!R || R.stat !== "expPct") return 0;
+    const gi = RPG.RUNE_GRADES?.[it.grade]?.val ?? -1;
+    return gi >= 0 ? parseFloat(String(R.vals[gi]).replace(/[^\d.,-]/g, "").replace(",", ".")) || 0 : 0;
+  }
+  function expBonusParts(save, ms = save) {
+    const parts = [];
+    const size = RPG.partySize ? RPG.partySize(save) : 1;
+    const k = 10 * Math.max(0, size - 1);
+    if (k) parts.push({ label: `група з ${size} героїв`, pct: k });
+    const j = springLeft(save) ? VELES.expBonusPct : 0;
+    if (j) parts.push({ label: "Джерело Велеса", pct: j });
+    let r = 0;
+    for (const slot in ms.equipment || {}) {
+      const ref = ms.equipment[slot];
+      if (!ref) continue;
+      r += (RPG.itemStats ? RPG.itemStats(ref).expPct : 0) || 0;
+      for (const rid of (typeof ref === "object" && ref.runes) || []) r += runeExpPct(rid);
+    }
+    r = Math.round(r * 10) / 10;
+    if (r) parts.push({ label: "руни й речі", pct: r });
+    let x = 0;
+    for (const fn of EXP_BONUS_EXTRA) {
+      for (const pt of fn(save, ms) || []) { if (pt?.pct) { x += pt.pct; parts.push(pt); } }
+    }
+    return { k, j, r, x, total: k + j + r + x, parts };
+  }
+
+  // Нагорода за чемпіона: золото — у спільний гаманець; досвід — КОЖНОМУ герою групи:
+  //   100% досвіду завдання + бонуси (expBonusParts — у кожного свої руни й речі).
+  // Повертає { ok, bounty, heroes: [{ name, exp, bonusPct, parts, levelUps }], levelUps (головного) }
   function claimBounty(save, bountyId) {
     const q = state(save);
     const i = q.bounties.findIndex(b => b.id === bountyId);
     if (i < 0) return { ok: false, reason: "Нагороди немає." };
     const [b] = q.bounties.splice(i, 1);
     save.character.gold += b.gold;
-    const levelUps = RPG.addExp(save, b.exp);
-    return { ok: true, bounty: b, levelUps };
+    const members = RPG.partyMembers ? RPG.partyMembers(save) : [save];
+    const heroes = members.map(ms => {
+      const bonus = expBonusParts(save, ms);
+      const exp = Math.round(b.exp * (1 + bonus.total / 100));
+      const levelUps = RPG.addExp(ms, exp);
+      return { name: ms.character.name, exp, bonusPct: bonus.total, parts: bonus.parts, levelUps };
+    });
+    return { ok: true, bounty: b, heroes, levelUps: heroes[0].levelUps };
+  }
+  // Текст нагороди за чемпіона для повідомлення й журналу
+  function bountyRewardText(res) {
+    const b = res.bounty;
+    const one = h => `${h.exp} EXP` + (h.bonusPct ? ` (${b.exp} + ${h.bonusPct}%: ${h.parts.map(p => `${p.label} +${p.pct}%`).join(", ")})` : "") +
+      (h.levelUps.length ? `, новий рівень ${h.levelUps[h.levelUps.length - 1]}!` : "");
+    const exp = res.heroes.length > 1 ? res.heroes.map(h => `${h.name}: ${one(h)}`).join("; ") : one(res.heroes[0]);
+    const txt = `Нагорода за чемпіона «${b.name}»: +${b.gold} золота; досвід — ${exp}`;
+    return txt.endsWith("!") ? txt : txt + ".";
   }
 
   // ---------- Квест «Долоні Велеса» (з 12 рівня головного героя) ----------
@@ -707,13 +764,13 @@
         where: GUILD_PLACE, ready: have >= quest.need });
     }
     for (const b of state(save).bounties) {
-      out.push({ title: `Нагорода за чемпіона: ${b.name}`, lines: [`${b.exp} EXP, ${b.gold} золота`], where: GUILD_PLACE, ready: true });
+      out.push({ title: `Нагорода за чемпіона: ${b.name}`, lines: [`${b.exp} EXP кожному герою групи + бонуси (група, тимчасові ефекти, руни й речі), ${b.gold} золота`], where: GUILD_PLACE, ready: true });
     }
     return out;
   }
 
   Object.assign(RPG, {
-    addChampionBounty, claimBounty, questLog,
+    addChampionBounty, claimBounty, bountyRewardText, expBonusParts, EXP_BONUS_EXTRA, questLog,
     QUEST_MAX_ACTIVE: MAX_ACTIVE, QUEST_MAX_ACTIVE_PRO: MAX_ACTIVE_PRO, QUEST_MAX_SAME: MAX_SAME, questMaxActive: maxActive, questSameCount: sameCount,
     questState: state, fillOffers, questTitle, questProgress, isQuestComplete: isComplete,
     describeReward, acceptQuest, abandonQuest, turnInQuest, questOnKill,
