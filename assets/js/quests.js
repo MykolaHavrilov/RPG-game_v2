@@ -611,6 +611,8 @@
     r = Math.round(r * 10) / 10;
     if (r) parts.push({ label: "руни й речі", pct: r });
     let x = 0;
+    const orb = RPG.godsOrb ? RPG.godsOrb(save) : null;   // Сфера Богів в інвентарі групи
+    if (orb) { x += orb.expPct; parts.push({ label: "Сфера Богів", pct: orb.expPct }); }
     for (const fn of EXP_BONUS_EXTRA) {
       for (const pt of fn(save, ms) || []) { if (pt?.pct) { x += pt.pct; parts.push(pt); } }
     }

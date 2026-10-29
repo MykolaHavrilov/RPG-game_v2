@@ -724,6 +724,25 @@ const CHEST_STORAGES = {
 };
 const DEFAULT_CHEST = "main";
 
+// ---------- Сфера Богів (предмет адміністратора, data/items.js → orb_gods) ----------
+// Бонуси діють на всю групу, поки сфера в інвентарі (у скрині — ні). null — сфери в інвентарі немає.
+const GODS_ORB = "orb_gods";
+function godsOrb(save) {
+  return countItem(save, GODS_ORB) > 0 ? ITEMS[GODS_ORB].gods : null;
+}
+// Чи є сфера де-небудь у збереженні (інвентар або будь-яка скриня)
+function hasGodsOrb(save) {
+  if (countItem(save, GODS_ORB) > 0) return true;
+  return Object.values(save.chests || {}).some(list => (list || []).some(e => e?.id === GODS_ORB));
+}
+// Видати сферу (сторінка «Налаштування»): одна на збереження
+function grantGodsOrb(save) {
+  if (hasGodsOrb(save)) return { ok: false, reason: "Сфера Богів уже є в цьому збереженні (в інвентарі чи в скрині Домівки)." };
+  if (!invFree(save)) return { ok: false, reason: "Інвентар повний — звільніть клітинку." };
+  addItem(save, GODS_ORB, 1);
+  return { ok: true };
+}
+
 // ---------- Скрині ремесла на складі власного дому (план крафту, етап 5) ----------
 // Склад добудовують при домі; на складі купують «меблі» — скрині ремесла. Кожна скриня — окреме
 // сховище з id "<id дому>:<вид>:<номер>" (напр. "h_oak:mat:2"), свої для кожного дому.
@@ -809,6 +828,9 @@ function moveToChest(save, invIndex, storageId = null, want = null) {
   if (!sid || !chestsHere(save).includes(sid)) return { ok: false, reason: "Тут немає скрині." };
   const entry = save.inventory[invIndex];
   if (!entry) return { ok: false, reason: "Порожня клітинка." };
+  if (ITEMS[entry.id]?.locked && sid !== DEFAULT_CHEST) {
+    return { ok: false, reason: `«${ITEMS[entry.id].name}» можна покласти лише в спільну скриню Домівки.` };
+  }
   if (!chestAllows(sid, entry.id)) {
     const cc = parseCraftChest(sid);
     return { ok: false, reason: `${chestConf(sid).name}: ${CRAFT_CHEST_ALLOW_TEXT[cc?.type] || "не для цього предмета"}.` };
@@ -1365,6 +1387,7 @@ function sellItem(save, invIndex, qty = 1) {
   const entry = save.inventory[invIndex];
   if (!entry) return { ok: false, reason: "Порожня клітинка." };
   if (ITEMS[entry.id]?.quest) return { ok: false, reason: "Квестові предмети торговець не купує." };
+  if (ITEMS[entry.id]?.locked) return { ok: false, reason: `«${ITEMS[entry.id].name}» — предмет адміністратора, його не можна продати.` };
   qty = Math.floor(Number(qty));
   if (!(qty >= 1)) return { ok: false, reason: "Вкажіть кількість від 1." };
   qty = Math.min(qty, entry.qty);
@@ -1411,7 +1434,7 @@ function applyReward(save, exp, loot) {
 }
 
 Object.assign(RPG, {
-  autoPotion, AUTO_POTIONS, INV_SIZE, invFree, fitQty, invSize, BELT_SLOTS, POUCH_DROP, beltOf, beltBonus, putOnBelt, takeFromBelt, rollPouchDrop,
+  autoPotion, AUTO_POTIONS, GODS_ORB, godsOrb, hasGodsOrb, grantGodsOrb, INV_SIZE, invFree, fitQty, invSize, BELT_SLOTS, POUCH_DROP, beltOf, beltBonus, putOnBelt, takeFromBelt, rollPouchDrop,
   TRADE_MIN_LEVEL, TRADE_PRICE_MULT, tradeStock, tradePrice, buyFromTrade, isDistrictOpen, districtLockText,
   IFRIT, ifritPrice, buyFromIfrit,                // ТЕСТ: прибрати разом з блоком IFRIT
   HOUSES, HOUSE_NAME_MAX, houseOf, houseHere, buyHouse, enterHouse,

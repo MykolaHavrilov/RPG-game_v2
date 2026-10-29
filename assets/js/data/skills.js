@@ -150,6 +150,8 @@
     if (trainerBoostLeft(save)) { flat += TRAINER_BOOST.flat; parts.push("тренування"); }
     if (levels.some(l => l >= lvl + 2)) { pct += 50; parts.push("сильніший ворог"); }
     if (RPG.springLeft && RPG.springLeft(save)) { pct += 100; parts.push("Джерело Велеса"); }
+    const orb = RPG.godsOrb ? RPG.godsOrb(save) : null;   // Сфера Богів в інвентарі групи: +600%
+    if (orb) { pct += orb.masteryPct; parts.push("Сфера Богів"); }
     let gear = 0;
     for (const slot in ms.equipment || {}) {
       const ref = ms.equipment[slot];

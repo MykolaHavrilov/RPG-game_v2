@@ -306,9 +306,18 @@
       skillLevels: { ...(ms.character.skills || {}) }, queue, qi: 0,
       hp: Math.floor(ms.character.hp), mp: Math.floor(ms.character.mp), buffs: {}, stun: 0,
       dual: dualOf(ms),
+      lifesteal: RPG.godsOrb ? (RPG.godsOrb(ms)?.lifestealPct || 0) : 0,   // Сфера Богів: вампіризм, % від шкоди
       pos: { r: 1, c: 2 }
     };
   }
+  // Вампіризм: частка завданої шкоди лікує героя. Повертає, скільки HP відновлено
+  function leech(H, dmg) {
+    if (!H.lifesteal || H.hp <= 0 || dmg <= 0) return 0;
+    const before = H.hp;
+    H.hp = Math.min(H.base.hp, H.hp + Math.round(dmg * H.lifesteal / 100));
+    return H.hp - before;
+  }
+  const leechTxt = n => (n ? `, вампіризм +${n} HP` : "");
   // Друга сокира Берсерка: { name, delta } — на скільки атака другої сокири відрізняється від першої
   function dualOf(ms) {
     const d = RPG.dualWieldInfo ? RPG.dualWieldInfo(ms) : null;
@@ -414,7 +423,8 @@
     const raw = (sk.magic ? h.magic : h.attack) * mult * variance();
     const dmg = finishHit(mitigate(raw, sk.magic ? enemyMagDef(E) : enemyDefense(E)), crit, blocked);
     E.hp = Math.max(0, E.hp - dmg);
-    return { text: dmg + (crit ? " (крит)" : ""), crit };
+    const lh = leech(H, dmg);
+    return { text: dmg + (crit ? " (крит)" : "") + (lh ? ` (+${lh} HP)` : ""), crit };
   }
 
   // Атакувальна навичка. pool — вороги поруч (для spread / splash), уже без заморожених
@@ -501,11 +511,13 @@
     const blocked = roll(es.blockPhys);
     const dmg = finishHit(mitigate(h.attack * variance(), enemyDefense(E)), crit, blocked);
     E.hp = Math.max(0, E.hp - dmg);
+    const lh = leech(H, dmg);
     let text = H.weapon.type
       ? `${H.name} б'є (${H.weapon.name}) «${E.name}»: ${dmg} шкоди`
       : `${H.name} б'є кулаками «${E.name}»: ${dmg} шкоди`;
     if (blocked) text += " (ворог частково заблокував)";
     if (crit) text += " — КРИТ!";
+    text += leechTxt(lh);
     return { who: "hero", text, crit, sound: "weapon:" + (H.weapon.type || "") };
   }
 
@@ -514,7 +526,7 @@
     const h = heroNow(H);
     const es = E.enemy.stats;
     const parts = [];
-    let anyCrit = false;
+    let anyCrit = false, healed = 0;
     for (const [atk, name] of [[h.attack, H.weapon.name], [Math.max(1, h.attack + H.dual.delta), H.dual.name]]) {
       if (E.hp <= 0) break;
       if (roll(es.dodge)) { parts.push(`${name} — промах`); continue; }
@@ -523,9 +535,10 @@
       const blocked = roll(es.blockPhys);
       const dmg = finishHit(mitigate(atk * DUAL_MULT * variance(), enemyDefense(E)), crit, blocked);
       E.hp = Math.max(0, E.hp - dmg);
+      healed += leech(H, dmg);
       parts.push(`${name} ${dmg}${crit ? " (крит)" : ""}${blocked ? " (блок)" : ""}`);
     }
-    return { who: "hero", text: `${H.name} б'є двома сокирами «${E.name}»: ${parts.join(" + ")} шкоди`, crit: anyCrit, sound: "weapon:axe" };
+    return { who: "hero", text: `${H.name} б'є двома сокирами «${E.name}»: ${parts.join(" + ")} шкоди${leechTxt(healed)}`, crit: anyCrit, sound: "weapon:axe" };
   }
 
   function spellAttack(H, E) {
@@ -535,7 +548,8 @@
     const blocked = roll(E.enemy.stats.blockMag);
     const dmg = finishHit(mitigate(h.magic * SPELL_MULT * variance(), enemyMagDef(E)), crit, blocked);
     E.hp = Math.max(0, E.hp - dmg);
-    let text = `${H.name} кидає «Іскру» (−${SPELL_COST} MP) в «${E.name}»: ${dmg} шкоди`;
+    const lh = leech(H, dmg);
+    let text = `${H.name} кидає «Іскру» (−${SPELL_COST} MP) в «${E.name}»: ${dmg} шкоди${leechTxt(lh)}`;
     if (blocked) text += " (ворог частково заблокував)";
     if (crit) text += " — КРИТ!";
     return { who: "hero", text, crit, sound: "fire" };
@@ -816,7 +830,7 @@
         const crit = roll(h.crit);
         const dmg = finishHit(mitigate(h.attack * variance(), enemyDefense(E)), crit, roll(es.blockPhys));
         E.hp = Math.max(0, E.hp - dmg);
-        text = `${H.name} виринає з тіні за спиною «${E.name}»: ${dmg} шкоди${crit ? " (крит)" : ""}`;
+        text = `${H.name} виринає з тіні за спиною «${E.name}»: ${dmg} шкоди${crit ? " (крит)" : ""}${leechTxt(leech(H, dmg))}`;
         if (E.hp > 0) {
           E.dot = { dmg: Math.max(1, Math.round(es.hp * sh.pct / 100)), turns: sh.turns };
           text += `, отрута ${E.dot.dmg} × ${sh.turns} ходів`;

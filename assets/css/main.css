@@ -727,3 +727,10 @@ a, button, input, label, select, [tabindex] { touch-action: manipulation; -webki
   background: rgba(0, 0, 0, .35); border: 1px solid var(--border-color); border-radius: var(--radius-sm, 6px);
 }
 .autopotion-dialog .field b { color: var(--accent); }
+
+/* ---------- Рядок коду (сторінка «Налаштування», game.js → pageSettings) ---------- */
+.code-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.code-input {
+  flex: 1 1 180px; min-height: 44px; padding: 8px 12px; font: inherit; color: var(--text);
+  background: rgba(0, 0, 0, .35); border: 1px solid var(--border-color); border-radius: var(--radius-sm, 6px);
+}

@@ -1113,7 +1113,7 @@
   // ---------- Опис предмета для спливаючого вікна та інвентаря ----------
   const TYPE_NAMES = {
     weapon: "Зброя", armor: "Броня", accessory: "Прикраса", consumable: "Зілля",
-    material: "Матеріал", offhand: "Ліва рука", shield: "Щит", quest: "Квестовий предмет"
+    material: "Матеріал", offhand: "Ліва рука", shield: "Щит", quest: "Квестовий предмет", admin: "Предмет адміністратора"
   };
   const RARITY_NAMES = {
     broken: "зламана", common: "звичайна", magic: "магічна", epic: "епічна", legendary: "легендарна"
@@ -1184,9 +1184,10 @@
 
     if (item.description) box.append(el("p", "tip-desc", item.description));
 
-    box.append(el("div", "tip-price",
-      `Ціна: ${fmtNum(item.price || 0)} зол. · продаж: ${fmtNum(RPG.refSellPrice(ref))} зол.` +
-      (item.noShop ? (item.tier === 3 ? " · продає лише Торгова гільдія" : " · не продається") : "")));
+    box.append(el("div", "tip-price", item.locked
+      ? "Не продається, не викидається й не розбирається — лише в спільну скриню Домівки."
+      : `Ціна: ${fmtNum(item.price || 0)} зол. · продаж: ${fmtNum(RPG.refSellPrice(ref))} зол.` +
+        (item.noShop ? (item.tier === 3 ? " · продає лише Торгова гільдія" : " · не продається") : "")));
     return box;
   }
 
@@ -1407,6 +1408,24 @@
 
     const exportBtn = $("export-btn");
     const current = await RPG.loadCurrentGame().catch(() => null);
+
+    // Рядок коду: єдиний код «god.mod» — Сфера Богів у інвентар поточної гри (одна на збереження).
+    // Будь-який інший текст нічого не виконує.
+    const codeForm = $("code-form"), codeInput = $("code-input");
+    if (codeForm) {
+      codeForm.addEventListener("submit", async ev => {
+        ev.preventDefault();
+        const code = codeInput.value.trim().toLowerCase();
+        codeInput.value = "Код";
+        if (code !== "god.mod") { showMsg(msg, "Невірний код.", true); return; }
+        const s = await RPG.loadCurrentGame().catch(() => null);
+        if (!s) { showMsg(msg, "Немає активної гри.", true); return; }
+        const r = RPG.grantGodsOrb(s);
+        if (!r.ok) { showMsg(msg, r.reason, true); return; }
+        await RPG.saveGame(s);
+        showMsg(msg, "Сфера Богів — в інвентарі.");
+      });
+    }
     if (!current) {
       exportBtn.disabled = true;
       exportBtn.title = "Немає активної гри";
@@ -3857,16 +3876,18 @@
         // і вся сума ділиться порівну між тими, хто вижив
         const survivors = team.filter((ms, k) => !result.heroes[k].dead);
         const spring = RPG.springExpMult(save);          // Джерело Велеса: ×3 до досвіду групи
-        const pool = Math.round(totalExp * (1 + 0.1 * (team.length - 1)) * spring);
+        const orb = RPG.godsOrb(save);                     // Сфера Богів (предмет адміністратора): +800% досвіду
+        const orbMult = orb ? 1 + orb.expPct / 100 : 1;
+        const pool = Math.round(totalExp * (1 + 0.1 * (team.length - 1)) * spring * orbMult);
         const expEach = Math.floor(pool / Math.max(1, survivors.length));
         for (const ms of survivors) {
           const ups = RPG.addExp(ms, expEach);
           if (ups.length) levelLines.push(`${ms.character.name}: новий рівень ${ups[ups.length - 1]}!`);
         }
-        const springTxt = spring > 1 ? `, Джерело Велеса +${RPG.VELES.expBonusPct}%` : "";
+        const springTxt = (spring > 1 ? `, Джерело Велеса +${RPG.VELES.expBonusPct}%` : "") + (orb ? `, Сфера Богів +${orb.expPct}%` : "");
         summary.unshift(group
           ? `+${expEach} EXP кожному, хто вижив (усього ${pool}, бонус групи +${(team.length - 1) * 10}%${springTxt})`
-          : `+${expEach} EXP${spring > 1 ? ` (Джерело Велеса +${RPG.VELES.expBonusPct}%)` : ""}`);
+          : `+${expEach} EXP${springTxt ? ` (${springTxt.slice(2)})` : ""}`);
         if (gold) summary.splice(1, 0, `+${gold} золота`);
         if (Object.keys(filtered).length) summary.push(`Фільтр викинув: ${Object.entries(filtered).map(([k, n]) => n > 1 ? `${k} ×${n}` : k).join(", ")}`);
         if (Object.keys(lost).length) summary.push(`Не вмістилось в інвентар: ${Object.entries(lost).map(([k, n]) => `${k} ×${n}`).join(", ")}`);
@@ -4583,7 +4604,7 @@
       }
       if (selected.kind === "eq") btnUnequip.disabled = false;
       if (selected.kind === "inv" && item.type === "consumable") btnUse.disabled = false;
-      if (selected.kind === "inv") btnDrop.disabled = false;
+      if (selected.kind === "inv") btnDrop.disabled = !!RPG.ITEMS[ms.inventory[selected.index]?.id]?.locked;   // Сфера Богів не викидається
       if (selected.kind === "inv" && atHome) btnToChest.disabled = false;
       if (selected.kind === "chest" && atHome) btnFromChest.disabled = false;
       const isStack = !ref.r && item.stackable && (ref.qty || 1) > 1;
@@ -4715,6 +4736,7 @@
     btnDrop.addEventListener("click", async () => {
       const entry = ms.inventory[selected.index];
       const item = RPG.ITEMS[entry.id];
+      if (item?.locked) { await commit(`«${item.name}» — предмет адміністратора, його не можна викинути.`, true); return; }
       if (!confirm(`Викинути «${RPG.itemFullName(entry)}»${entry.qty > 1 ? ` ×${entry.qty}` : ""}?`)) return;
       ms.inventory.splice(selected.index, 1);
       selected = null;
