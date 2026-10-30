@@ -178,6 +178,7 @@
     if (!ref?.sockets || !Array.isArray(ref.runes) || !(slot >= 0 && slot < ref.sockets)) return { ok: false, reason: "Немає такого гнізда." };
     if (ref.runes[slot]) return { ok: false, reason: "Гніздо вже зайняте — спершу вийміть руну." };
     if (!runeFits(ref.id, runeId)) return { ok: false, reason: `${RPG.ITEMS[runeId]?.name || "Ця руна"} сюди не лягає.` };
+    if (RPG.ITEMS[runeId].grade === "broken") return { ok: false, reason: "Зламана руна не діє — її можна лише переплавити в Горні Сварога." };
     if (RPG.countItem(save, runeId) < 1) return { ok: false, reason: "Такої руни немає в інвентарі." };
     RPG.removeItem(save, runeId, 1);
     ref.runes[slot] = runeId;

@@ -4957,7 +4957,8 @@
           // а в межах руни — від нижчої рідкості до вищої. Рядок: назва й рідкість, нижче — що дає.
           const keyOrder = Object.keys(RPG.RUNES);
           const fits = [];
-          for (const e of ms.inventory) if (RPG.runeFits(ref.id, e.id) && !fits.includes(e.id)) fits.push(e.id);
+          // зламані руни не діють — у списку їх немає (вони лише паливо для Горна Сварога)
+          for (const e of ms.inventory) if (RPG.runeFits(ref.id, e.id) && RPG.ITEMS[e.id].grade !== "broken" && !fits.includes(e.id)) fits.push(e.id);
           fits.sort((a, b) => {
             const A = RPG.ITEMS[a], B = RPG.ITEMS[b];
             return keyOrder.indexOf(A.rune) - keyOrder.indexOf(B.rune) ||
