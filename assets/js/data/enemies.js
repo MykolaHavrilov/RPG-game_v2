@@ -41,14 +41,18 @@
   };
   const RANGE_NAMES = { 1: "ближній бій", 2: "середня дистанція", 3: "дальній бій" };
 
-  const ENEMIES = {
+  // Перерахунок під нові межі характеристик (stats.js → CAP: крит 100%, ухилення 60%, швидкість 250, блок 95%):
+//   крит і блок ростуть поступово з рівнем: до 5 рівня — як були, на 25-му — ×1,67 і ×1,9 (пропорційно новим межам);
+//   швидкість ×1,1 на 10 рівні → ×1,3 на 25-му (до 10 рівня — як була);
+//   ухилення — лише спритним (щури, вовки, павуки, тіні, привиди, вершники, лучники): 3% на 1 рівні → 20% на 25-му; важким — 0.
+const ENEMIES = {
     // ---------- Щури (1–3 рівень) ----------
     rat: {
       name: "Щур з льоху",
       range: 1, move: { name: "Сказений укус", mult: 1.5, chance: 0.25 },
       sprite: 0,
       level: 1,
-      stats: { hp: 30, mp: 0, attack: 7, defense: 1, magicDefense: 0, speed: 4, crit: 3 },
+      stats: { hp: 30, mp: 0, attack: 7, defense: 1, magicDefense: 0, speed: 4, crit: 3, dodge: 3 },
       exp: 2,
       gold: [0, 2],
       loot: [
@@ -63,7 +67,7 @@
       range: 1, move: { name: "Сказений укус", mult: 1.5, chance: 0.25 },
       sprite: 1,
       level: 2,
-      stats: { hp: 45, mp: 0, attack: 10, defense: 2, magicDefense: 1, speed: 5, crit: 4 },
+      stats: { hp: 45, mp: 0, attack: 10, defense: 2, magicDefense: 1, speed: 5, crit: 4, dodge: 4 },
       exp: 6,
       gold: [1, 4],
       loot: [
@@ -81,7 +85,7 @@
       range: 1, move: { name: "Сказений укус", mult: 1.55, chance: 0.28 },
       sprite: 2,
       level: 3,
-      stats: { hp: 65, mp: 0, attack: 14, defense: 3, magicDefense: 1, speed: 6, crit: 5 },
+      stats: { hp: 65, mp: 0, attack: 14, defense: 3, magicDefense: 1, speed: 6, crit: 5, dodge: 4 },
       exp: 20,
       gold: [3, 8],
       loot: [
@@ -104,7 +108,7 @@
       range: 1, move: { name: "Розірвати горлянку", mult: 1.6, chance: 0.25 },
       sprite: 3,
       level: 4,
-      stats: { hp: 110, mp: 0, attack: 20, defense: 5, magicDefense: 2, speed: 8, crit: 6, blockPhys: 3 },
+      stats: { hp: 110, mp: 0, attack: 20, defense: 5, magicDefense: 2, speed: 8, crit: 6, dodge: 5, blockPhys: 3 },
       exp: 40,
       gold: [5, 12],
       loot: [
@@ -127,7 +131,7 @@
       range: 1, move: { name: "Розірвати горлянку", mult: 1.65, chance: 0.28 },
       sprite: 4,
       level: 5,
-      stats: { hp: 150, mp: 0, attack: 26, defense: 7, magicDefense: 3, speed: 9, crit: 8, blockPhys: 4 },
+      stats: { hp: 150, mp: 0, attack: 26, defense: 7, magicDefense: 3, speed: 9, crit: 8, dodge: 6, blockPhys: 4 },
       exp: 60,
       gold: [8, 18],
       loot: [
@@ -151,7 +155,7 @@
       range: 1, move: { name: "Розірвати горлянку", mult: 1.65, chance: 0.28 },
       sprite: 5,
       level: 6,
-      stats: { hp: 200, mp: 0, attack: 32, defense: 9, magicDefense: 4, speed: 10, crit: 10, blockPhys: 5 },
+      stats: { hp: 200, mp: 0, attack: 32, defense: 9, magicDefense: 4, speed: 10, crit: 10, dodge: 7, blockPhys: 5 },
       exp: 90,
       gold: [12, 25],
       loot: [
@@ -197,7 +201,7 @@
       range: 2, move: { name: "Стрибок слизу", mult: 1.35, chance: 0.25 },
       sprite: 7, verb: "хлюпає",
       level: 7,
-      stats: { hp: 220, mp: 60, attack: 25, magic: 33, defense: 8, magicDefense: 14, speed: 8, crit: 5, blockMag: 6 },
+      stats: { hp: 220, mp: 60, attack: 25, magic: 33, defense: 8, magicDefense: 14, speed: 8, crit: 5, blockMag: 7 },
       spell: { name: "Крижаний бризок", mp: 12, mult: 1.4, chance: 0.4 },
       exp: 140,
       gold: [14, 28],
@@ -217,7 +221,7 @@
       range: 2, move: { name: "Стрибок слизу", mult: 1.35, chance: 0.25 },
       sprite: 8, verb: "хлюпає",
       level: 8,
-      stats: { hp: 270, mp: 80, attack: 29, magic: 40, defense: 9, magicDefense: 16, speed: 9, crit: 6, blockMag: 8 },
+      stats: { hp: 270, mp: 80, attack: 29, magic: 40, defense: 9, magicDefense: 16, speed: 9, crit: 7, blockMag: 9 },
       spell: { name: "Отруйна хмара", mp: 15, mult: 1.5, chance: 0.45 },
       exp: 190,
       gold: [18, 35],
@@ -240,7 +244,7 @@
       level: 10,
       boss: true, noChampion: true, spawnWeight: 0.1,
       // У 5–6 разів сильніший за зеленого слайма: HP ×6, атака й магія ×1,6
-      stats: { hp: 1020, mp: 300, attack: 35, magic: 42, defense: 14, magicDefense: 20, speed: 8, crit: 8, blockPhys: 5, blockMag: 10 },
+      stats: { hp: 1020, mp: 300, attack: 35, magic: 42, defense: 14, magicDefense: 20, speed: 9, crit: 9, blockPhys: 6, blockMag: 12 },
       skills: [
         { kind: "magic", name: "Золотий потоп", mp: 40, mult: 2.2 },
         { kind: "heal",  name: "Королівське желе", mp: 50, healPct: 0.12 },
@@ -267,7 +271,7 @@
       range: 1, move: { name: "Укус із тіні", mult: 1.50, chance: 0.25 },
       verb: "кусає",
       level: 10,
-      stats: { hp: 823, mp: 0, attack: 113, defense: 42, magicDefense: 50, speed: 18, crit: 12 },
+      stats: { hp: 823, mp: 0, attack: 113, defense: 42, magicDefense: 50, speed: 20, crit: 14, dodge: 9 },
       exp: 300,
       gold: [23, 44],
       loot: [
@@ -298,7 +302,7 @@
       range: 1, move: { name: "Таранний удар", mult: 1.51, chance: 0.25 },
       verb: "б'є іклами",
       level: 11,
-      stats: { hp: 1398, mp: 0, attack: 96, defense: 78, magicDefense: 62, speed: 11, crit: 7, blockPhys: 8 },
+      stats: { hp: 1398, mp: 0, attack: 96, defense: 78, magicDefense: 62, speed: 12, crit: 8, blockPhys: 10 },
       exp: 363,
       gold: [25, 48],
       loot: [
@@ -329,7 +333,7 @@
       range: 2, move: { name: "Плювок отрутою", mult: 1.52, chance: 0.25 },
       verb: "кусає",
       level: 12,
-      stats: { hp: 1029, mp: 0, attack: 112, defense: 54, magicDefense: 54, speed: 14, crit: 7 },
+      stats: { hp: 1029, mp: 0, attack: 112, defense: 54, magicDefense: 54, speed: 16, crit: 9, dodge: 11 },
       exp: 432,
       gold: [28, 53],
       loot: [
@@ -360,7 +364,7 @@
       range: 1, move: { name: "Висмоктати кров", mult: 1.52, chance: 0.25 },
       verb: "присмоктується",
       level: 12,
-      stats: { hp: 874, mp: 0, attack: 123, defense: 46, magicDefense: 54, speed: 19, crit: 12 },
+      stats: { hp: 874, mp: 0, attack: 123, defense: 46, magicDefense: 54, speed: 21, crit: 15 },
       exp: 432,
       gold: [28, 53],
       loot: [
@@ -394,7 +398,7 @@
       range: 1, move: { name: "Мертва хватка", mult: 1.53, chance: 0.25 },
       verb: "дряпає",
       level: 13,
-      stats: { hp: 1481, mp: 0, attack: 105, defense: 84, magicDefense: 67, speed: 12, crit: 8, blockPhys: 8 },
+      stats: { hp: 1481, mp: 0, attack: 105, defense: 84, magicDefense: 67, speed: 14, crit: 10, blockPhys: 11 },
       exp: 507,
       gold: [30, 57],
       loot: [
@@ -425,7 +429,7 @@
       range: 2, move: { name: "Спалах", mult: 1.54, chance: 0.25 },
       verb: "обпікає",
       level: 14,
-      stats: { hp: 923, mp: 168, attack: 73, magic: 106, defense: 46, magicDefense: 87, speed: 15, crit: 8, blockMag: 8 },
+      stats: { hp: 923, mp: 168, attack: 73, magic: 106, defense: 46, magicDefense: 87, speed: 17, crit: 10, dodge: 12, blockMag: 11 },
       spell: { name: "Мертвецьке полум'я", mp: 17, mult: 1.4, chance: 0.4 },
       exp: 588,
       gold: [32, 62],
@@ -460,7 +464,7 @@
       range: 1, move: { name: "Удар іржавого меча", mult: 1.54, chance: 0.25 },
       verb: "рубає",
       level: 14,
-      stats: { hp: 1086, mp: 0, attack: 122, defense: 58, magicDefense: 58, speed: 15, crit: 8 },
+      stats: { hp: 1086, mp: 0, attack: 122, defense: 58, magicDefense: 58, speed: 17, crit: 10, dodge: 12 },
       exp: 588,
       gold: [32, 62],
       loot: [
@@ -492,7 +496,7 @@
       range: 2, move: { name: "Холодний дотик", mult: 1.55, chance: 0.25 },
       verb: "торкається",
       level: 15,
-      stats: { hp: 947, mp: 180, attack: 76, magic: 111, defense: 48, magicDefense: 90, speed: 16, crit: 8, blockMag: 8 },
+      stats: { hp: 947, mp: 180, attack: 76, magic: 111, defense: 48, magicDefense: 90, speed: 19, crit: 11, dodge: 13, blockMag: 12 },
       spell: { name: "Крижаний стогін", mp: 18, mult: 1.4, chance: 0.4 },
       exp: 675,
       gold: [34, 66],
@@ -527,7 +531,7 @@
       range: 1, move: { name: "Трупні пазурі", mult: 1.56, chance: 0.25 },
       verb: "шматує",
       level: 16,
-      stats: { hp: 970, mp: 0, attack: 146, defense: 53, magicDefense: 62, speed: 22, crit: 13 },
+      stats: { hp: 970, mp: 0, attack: 146, defense: 53, magicDefense: 62, speed: 26, crit: 18 },
       exp: 768,
       gold: [37, 70],
       loot: [
@@ -558,7 +562,7 @@
       range: 1, move: { name: "Отруйне жало", mult: 1.56, chance: 0.25 },
       verb: "жалить",
       level: 16,
-      stats: { hp: 970, mp: 0, attack: 146, defense: 53, magicDefense: 62, speed: 22, crit: 13 },
+      stats: { hp: 970, mp: 0, attack: 146, defense: 53, magicDefense: 62, speed: 26, crit: 18, dodge: 14 },
       exp: 768,
       gold: [37, 70],
       loot: [
@@ -589,7 +593,7 @@
       range: 2, move: { name: "Липка сітка", mult: 1.57, chance: 0.25 },
       verb: "кусає",
       level: 17,
-      stats: { hp: 1167, mp: 0, attack: 137, defense: 64, magicDefense: 64, speed: 16, crit: 8 },
+      stats: { hp: 1167, mp: 0, attack: 137, defense: 64, magicDefense: 64, speed: 19, crit: 11, dodge: 14 },
       exp: 867,
       gold: [39, 75],
       loot: [
@@ -621,7 +625,7 @@
       verb: "кусає",
       level: 18,
       boss: true, noChampion: true, spawnWeight: 0.1,
-      stats: { hp: 3101, mp: 450, attack: 136, magic: 120, defense: 73, magicDefense: 73, speed: 17, crit: 9, blockPhys: 8, blockMag: 8 },
+      stats: { hp: 3101, mp: 450, attack: 136, magic: 120, defense: 73, magicDefense: 73, speed: 21, crit: 13, dodge: 15, blockPhys: 13, blockMag: 13 },
       skills: [
         { kind: "magic", name: "Отруйна злива", mp: 40, mult: 2.0 },
         { kind: "stun", name: "Кокон", mp: 30, mult: 1.0 },
@@ -659,7 +663,7 @@
       range: 1, move: { name: "Розшматувати", mult: 1.58, chance: 0.25 },
       verb: "роздирає",
       level: 18,
-      stats: { hp: 1014, mp: 0, attack: 157, defense: 56, magicDefense: 66, speed: 23, crit: 14 },
+      stats: { hp: 1014, mp: 0, attack: 157, defense: 56, magicDefense: 66, speed: 28, crit: 20, dodge: 15 },
       exp: 972,
       gold: [41, 79],
       loot: [
@@ -690,7 +694,7 @@
       range: 1, move: { name: "Удар ватажка", mult: 1.59, chance: 0.25 },
       verb: "б'є",
       level: 19,
-      stats: { hp: 1705, mp: 0, attack: 133, defense: 102, magicDefense: 82, speed: 14, crit: 9, blockPhys: 8 },
+      stats: { hp: 1705, mp: 0, attack: 133, defense: 102, magicDefense: 82, speed: 17, crit: 13, dodge: 16, blockPhys: 13 },
       exp: 1083,
       gold: [44, 84],
       loot: [
@@ -721,7 +725,7 @@
       range: 2, move: { name: "Тіньовий кіготь", mult: 1.60, chance: 0.25 },
       verb: "рве",
       level: 20,
-      stats: { hp: 1079, mp: 240, attack: 99, magic: 140, defense: 56, magicDefense: 105, speed: 18, crit: 9, blockMag: 8 },
+      stats: { hp: 1079, mp: 240, attack: 99, magic: 140, defense: 56, magicDefense: 105, speed: 22, crit: 14, dodge: 16, blockMag: 13 },
       spell: { name: "Тіньовий подих", mp: 24, mult: 1.4, chance: 0.4 },
       exp: 1200,
       gold: [46, 88],
@@ -755,7 +759,7 @@
       range: 2, move: { name: "Ритуальний ніж", mult: 1.60, chance: 0.25 },
       verb: "б'є ножем",
       level: 20,
-      stats: { hp: 1079, mp: 240, attack: 99, magic: 140, defense: 56, magicDefense: 105, speed: 18, crit: 9, blockMag: 8 },
+      stats: { hp: 1079, mp: 240, attack: 99, magic: 140, defense: 56, magicDefense: 105, speed: 22, crit: 14, blockMag: 13 },
       spell: { name: "Чорне прокляття", mp: 24, mult: 1.4, chance: 0.4 },
       exp: 1200,
       gold: [46, 88],
@@ -789,7 +793,7 @@
       range: 3, move: { name: "Удар патерицею", mult: 1.61, chance: 0.25 },
       verb: "вдаряє патерицею",
       level: 21,
-      stats: { hp: 1122, mp: 252, attack: 109, magic: 150, defense: 58, magicDefense: 108, speed: 18, crit: 9, blockMag: 8 },
+      stats: { hp: 1122, mp: 252, attack: 109, magic: 150, defense: 58, magicDefense: 108, speed: 22, crit: 14, blockMag: 14 },
       spell: { name: "Відьомський вогонь", mp: 25, mult: 1.4, chance: 0.4 },
       exp: 1323,
       gold: [48, 92],
@@ -821,7 +825,7 @@
       range: 1, move: { name: "Кам'яний кулак", mult: 1.62, chance: 0.25 },
       verb: "трощить",
       level: 22,
-      stats: { hp: 1917, mp: 0, attack: 180, defense: 111, magicDefense: 89, speed: 15, crit: 9, blockPhys: 8 },
+      stats: { hp: 1917, mp: 0, attack: 180, defense: 111, magicDefense: 89, speed: 19, crit: 14, blockPhys: 14 },
       exp: 1452,
       gold: [51, 97],
       loot: [
@@ -852,7 +856,7 @@
       range: 2, move: { name: "Удар корінням", mult: 1.63, chance: 0.25 },
       verb: "хльоскає",
       level: 23,
-      stats: { hp: 1947, mp: 0, attack: 185, defense: 114, magicDefense: 91, speed: 16, crit: 10, blockPhys: 8 },
+      stats: { hp: 1947, mp: 0, attack: 185, defense: 114, magicDefense: 91, speed: 20, crit: 16, blockPhys: 14 },
       exp: 1587,
       gold: [53, 101],
       loot: [
@@ -885,7 +889,7 @@
       range: 1, move: { name: "Наскок вершника", mult: 1.64, chance: 0.25 },
       verb: "рубає",
       level: 24,
-      stats: { hp: 1201, mp: 0, attack: 234, defense: 66, magicDefense: 78, speed: 27, crit: 15 },
+      stats: { hp: 1201, mp: 0, attack: 234, defense: 66, magicDefense: 78, speed: 35, crit: 24, dodge: 19 },
       exp: 1728,
       gold: [55, 106],
       loot: [
@@ -919,7 +923,7 @@
       verb: "б'є",
       level: 25,
       boss: true, noChampion: true, spawnWeight: 0.1,
-      stats: { hp: 3727, mp: 625, attack: 208, magic: 169, defense: 88, magicDefense: 88, speed: 20, crit: 10, blockPhys: 8, blockMag: 8 },
+      stats: { hp: 3727, mp: 625, attack: 208, magic: 169, defense: 88, magicDefense: 88, speed: 26, crit: 17, blockPhys: 15, blockMag: 15 },
       skills: [
         { kind: "magic", name: "Темне коріння", mp: 60, mult: 2.4 },
         { kind: "heal", name: "Подих лісу", mp: 70, healPct: 0.1 },
