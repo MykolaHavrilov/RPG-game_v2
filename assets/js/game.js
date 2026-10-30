@@ -1472,7 +1472,8 @@
       codeForm.addEventListener("submit", async ev => {
         ev.preventDefault();
         const code = codeInput.value.trim().toLowerCase();
-        codeInput.value = "Код";
+        codeInput.value = "";
+        codeInput.placeholder = "код";
         if (code !== "god.mod" && code !== "god.mod.off") { showMsg(msg, "Невірний код.", true); return; }
         const s = await RPG.loadCurrentGame().catch(() => null);
         if (!s) { showMsg(msg, "Немає активної гри.", true); return; }
