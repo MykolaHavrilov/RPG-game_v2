@@ -4953,19 +4953,33 @@
         });
         dlg.append(slots);
         if (pick !== null) {
+          // Список рун, що лягають у цю річ: згори донизу — руна за руною (порядок книги рун),
+          // а в межах руни — від нижчої рідкості до вищої. Рядок: назва й рідкість, нижче — що дає.
+          const keyOrder = Object.keys(RPG.RUNES);
           const fits = [];
           for (const e of ms.inventory) if (RPG.runeFits(ref.id, e.id) && !fits.includes(e.id)) fits.push(e.id);
-          const box = el("div", "rune-forge-list");
+          fits.sort((a, b) => {
+            const A = RPG.ITEMS[a], B = RPG.ITEMS[b];
+            return keyOrder.indexOf(A.rune) - keyOrder.indexOf(B.rune) ||
+              RPG.RUNE_GRADE_ORDER.indexOf(A.grade) - RPG.RUNE_GRADE_ORDER.indexOf(B.grade);
+          });
           if (!fits.length) dlg.append(el("p", "house-soon", "В інвентарі немає рун, що лягають у цю річ."));
+          const box = el("div", "rune-pick-list");
           for (const rid of fits) {
-            const b = button("", "wf wf-slot rune-forge-pick", async () => {
+            const it = RPG.ITEMS[rid];
+            const b = button("", "rune-pick-row", async () => {
               const r = RPG.insertRune(ms, ref, pick, rid);
               note = { text: r.ok ? `${RPG.ITEMS[r.id].name} лягла в гніздо.` : r.reason, error: !r.ok };
               if (r.ok) { pick = null; await RPG.saveGame(save); }
               draw();
             });
-            fillItemCell(b, rid, RPG.countItem(ms, rid));
-            b.title = `${RPG.ITEMS[rid].name} — ${RPG.runeEffectText(rid)}`;
+            const text = el("span", "rune-pick-text");
+            const head = el("span", "rune-pick-head");
+            head.append(el("strong", rarityTextClass(rid).trim() || null, RPG.RUNES[it.rune].name),
+              el("span", "rune-pick-grade rt-" + it.grade, RARITY_NAMES[it.grade] || ""));
+            text.append(head, el("small", "rune-pick-fx", "– " + RPG.runeEffectText(rid)));
+            b.append(smallIcon(rid, "rune-pick-icon"), text, el("span", "rune-pick-qty", `×${fmtNum(RPG.countItem(ms, rid))}`));
+            b.title = `Вкласти: ${it.name}`;
             box.append(b);
           }
           if (fits.length) dlg.append(el("strong", null, `Гніздо ${pick + 1}: виберіть руну`), box);

@@ -170,7 +170,7 @@
     const it = RPG.ITEMS[runeId], r = it && RUNES[it.rune];
     if (!r) return "";
     const g = RUNE_GRADES[it.grade];
-    return g && g.val >= 0 ? `${r.effect}: ${r.vals[g.val]}` : "зламана — не діє";
+    return g && g.val >= 0 ? `${r.effect}: ${r.vals[g.val]}` : "не діє — лише паливо для Горна Сварога";
   }
   // Вкласти руну з інвентаря (runeId) у гніздо slot речі ref (річ в інвентарі чи вдягнена). save — сейв героя (ms)
   function insertRune(save, ref, slot, runeId) {
