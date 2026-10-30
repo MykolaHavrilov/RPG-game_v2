@@ -12,7 +12,7 @@
   const STORE = "saves";
   const LS_PREFIX = "rpg_save_"; // запасне сховище в localStorage
 
-  const SAVE_VERSION = 9;        // версія ФОРМАТУ сейву (полів усередині)
+  const SAVE_VERSION = 10;        // версія ФОРМАТУ сейву (полів усередині)
   const CURRENT_SLOT_KEY = "rpg_current_slot";
 
   // ---------- Відкриття бази ----------
@@ -145,7 +145,10 @@
   }
 
   async function loadCurrentGame() {
-    return loadGame(getCurrentSlot());
+    const save = await loadGame(getCurrentSlot());
+    // гнізда під руни видно лише після прочитання книги «Руни Небесної Кузні» (rarity.js → SOCKETS)
+    RPG.uiRunesSeen = !!save?.books?.runesRead;
+    return save;
   }
 
   // Новий унікальний слот: "slot_1760797200000"
@@ -185,6 +188,7 @@
     save.inventory ??= [];
     // Версія 7: власні доми (character.js → HOUSES) — список, бо згодом будуть доми в інших містах
     if (!Array.isArray(save.houses)) save.houses = [];
+    // Версія 10: гнізда під руни (ref.sockets / ref.runes) — розігруються в RPG.normalizeRef для речей, у яких їх ще немає
     // Версія 9: пояс з 5 слотами для мішечків (character.js → BELT_SLOTS)
     if (!Array.isArray(save.belt)) save.belt = [];
     save.belt = save.belt.slice(0, RPG.BELT_SLOTS || 5).map(id => (ITEMS[id]?.type === "pouch" ? id : null));

@@ -157,5 +157,47 @@
     return { ok: true, id: outId, grade, price: RUNE_FORGE.fee };
   }
 
-  Object.assign(RPG, { RUNES, RUNE_GRADES, RUNE_GRADE_ORDER, RUNE_KIND_NAME, runeItemId, RUNE_IDS, RUNE_FORGE, runeForgeOdds, runeForge });
+  // ---------- Гнізда: які руни куди лягають, опис дії ----------
+  // Руни зброї — у зброю та речі лівої руки (щити, колчани, сфери, малі кинджали), руни броні — у броню,
+  // універсальні — у будь-що, зокрема прикраси.
+  const RUNE_FITS = { weapon: ["weapon", "shield", "offhand"], armor: ["armor"], universal: ["weapon", "shield", "offhand", "armor", "accessory"] };
+  function runeFits(itemId, runeId) {
+    const rune = RPG.ITEMS[runeId], item = RPG.ITEMS[itemId];
+    return !!(rune?.type === "rune" && item && RUNE_FITS[rune.runeKind]?.includes(item.type));
+  }
+  // «Атака зброї: +8%» для руни цієї рідкості (зламана — «не діє»)
+  function runeEffectText(runeId) {
+    const it = RPG.ITEMS[runeId], r = it && RUNES[it.rune];
+    if (!r) return "";
+    const g = RUNE_GRADES[it.grade];
+    return g && g.val >= 0 ? `${r.effect}: ${r.vals[g.val]}` : "зламана — не діє";
+  }
+  // Вкласти руну з інвентаря (runeId) у гніздо slot речі ref (річ в інвентарі чи вдягнена). save — сейв героя (ms)
+  function insertRune(save, ref, slot, runeId) {
+    if (!save.books?.runesRead) return { ok: false, reason: "Гнізда бачить лише той, хто прочитав «Руни Небесної Кузні»." };
+    if (!ref?.sockets || !Array.isArray(ref.runes) || !(slot >= 0 && slot < ref.sockets)) return { ok: false, reason: "Немає такого гнізда." };
+    if (ref.runes[slot]) return { ok: false, reason: "Гніздо вже зайняте — спершу вийміть руну." };
+    if (!runeFits(ref.id, runeId)) return { ok: false, reason: `${RPG.ITEMS[runeId]?.name || "Ця руна"} сюди не лягає.` };
+    if (RPG.countItem(save, runeId) < 1) return { ok: false, reason: "Такої руни немає в інвентарі." };
+    RPG.removeItem(save, runeId, 1);
+    ref.runes[slot] = runeId;
+    return { ok: true, id: runeId };
+  }
+  // Вийняти руну з гнізда: вона тріскається й повертається в інвентар зламаною
+  function removeRune(save, ref, slot) {
+    const id = ref?.runes?.[slot];
+    if (!id) return { ok: false, reason: "Гніздо порожнє." };
+    const broken = runeItemId(RPG.ITEMS[id].rune, "broken");
+    if (RPG.fitQty(save, broken, 1) < 1) return { ok: false, reason: "Інвентар повний — нікуди покласти руну." };
+    ref.runes[slot] = null;
+    RPG.addItem(save, broken, 1);
+    return { ok: true, id, broken };
+  }
+  // Руни з гнізд речі, що зникає (розбір): кожна тріскається → id зламаних рун
+  function crackedRunes(ref) {
+    return (ref?.runes || []).filter(Boolean).map(id => runeItemId(RPG.ITEMS[id].rune, "broken"));
+  }
+
+  Object.assign(RPG, { RUNES, RUNE_GRADES, RUNE_GRADE_ORDER, RUNE_KIND_NAME, runeItemId, RUNE_IDS, RUNE_FORGE, runeForgeOdds, runeForge,
+    RUNE_FITS, runeFits, runeEffectText, insertRune, removeRune, crackedRunes });
 })(window.RPG);

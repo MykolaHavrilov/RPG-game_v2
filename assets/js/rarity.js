@@ -150,6 +150,20 @@
     return aff;
   }
 
+  // ---------- Гнізда під руни (оновлення рун; Книга Сварога · друга) ----------
+  // Шанс на гнізда кожна річ отримує одразу, коли з'являється (бій, кузня, магазин); старі речі — один раз
+  // при завантаженні сейву (normalizeRef). Гравець бачить гнізда лише після прочитання книги рун (save.books.runesRead).
+  //   ref.sockets — скільки гнізд (0 — немає), ref.runes — [id руни | null, …] довжиною sockets
+  const SOCKETS = { chance: 0.40, count: { broken: [1, 1], common: [1, 1], magic: [1, 2], epic: [3, 3], legendary: [4, 4] } };
+  function rollSockets(ref) {
+    const [lo, hi] = SOCKETS.count[RARITIES[ref.r] ? ref.r : "common"];
+    const n = Math.random() < SOCKETS.chance ? lo + Math.floor(Math.random() * (hi - lo + 1)) : 0;
+    ref.sockets = n;
+    if (n) ref.runes = Array(n).fill(null);
+    else delete ref.runes;
+    return ref;
+  }
+
   // Створити екземпляр речі (для інвентаря/скрині)
   function makeItem(id, r = "common", opts = {}) {
     if (!hasRarity(id)) return { id, qty: 1 };
@@ -157,6 +171,7 @@
     const entry = { id, qty: 1, r };
     const aff = rollAffixes(id, r, opts.fromShop);
     if (Object.keys(aff).length) entry.aff = aff;
+    rollSockets(entry);
     return entry;
   }
 
@@ -261,6 +276,12 @@
     if (hasRarity(ref.id)) {
       if (!RARITIES[ref.r]) ref.r = "common";
       ref.qty = 1;
+      if (typeof ref.sockets !== "number") rollSockets(ref);          // речі зі старих сейвів — один розіграш
+      else if (ref.sockets > 0) {
+        if (!Array.isArray(ref.runes)) ref.runes = [];
+        ref.runes = ref.runes.slice(0, ref.sockets).map(x => (RPG.ITEMS[x]?.type === "rune" ? x : null));
+        while (ref.runes.length < ref.sockets) ref.runes.push(null);
+      }
     }
     return ref;
   }
@@ -291,6 +312,6 @@
     lootFilter, isFilteredOut, lootFilterActive,
     RARITY_ORDER, RARITIES, DROP_WEIGHTS, LUCK, LEGEND_OVERCAP, CORE_KEYS,
     refId, hasRarity, rarityOf, makeItem, rollRarity, newLuck,
-    itemStats, itemName, itemFullName, itemIconRef, refSellPrice, normalizeRef
+    itemStats, itemName, itemFullName, itemIconRef, refSellPrice, normalizeRef, SOCKETS, rollSockets
   });
 })(window.RPG);

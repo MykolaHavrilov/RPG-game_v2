@@ -355,6 +355,8 @@
     if (!info) return { ok: false, reason: "Цю річ не можна розібрати." };
     if (!info.ready.ok) return { ok: false, reason: info.ready.reason };
     const got = info.mats.map(m => [...m]);
+    // руни з гнізд при розборі тріскаються й повертаються зламаними
+    for (const id of (RPG.crackedRunes ? RPG.crackedRunes(info.ref) : [])) got.push([id, 1]);
     if (info.bonus === "spark") got.push(["heavenly_spark", 1]);
     else if (info.bonus) {
       const [baseId] = info.recipe.mats[Math.floor(Math.random() * info.recipe.mats.length)];

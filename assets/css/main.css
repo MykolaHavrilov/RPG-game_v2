@@ -734,3 +734,18 @@ a, button, input, label, select, [tabindex] { touch-action: manipulation; -webki
   flex: 1 1 180px; min-height: 44px; padding: 8px 12px; font: inherit; color: var(--text);
   background: rgba(0, 0, 0, .35); border: 1px solid var(--border-color); border-radius: var(--radius-sm, 6px);
 }
+
+/* ---------- Гнізда під руни (game.js → socketMarks, itemInfo) ---------- */
+.item-sockets { position: absolute; left: 3px; bottom: 3px; display: flex; gap: 2px; pointer-events: none; z-index: 2; }
+.item-sockets .sock { width: 7px; height: 7px; transform: rotate(45deg); border: 1.5px solid #e8d5ae; background: rgba(0, 0, 0, .55); box-shadow: 0 0 2px #000; }
+.item-sockets .sock.is-full { border-color: #1a120a; }
+.sock.rg-broken { background: #9a9a9a; } .sock.rg-common { background: #e8e8e8; } .sock.rg-magic { background: #4f8dff; }
+.sock.rg-epic { background: #b265ff; } .sock.rg-legendary { background: #ff9d2e; }
+.tip-sockets { margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(201, 163, 90, .35); }
+.tip-sockets-title { font-weight: 700; color: var(--gold); font-size: .9rem; }
+.tip-socket-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tip-socket { display: flex; align-items: center; gap: 6px; font-size: .88rem; flex-wrap: wrap; }
+.tip-socket small { opacity: .85; }
+.tip-socket-icon { width: 22px; height: 22px; }
+.tip-socket-empty { width: 12px; height: 12px; margin: 0 5px; transform: rotate(45deg); border: 1.5px dashed #c9a35a; flex: none; }
+.tip-socket-free { opacity: .7; font-style: italic; }

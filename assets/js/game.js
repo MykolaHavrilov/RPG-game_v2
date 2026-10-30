@@ -726,6 +726,7 @@
     else if (id === "runes") {
       // прочитана книга рун — гравець починає бачити гнізда в речах (оновлення рун)
       if (!save.books?.runesRead) { RPG.addToLibrary(save, "runesRead"); RPG.saveGame(save).catch(e => console.error(e)); }
+      RPG.uiRunesSeen = true;
       showDataBook(save, RPG.RUNE_BOOK, "word", "is-rune-book");
     }
   }
@@ -909,7 +910,18 @@
     if (qty > 1) cell.append(el("span", "item-qty", `×${qty}`));
     const gs = RPG.gearScore ? RPG.gearScore(ref) : null;
     if (gs !== null) cell.append(el("span", "item-gs", String(gs)));
+    const sockets = socketMarks(ref);
+    if (sockets) cell.append(sockets);
     return cell;
+  }
+  // Ромбики гнізд у куті комірки: порожній — вільне гніздо, кольоровий — руна (колір рідкості руни).
+  // Видно лише після прочитання книги «Руни Небесної Кузні» (RPG.uiRunesSeen).
+  function socketMarks(ref) {
+    if (!RPG.uiRunesSeen || !ref || typeof ref !== "object" || !(ref.sockets > 0)) return null;
+    const box = el("span", "item-sockets");
+    box.setAttribute("aria-hidden", "true");
+    for (const id of ref.runes || []) box.append(el("i", "sock" + (id ? " is-full rg-" + (RPG.ITEMS[id]?.grade || "common") : "")));
+    return box;
   }
 
   // Комірка спорядження розміром з іконку: річ — лише картинка,
@@ -1191,6 +1203,22 @@
 
     const eff = describeEffect(item);
     if (eff) box.append(el("div", "tip-effect", eff));
+    // Гнізда під руни (після прочитання книги рун)
+    if (RPG.uiRunesSeen && ref && typeof ref === "object" && ref.sockets > 0) {
+      const sb = el("div", "tip-sockets");
+      sb.append(el("span", "tip-sockets-title", `Гнізда для рун: ${ref.runes.filter(Boolean).length}/${ref.sockets}`));
+      const ul = el("ul", "tip-socket-list");
+      for (const rid of ref.runes) {
+        const li = el("li", "tip-socket" + (rid ? " is-full" : ""));
+        if (rid) {
+          li.append(smallIcon(rid, "tip-socket-icon"), el("span", rarityTextClass(rid).trim() || null, RPG.ITEMS[rid].name),
+            el("small", null, RPG.runeEffectText(rid)));
+        } else li.append(el("span", "tip-socket-empty"), el("span", "tip-socket-free", "вільне гніздо"));
+        ul.append(li);
+      }
+      sb.append(ul);
+      box.append(sb);
+    }
 
     const set = item.set && RPG.ITEM_SETS && RPG.ITEM_SETS[item.set];
     if (set) {
@@ -4551,6 +4579,8 @@
     // Частина стопки: вікно з кількістю (напр. 25 слизу з 200)
     const btnToChestPart = button("У скриню: частину…", "wf wf-secondary");
     const btnFromChestPart = button("Забрати частину…", "wf wf-secondary");
+    // Гнізда під руни: вкласти / вийняти (data/runes.js → insertRune / removeRune)
+    const btnRunes = button("Руни в гніздах…", "wf wf-secondary");
     // Скриня поточної локації (або основна — тоді її можна лише переглянути)
     // У власному домі зі складом — ще й скрині ремесла (вкладки над скринею)
     const storages = RPG.chestsHere(ms);
@@ -4672,7 +4702,7 @@
     // Кнопки дій у вікні — дублюють активні кнопки під інвентарем
     function invActions() {
       return [
-        [btnEquip, "wf-button"], [btnUnequip, "wf-button"], [btnUse, "wf-button"],
+        [btnEquip, "wf-button"], [btnUnequip, "wf-button"], [btnUse, "wf-button"], [btnRunes, "wf-secondary"],
         [btnToChest, "wf-secondary"], [btnToChestPart, "wf-secondary"], [btnFromChest, "wf-secondary"], [btnFromChestPart, "wf-secondary"],
         [btnDrop, "wf-danger"]
       ].filter(([b]) => !b.disabled)
@@ -4694,7 +4724,7 @@
     function renderDesc() {
       const id = selectedItemId();
       desc.innerHTML = "";
-      for (const b of [btnEquip, btnUnequip, btnUse, btnDrop, btnToChest, btnFromChest, btnToChestPart, btnFromChestPart]) b.disabled = true;
+      for (const b of [btnEquip, btnUnequip, btnUse, btnDrop, btnToChest, btnFromChest, btnToChestPart, btnFromChestPart, btnRunes]) b.disabled = true;
       btnToChest.title = btnFromChest.title = atHome ? "" : "Доступно лише біля скрині";
       if (!id) {
         desc.append(el("div", null, "Оберіть предмет, щоб побачити опис."));
@@ -4717,6 +4747,7 @@
       if (selected.kind === "inv") btnDrop.disabled = !!RPG.ITEMS[ms.inventory[selected.index]?.id]?.locked;   // Сфера Богів не викидається
       if (selected.kind === "inv" && atHome) btnToChest.disabled = false;
       if (selected.kind === "chest" && atHome) btnFromChest.disabled = false;
+      if (RPG.uiRunesSeen && (selected.kind === "inv" || selected.kind === "eq") && ref.sockets > 0) btnRunes.disabled = false;
       const isStack = !ref.r && item.stackable && (ref.qty || 1) > 1;
       if (isStack && selected.kind === "inv" && atHome) btnToChestPart.disabled = false;
       if (isStack && selected.kind === "chest" && atHome) btnFromChestPart.disabled = false;
@@ -4859,6 +4890,67 @@
       await commit(r.ok ? `У скриню: ${RPG.ITEMS[r.id].name}${r.qty > 1 ? ` ×${r.qty}` : ""}` +
         (r.left ? `. Не влізло ${r.left} шт. — скриня повна.` : "") : r.reason, !r.ok);
     });
+
+    btnRunes.addEventListener("click", () => {
+      const ref = selectedRef();
+      if (ref) showSocketDialog(ref);
+    });
+    // Вікно гнізд речі: вільне гніздо — вибір руни з інвентаря, що пасує; зайняте — руна й «Вийняти» (руна трісне)
+    function showSocketDialog(ref) {
+      document.querySelector(".socket-dialog")?.remove();
+      const dlg = el("dialog", "notice-dialog socket-dialog");
+      let pick = null, note = null;
+      const draw = () => {
+        dlg.innerHTML = "";
+        const close = button("×", "notice-close", () => dlg.close());
+        close.setAttribute("aria-label", "Закрити");
+        dlg.append(close, el("h3", null, `Гнізда: ${RPG.itemFullName(ref)}`));
+        dlg.append(el("p", "note", "Руни зброї лягають у зброю та речі лівої руки, руни броні — у броню, універсальні — у будь-що. Вийнята з гнізда руна тріскається і стає зламаною."));
+        if (note) dlg.append(el("p", "forge-result" + (note.error ? " is-error" : ""), note.text));
+        const slots = el("div", "socket-slots");
+        ref.runes.forEach((rid, i) => {
+          const row = el("div", "socket-row" + (pick === i ? " is-pick" : ""));
+          if (rid) {
+            row.append(smallIcon(rid, "tip-socket-icon"));
+            const t = el("div", "socket-text");
+            t.append(el("strong", rarityTextClass(rid).trim() || null, RPG.ITEMS[rid].name), el("small", null, RPG.runeEffectText(rid)));
+            row.append(t, button("Вийняти", "wf wf-danger", async () => {
+              const r = RPG.removeRune(ms, ref, i);
+              note = { text: r.ok ? `${RPG.ITEMS[r.id].name} тріснула — в інвентарі ${RPG.ITEMS[r.broken].name.toLowerCase()}.` : r.reason, error: !r.ok };
+              if (r.ok) await RPG.saveGame(save);
+              draw();
+            }));
+          } else {
+            row.append(el("span", "tip-socket-empty"), el("span", "socket-text", "Вільне гніздо"),
+              button(pick === i ? "Скасувати" : "Вкласти руну", "wf " + (pick === i ? "wf-secondary" : "wf-button"), () => { pick = pick === i ? null : i; note = null; draw(); }));
+          }
+          slots.append(row);
+        });
+        dlg.append(slots);
+        if (pick !== null) {
+          const fits = [];
+          for (const e of ms.inventory) if (RPG.runeFits(ref.id, e.id) && !fits.includes(e.id)) fits.push(e.id);
+          const box = el("div", "rune-forge-list");
+          if (!fits.length) dlg.append(el("p", "house-soon", "В інвентарі немає рун, що лягають у цю річ."));
+          for (const rid of fits) {
+            const b = button("", "wf wf-slot rune-forge-pick", async () => {
+              const r = RPG.insertRune(ms, ref, pick, rid);
+              note = { text: r.ok ? `${RPG.ITEMS[r.id].name} лягла в гніздо.` : r.reason, error: !r.ok };
+              if (r.ok) { pick = null; await RPG.saveGame(save); }
+              draw();
+            });
+            fillItemCell(b, rid, RPG.countItem(ms, rid));
+            b.title = `${RPG.ITEMS[rid].name} — ${RPG.runeEffectText(rid)}`;
+            box.append(b);
+          }
+          if (fits.length) dlg.append(el("strong", null, `Гніздо ${pick + 1}: виберіть руну`), box);
+        }
+      };
+      dlg.addEventListener("close", () => { dlg.remove(); RPG.popover.hide(); render(); });
+      document.body.append(dlg);
+      draw();
+      dlg.showModal();
+    }
 
     btnToChestPart.addEventListener("click", async () => {
       const entry = ms.inventory[selected?.index];
