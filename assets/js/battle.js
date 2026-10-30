@@ -306,9 +306,52 @@
       skillLevels: { ...(ms.character.skills || {}) }, queue, qi: 0,
       hp: Math.floor(ms.character.hp), mp: Math.floor(ms.character.mp), buffs: {}, stun: 0,
       dual: dualOf(ms),
-      lifesteal: RPG.godsOrb ? (RPG.godsOrb(ms)?.lifestealPct || 0) : 0,   // Сфера Богів: вампіризм, % від шкоди
+      lifesteal: (RPG.godsOrb ? (RPG.godsOrb(ms)?.lifestealPct || 0) : 0) + (runeB(ms).lifesteal || 0),   // Сфера Богів + руна Треба
+      rb: runeB(ms),                                     // бойові ефекти рун (data/runes.js → runeTotals().battle)
       pos: { r: 1, c: 2 }
     };
+  }
+  const runeB = ms => (RPG.runeTotals ? RPG.runeTotals(ms).battle : {});
+  // ---------- Руни в бою ----------
+  // Після влучання героя: оглушення (Турісаз), підпал (Кеназ), прокляття (Чорнобог). Повертає текст для журналу
+  function runeOnHit(H, E, dmg) {
+    const rb = H.rb || {};
+    let t = "";
+    if (dmg <= 0 || E.hp <= 0) return t;
+    if (rb.stun && !E.stunned && roll(rb.stun)) { E.stunned = 1; t += `, «${E.name}» оглушений (Турісаз)`; }
+    if (rb.burn) {
+      const burn = Math.max(1, Math.round(heroNow(H).attack * rb.burn / 100));
+      const fresh = !E.dot || E.dot.turns <= 0;
+      if (fresh || E.dot.dmg * E.dot.turns < burn * 3) { E.dot = { dmg: burn, turns: 3 }; if (fresh) t += `, підпал ${burn} × 3 ходи (Кеназ)`; }
+    }
+    if (rb.curse && !(E.curse > 0) && roll(rb.curse)) { E.curse = 3; t += `, прокляття: захист −${CURSE_PCT}% на 3 ходи (Чорнобог)`; }
+    return t;
+  }
+  // Множник шкоди героя по ворогу: по чемпіонах і босах (руна Сила)
+  const runeEliteMult = (H, E) => (H.rb?.elite && (E.champion || E.enemy.boss) ? 1 + H.rb.elite / 100 : 1);
+  // Захист ворога з урахуванням пробиття (Хагалаз)
+  const penDef = (H, E) => enemyDefense(E) * (1 - (H.rb?.pen || 0) / 100);
+  // Додаткова вогняна шкода від атаки (Крада) — магічна, проти магічного захисту
+  function runeFire(H, E) {
+    const pct = H.rb?.fire;
+    if (!pct || E.hp <= 0) return 0;
+    const f = Math.max(1, Math.round(mitigate(heroNow(H).attack * pct / 100, enemyMagDef(E) * 0.5)));
+    E.hp = Math.max(0, E.hp - f);
+    return f;
+  }
+  // Удар ворога по герою: менше шкоди від нежиті (Велес). Повертає змінену шкоду
+  const runeUndead = (H, E, dmg) => (E.undead && H.rb?.undeadRes ? Math.round(dmg * (1 - H.rb.undeadRes / 100)) : dmg);
+  // Після удару ворога: шипи (Чур) і заморожування нападника (Іса). Повертає текст
+  function runeOnStruck(H, E, dmg) {
+    const rb = H.rb || {};
+    let t = "";
+    if (dmg > 0 && rb.thorns && E.hp > 0) {
+      const back = Math.max(1, Math.round(dmg * rb.thorns / 100));
+      E.hp = Math.max(0, E.hp - back);
+      t += `, шипи б'ють у відповідь: ${back} (Чур)`;
+    }
+    if (rb.freeze && E.hp > 0 && !(E.frozen > 0) && roll(rb.freeze)) { E.frozen = 1; t += `, «${E.name}» скутий кригою (Іса)`; }
+    return t;
   }
   // Вампіризм: частка завданої шкоди лікує героя. Повертає, скільки HP відновлено
   function leech(H, dmg) {
@@ -383,7 +426,8 @@
 
   const speedOf = u => Math.max(0.5, u.side === "hero" ? heroNow(u).speed : (u.enemy.stats.speed || 1));
   const dist = (A, B) => cellDist(A.pos, B.pos);
-  const enemyDefense = E => E.enemy.stats.defense * (1 - E.defDown / 100);
+  const CURSE_PCT = 10;
+  const enemyDefense = E => E.enemy.stats.defense * (1 - Math.min(90, E.defDown + (E.curse > 0 ? CURSE_PCT : 0)) / 100);
   const enemyMagDef = E => E.enemy.stats.magicDefense ?? Math.floor(E.enemy.stats.defense / 2);
   const atkDownOf = E => (E.atkDown.turns > 0 ? E.atkDown.pct : 0);
 
@@ -420,11 +464,12 @@
     if (sk.vsUndead && E.undead) mult *= 1 + sk.vsUndead / 100;
     const crit = roll(h.crit + RPG.skillValue(sk.critBonus, lvl));
     const blocked = roll(sk.magic ? es.blockMag : es.blockPhys);
-    const raw = (sk.magic ? h.magic : h.attack) * mult * variance();
-    const dmg = finishHit(mitigate(raw, sk.magic ? enemyMagDef(E) : enemyDefense(E)), crit, blocked);
+    const raw = (sk.magic ? h.magic : h.attack) * mult * variance() * runeEliteMult(H, E);
+    const dmg = finishHit(mitigate(raw, sk.magic ? enemyMagDef(E) : penDef(H, E)), crit, blocked);
     E.hp = Math.max(0, E.hp - dmg);
     const lh = leech(H, dmg);
-    return { text: dmg + (crit ? " (крит)" : "") + (lh ? ` (+${lh} HP)` : ""), crit };
+    const rt = sk.magic ? "" : runeOnHit(H, E, dmg);
+    return { text: dmg + (crit ? " (крит)" : "") + (lh ? ` (+${lh} HP)` : "") + rt, crit };
   }
 
   // Атакувальна навичка. pool — вороги поруч (для spread / splash), уже без заморожених
@@ -509,15 +554,17 @@
     }
     const crit = roll(h.crit);
     const blocked = roll(es.blockPhys);
-    const dmg = finishHit(mitigate(h.attack * variance(), enemyDefense(E)), crit, blocked);
+    const dmg = finishHit(mitigate(h.attack * variance() * runeEliteMult(H, E), penDef(H, E)), crit, blocked);
     E.hp = Math.max(0, E.hp - dmg);
-    const lh = leech(H, dmg);
+    const fire = runeFire(H, E);
+    const lh = leech(H, dmg + fire);
     let text = H.weapon.type
       ? `${H.name} б'є (${H.weapon.name}) «${E.name}»: ${dmg} шкоди`
       : `${H.name} б'є кулаками «${E.name}»: ${dmg} шкоди`;
+    if (fire) text += ` + ${fire} вогнем (Крада)`;
     if (blocked) text += " (ворог частково заблокував)";
     if (crit) text += " — КРИТ!";
-    text += leechTxt(lh);
+    text += leechTxt(lh) + runeOnHit(H, E, dmg);
     return { who: "hero", text, crit, sound: "weapon:" + (H.weapon.type || "") };
   }
 
@@ -533,10 +580,11 @@
       const crit = roll(h.crit);
       anyCrit = anyCrit || crit;
       const blocked = roll(es.blockPhys);
-      const dmg = finishHit(mitigate(atk * DUAL_MULT * variance(), enemyDefense(E)), crit, blocked);
+      const dmg = finishHit(mitigate(atk * DUAL_MULT * variance() * runeEliteMult(H, E), penDef(H, E)), crit, blocked);
       E.hp = Math.max(0, E.hp - dmg);
-      healed += leech(H, dmg);
-      parts.push(`${name} ${dmg}${crit ? " (крит)" : ""}${blocked ? " (блок)" : ""}`);
+      const fire = runeFire(H, E);
+      healed += leech(H, dmg + fire);
+      parts.push(`${name} ${dmg}${fire ? ` +${fire} вогнем` : ""}${crit ? " (крит)" : ""}${blocked ? " (блок)" : ""}${runeOnHit(H, E, dmg)}`);
     }
     return { who: "hero", text: `${H.name} б'є двома сокирами «${E.name}»: ${parts.join(" + ")} шкоди${leechTxt(healed)}`, crit: anyCrit, sound: "weapon:axe" };
   }
@@ -546,7 +594,7 @@
     H.mp -= SPELL_COST;
     const crit = roll(h.crit);
     const blocked = roll(E.enemy.stats.blockMag);
-    const dmg = finishHit(mitigate(h.magic * SPELL_MULT * variance(), enemyMagDef(E)), crit, blocked);
+    const dmg = finishHit(mitigate(h.magic * SPELL_MULT * variance() * runeEliteMult(H, E), enemyMagDef(E)), crit, blocked);
     E.hp = Math.max(0, E.hp - dmg);
     const lh = leech(H, dmg);
     let text = `${H.name} кидає «Іскру» (−${SPELL_COST} MP) в «${E.name}»: ${dmg} шкоди${leechTxt(lh)}`;
@@ -561,11 +609,12 @@
     E.mp -= mp;
     const crit = roll(E.enemy.stats.crit);
     const blocked = roll(hero.blockMag);
-    const dmg = finishHit(mitigate((E.enemy.stats.magic || 0) * mult * (1 - atkDownOf(E) / 100) * variance(), hero.magicDefense), crit, blocked);
+    const dmg = runeUndead(H, E, finishHit(mitigate((E.enemy.stats.magic || 0) * mult * (1 - atkDownOf(E) / 100) * variance(), hero.magicDefense), crit, blocked));
     H.hp = Math.max(0, H.hp - dmg);
     let text = `${E.name} — «${name}» (−${mp} MP) по ${H.name}: ${dmg} магічної шкоди`;
     if (blocked) text += ` (${H.name} частково блокує)`;
     if (crit) text += " — КРИТ!";
+    if (H.hp > 0) text += runeOnStruck(H, E, dmg);
     return { who: "enemy", text, crit, sound: "dark" };
   }
 
@@ -576,7 +625,7 @@
     }
     const crit = roll(E.enemy.stats.crit);
     const blocked = roll(hero.blockPhys);
-    const dmg = finishHit(mitigate(E.enemy.stats.attack * (mult || 1) * (1 - atkDownOf(E) / 100) * variance(), hero.defense), crit, blocked);
+    const dmg = runeUndead(H, E, finishHit(mitigate(E.enemy.stats.attack * (mult || 1) * (1 - atkDownOf(E) / 100) * variance(), hero.defense), crit, blocked));
     H.hp = Math.max(0, H.hp - dmg);
     const verb = E.enemy.verb || "кусає";
     let text = moveName
@@ -584,6 +633,7 @@
       : `${E.name} ${verb} ${H.name}: ${dmg} шкоди`;
     if (blocked) text += ` (${H.name} блокує частину удару)`;
     if (crit) text += " — КРИТ!";
+    if (H.hp > 0) text += runeOnStruck(H, E, dmg);
     return { who: "enemy", text, crit, sound: `enemy:${E.enemy.weapon || ""}:${verb}` };
   }
 
@@ -892,6 +942,11 @@
 
     // --- Хід ворога ---
     function enemyTurn(E, firstInRound) {
+      if (E.stunned > 0) {
+        E.stunned--;
+        push({ who: "enemy", text: `«${E.name}» оглушений і пропускає хід`, crit: false });
+        return;
+      }
       if (E.frozen > 0) {
         E.frozen--;
         push({ who: "enemy", text: E.frozen > 0 ? `«${E.name}» скутий кригою й пропускає хід`
@@ -974,7 +1029,7 @@
           }
         }
       }
-      for (const f of foes) if (f.atkDown.turns > 0) f.atkDown.turns--;
+      for (const f of foes) { if (f.atkDown.turns > 0) f.atkDown.turns--; if (f.curse > 0) f.curse--; }
     }
 
     const win = aliveE().length === 0;

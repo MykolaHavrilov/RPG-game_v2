@@ -166,6 +166,12 @@ function calcStats(save, trace = null) {
     }
   }
 
+  // Руни в гніздах вдягнених речей (data/runes.js → runeTotals): числа й пункти — до ліміту, як і речі
+  const runes = RPG.runeTotals ? RPG.runeTotals(save) : null;
+  if (runes) {
+    for (const [key, v] of Object.entries(runes.flat)) { stats[key] = (stats[key] || 0) + v; note(key, "Руни в гніздах", v); }
+  }
+
   // Володіння вдягненою зброєю (data/skills.js)
   const mastery = RPG.masteryBonus ? RPG.masteryBonus(save) : {};
   for (const key in mastery) {
@@ -179,6 +185,9 @@ function calcStats(save, trace = null) {
   for (const [k, stat] of Object.entries(PCT)) if (pas[k]) change(stat, "Пасивні навички", v => v * (1 + pas[k] / 100));
   if (pas.crit) change("crit", "Пасивні навички", v => v + pas.crit);
   if (pas.dodge) change("dodge", "Пасивні навички", v => v + pas.dodge);
+
+  // Руни: % до атаки, захисту, магічного захисту, здоров'я й відновлення
+  if (runes) for (const [key, v] of Object.entries(runes.pct)) change(key, "Руни в гніздах", x => x * (1 + v / 100));
 
   const CAP = RPG.STAT_CAP;
   change("crit", "Обмеження максимуму", v => Math.min(v, CAP.crit));
@@ -1424,7 +1433,9 @@ function applyReward(save, exp, loot) {
       const filterOn = RPG.lootFilterActive(save);
       for (let i = 0; i < it.qty; i++) {
         if (!filterOn && !invFree(save)) break;        // місця немає — решта пропадає
-        const r = RPG.rollRarity(save);
+        let r = RPG.rollRarity(save);
+        // руна Даждьбог: шанс підняти рідкість на крок (крім легендарної)
+        if (loot.rarityUp && r !== "legendary" && Math.random() * 100 < loot.rarityUp) r = RPG.RARITY_ORDER[RPG.RARITY_ORDER.indexOf(r) + 1];
         if (filterOn && RPG.isFilteredOut(save, r)) { it.filtered.push(RPG.makeItem(it.id, r)); continue; }
         if (!invFree(save)) continue;                  // не викинута, але й не влізла — пропала
         const ref = RPG.makeItem(it.id, r);

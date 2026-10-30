@@ -3957,9 +3957,12 @@
         });
         const totalExp = result.enemies.reduce((sum, e) => sum + (e.exp || 0), 0);
         let gold = 0;
+        const runeEco = RPG.teamRuneEco ? RPG.teamRuneEco(team) : { gold: 0, lootRarity: 0 };   // руни Феху й Даждьбог усієї групи
         for (const e of result.enemies) {
           const lootOrb = RPG.godsOrb(save);              // Сфера Богів: +10 пунктів до шансу кожного предмета (20% → 30%)
           const loot = RPG.rollLoot(e.id, lootOrb ? lootOrb.lootPct / 100 : 0);
+          if (runeEco.gold && loot.gold) loot.gold = Math.round(loot.gold * (1 + runeEco.gold / 100));
+          if (runeEco.lootRarity) loot.rarityUp = runeEco.lootRarity;
           RPG.applyReward(save, 0, loot);                // золото й речі — у спільний інвентар
           gold += loot.gold || 0;
           for (const it of loot.items) {
@@ -4018,15 +4021,20 @@
         const orbMult = orb ? 1 + orb.expPct / 100 : 1;
         const pool = Math.round(totalExp * (1 + 0.1 * (team.length - 1)) * spring * orbMult);
         const expEach = Math.floor(pool / Math.max(1, survivors.length));
+        const runeExpLines = [];
         for (const ms of survivors) {
-          const ups = RPG.addExp(ms, expEach);
+          const rp = RPG.runeTotals ? (RPG.runeTotals(ms).eco.exp || 0) : 0;   // руна Вуньо — кожному свої
+          const extra = Math.round(expEach * rp / 100);
+          if (extra) runeExpLines.push(`${group ? ms.character.name + ": " : ""}руни +${extra} EXP (+${rp}%)`);
+          const ups = RPG.addExp(ms, expEach + extra);
           if (ups.length) levelLines.push(`${ms.character.name}: новий рівень ${ups[ups.length - 1]}!`);
         }
         const springTxt = (spring > 1 ? `, Джерело Велеса +${RPG.VELES.expBonusPct}%` : "") + (orb ? `, Сфера Богів +${orb.expPct}%` : "");
         summary.unshift(group
           ? `+${expEach} EXP кожному, хто вижив (усього ${pool}, бонус групи +${(team.length - 1) * 10}%${springTxt})`
           : `+${expEach} EXP${springTxt ? ` (${springTxt.slice(2)})` : ""}`);
-        if (gold) summary.splice(1, 0, `+${gold} золота`);
+        if (gold) summary.splice(1, 0, `+${gold} золота` + (runeEco.gold ? ` (руни +${runeEco.gold}%)` : ""));
+        if (runeExpLines.length) summary.splice(1, 0, ...runeExpLines);
         if (Object.keys(filtered).length) summary.push(`Фільтр викинув: ${Object.entries(filtered).map(([k, n]) => n > 1 ? `${k} ×${n}` : k).join(", ")}`);
         if (Object.keys(lost).length) summary.push(`Не вмістилось в інвентар: ${Object.entries(lost).map(([k, n]) => `${k} ×${n}`).join(", ")}`);
         battleGold = gold;
@@ -4485,6 +4493,23 @@
           infoButton(RPG.STAT_NAMES[key], () => statInfo(key, st, trace)),
           el("strong", null, fmtStat(key, st[key] || 0)));
         list.append(row);
+      }
+      // Особливі дії рун у вдягнених речах (бій, золото, досвід) — те, чого не видно в характеристиках
+      if (RPG.uiRunesSeen && RPG.runeTotals) {
+        const rt = RPG.runeTotals(ms);
+        const NAMES = { stun: "Шанс оглушити ворога", burn: "Підпал від атаки (шкода за хід, 3 ходи)", pen: "Пробиття захисту ворога",
+          fire: "Додаткова вогняна шкода від атаки", elite: "Шкода по чемпіонах і босах", lifesteal: "Вампіризм",
+          curse: "Шанс прокляття (−10% захисту ворога, 3 ходи)", freeze: "Шанс заморозити нападника", thorns: "Шипи (частка отриманої шкоди)",
+          undeadRes: "Менше шкоди від нежиті", gold: "Більше золота з боїв (група)", exp: "Більше досвіду за бої", lootRarity: "Шанс вищої рідкості здобичі (група)" };
+        const rows = [...Object.entries(rt.battle), ...Object.entries(rt.eco)].filter(([, v]) => v);
+        if (rows.length) {
+          list.append(el("div", "stat-row stat-sub", "Руни в гніздах"));
+          for (const [k, v] of rows) {
+            const row = el("div", "stat-row");
+            row.append(el("span", null, NAMES[k] || k), el("strong", null, `${k === "undeadRes" ? "−" : "+"}${Math.round(v * 10) / 10}%`));
+            list.append(row);
+          }
+        }
       }
 
       const info = $("char-info");

@@ -161,6 +161,8 @@
         if (key in ATTRS) total[key] += st[key];
       }
     }
+    // Руни в гніздах вдягнених речей (Уруз, Алатир, Ансуз, Рід — data/runes.js → runeAttrs)
+    if (RPG.runeAttrs) { const ra = RPG.runeAttrs(save); for (const key in ra) total[key] += ra[key]; }
     return total;
   }
 

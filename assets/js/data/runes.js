@@ -198,6 +198,83 @@
     return (ref?.runes || []).filter(Boolean).map(id => runeItemId(RPG.ITEMS[id].rune, "broken"));
   }
 
+  // ---------- Дія рун у вдягнених речах ----------
+  // Числа з vals: "+5%/+2" → [5, 2], "−6%" → [6]
+  function runeNums(runeId) {
+    const it = RPG.ITEMS[runeId], r = it && RUNES[it.rune], g = it && RUNE_GRADES[it.grade];
+    if (!r || !g || g.val < 0) return null;
+    return String(r.vals[g.val]).split("/").map(x => parseFloat(x.replace(/[^\d.]/g, "")) || 0);
+  }
+  // Підсумок рун героя ms: { flat, pct, attrs, battle, eco, parts }
+  //   flat   — до характеристик (speed — число; crit, dodge, blockPhys, blockMag — пункти)
+  //   pct    — % до attack (Тейваз, Перун), defense (Альгіз), magicDefense (Ансуз), hp, hpRegen, mpRegen; attrs — str / vit / int / allAttr
+  //   battle — бойові: stun, burn, pen, fire, elite, lifesteal, curse, freeze, thorns, undeadRes (у %)
+  //   eco    — gold, exp, lootRarity (у %); parts — [{ label, key, value }] для підказок
+  // Дві однакові руни в одній речі не складаються — діє сильніша. У різних речах — складаються.
+  function runeTotals(ms) {
+    const T = { flat: {}, pct: {}, attrs: {}, battle: {}, eco: {}, parts: [] };
+    const add = (bag, key, v, label) => { if (!v) return; bag[key] = (bag[key] || 0) + v; T.parts.push({ label, key, value: v }); };
+    for (const slot in ms.equipment || {}) {
+      const ref = ms.equipment[slot];
+      if (!ref || typeof ref !== "object" || !Array.isArray(ref.runes)) continue;
+      const best = {};                                    // ключ руни → id найсильнішої в цій речі
+      for (const rid of ref.runes) {
+        const it = RPG.ITEMS[rid];
+        if (!it || !runeNums(rid)) continue;
+        const cur = best[it.rune];
+        if (!cur || RUNE_GRADES[it.grade].val > RUNE_GRADES[RPG.ITEMS[cur].grade].val) best[it.rune] = rid;
+      }
+      for (const rid of Object.values(best)) {
+        const it = RPG.ITEMS[rid], n = runeNums(rid), label = it.name;
+        switch (RUNES[it.rune].stat) {
+          case "weaponAtkPct": add(T.pct, "attack", n[0], label); break;
+          case "weaponAtkPct+speed": add(T.pct, "attack", n[0], label); add(T.flat, "speed", n[1], label); break;
+          case "defPct": add(T.pct, "defense", n[0], label); break;
+          case "mdefPct+int": add(T.pct, "magicDefense", n[0], label); add(T.attrs, "int", n[1], label); break;
+          case "crit": add(T.flat, "crit", n[0], label); break;
+          case "speed": add(T.flat, "speed", n[0], label); break;
+          case "dodge": add(T.flat, "dodge", n[0], label); break;
+          case "physBlockPct": add(T.flat, "blockPhys", n[0], label); break;
+          case "magBlockPct": add(T.flat, "blockMag", n[0], label); break;
+          case "hpPct": add(T.pct, "hp", n[0], label); break;
+          case "hpRegenPct": add(T.pct, "hpRegen", n[0], label); break;
+          case "mpRegenPct": add(T.pct, "mpRegen", n[0], label); break;
+          case "str": add(T.attrs, "str", n[0], label); break;
+          case "vit": add(T.attrs, "vit", n[0], label); break;
+          case "allAttr": add(T.attrs, "all", n[0], label); break;
+          case "stunChance": add(T.battle, "stun", n[0], label); break;
+          case "burnPct": add(T.battle, "burn", n[0], label); break;
+          case "armorPenPct": add(T.battle, "pen", n[0], label); break;
+          case "fireDmgPct": add(T.battle, "fire", n[0], label); break;
+          case "eliteDmgPct": add(T.battle, "elite", n[0], label); break;
+          case "lifestealPct": add(T.battle, "lifesteal", n[0], label); break;
+          case "curseChance": add(T.battle, "curse", n[0], label); break;
+          case "freezeChance": add(T.battle, "freeze", n[0], label); break;
+          case "thornsPct": add(T.battle, "thorns", n[0], label); break;
+          case "undeadResPct": add(T.battle, "undeadRes", n[0], label); break;
+          case "goldPct": add(T.eco, "gold", n[0], label); break;
+          case "expPct": add(T.eco, "exp", n[0], label); break;
+          case "lootRarityPct": add(T.eco, "lootRarity", n[0], label); break;
+        }
+      }
+    }
+    if (T.battle.pen) T.battle.pen = Math.min(T.battle.pen, 60);           // пробиття — не більше 60%
+    if (T.battle.undeadRes) T.battle.undeadRes = Math.min(T.battle.undeadRes, 60);
+    return T;
+  }
+  // Атрибути від рун (для stats.js → totalAttrs)
+  function runeAttrs(ms) {
+    const a = runeTotals(ms).attrs, out = {};
+    for (const k of Object.keys(RPG.ATTRS || {})) out[k] = (a[k] || 0) + (a.all || 0);
+    return out;
+  }
+  // Сума бонусів рун усієї групи (золото, рідкість здобичі)
+  function teamRuneEco(members) {
+    const e = { gold: 0, exp: 0, lootRarity: 0 };
+    for (const ms of members || []) { const t = runeTotals(ms).eco; for (const k in e) e[k] += t[k] || 0; }
+    return e;
+  }
+
   Object.assign(RPG, { RUNES, RUNE_GRADES, RUNE_GRADE_ORDER, RUNE_KIND_NAME, runeItemId, RUNE_IDS, RUNE_FORGE, runeForgeOdds, runeForge,
-    RUNE_FITS, runeFits, runeEffectText, insertRune, removeRune, crackedRunes });
+    RUNE_FITS, runeFits, runeEffectText, insertRune, removeRune, crackedRunes, runeNums, runeTotals, runeAttrs, teamRuneEco });
 })(window.RPG);
