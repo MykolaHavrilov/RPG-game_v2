@@ -418,9 +418,9 @@
     if (sum.magicPct) h.magic *= 1 + sum.magicPct / 100;
     if (sum.defensePct) h.defense *= 1 + sum.defensePct / 100;
     if (sum.magicDefensePct) h.magicDefense *= 1 + sum.magicDefensePct / 100;
-    if (sum.crit) h.crit += sum.crit;
-    if (sum.dodge) h.dodge = (h.dodge || 0) + sum.dodge;
-    if (sum.speedPct) h.speed = Math.min(h.speed * (1 + sum.speedPct / 100), RPG.STAT_CAP.speed * 2);
+    if (sum.crit) h.crit = Math.min(h.crit + sum.crit, RPG.STAT_CAP.crit);
+    if (sum.dodge) h.dodge = Math.min((h.dodge || 0) + sum.dodge, RPG.STAT_CAP.dodge);
+    if (sum.speedPct) h.speed = Math.min(h.speed * (1 + sum.speedPct / 100), RPG.STAT_CAP.speed);
     return h;
   }
 

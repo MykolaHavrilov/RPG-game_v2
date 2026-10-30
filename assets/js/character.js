@@ -189,20 +189,15 @@ function calcStats(save, trace = null) {
   // Руни: % до атаки, захисту, магічного захисту, здоров'я й відновлення
   if (runes) for (const [key, v] of Object.entries(runes.pct)) change(key, "Руни в гніздах", x => x * (1 + v / 100));
 
+  // Межі (STAT_CAP) діють один раз — у самому кінці, на суму з усіх джерел, і з легендарними речами теж
   const CAP = RPG.STAT_CAP;
-  change("crit", "Обмеження максимуму", v => Math.min(v, CAP.crit));
-  change("dodge", "Обмеження максимуму", v => Math.min(v, CAP.dodge));
-  change("speed", "Обмеження максимуму", v => Math.min(v, CAP.speed));
-  change("blockPhys", "Обмеження максимуму", v => Math.min(v, CAP.block));
-  change("blockMag", "Обмеження максимуму", v => Math.min(v, CAP.block));
-  for (const key in legendOver) change(key, "Легендарні речі (понад межу)", v => v + legendOver[key]);   // легендарні — понад ліміт
+  for (const key in legendOver) change(key, "Легендарні речі", v => v + legendOver[key]);
 
-  // Швидкість атаки з володіння (напр. лук до +25%) — теж понад ліміт,
-  // але не більше 200% ліміту: це другий, крайній ліміт швидкості
+  // Швидкість атаки з володіння (напр. лук до +25%) — теж після першого ліміту,
+  // а остаточна межа (STAT_CAP.speed) — нижче, разом з іншими
   stats.attackSpeedPct = mastery.attackSpeedPct || 0;
   note("attackSpeedPct", "Володіння вдягненою зброєю (Тренер)", stats.attackSpeedPct);
   if (stats.attackSpeedPct) change("speed", "Швидкість атаки (володіння зброєю)", v => v * (1 + stats.attackSpeedPct / 100));
-  change("speed", "Обмеження максимуму", v => Math.min(v, CAP.speed * 2));
 
   // Бонуси комплектів (data/items.js → ITEM_SETS), поверх усього іншого
   const setCounts = RPG.equippedSetCounts ? RPG.equippedSetCounts(save) : {};
@@ -211,6 +206,14 @@ function calcStats(save, trace = null) {
     if (!set || n < set.pieces) continue;
     for (const [key, pct] of Object.entries(set.bonusPct || {})) change(key, set.name, v => (v || 0) * (1 + pct / 100));
   }
+
+  // Остаточні межі — і з легендарними речами, володінням зброєю та комплектами: більше не враховується
+  // (підказка «i» показує, скільки зрізано понад межу)
+  change("crit", "Обмеження максимуму", v => Math.min(v, CAP.crit));
+  change("dodge", "Обмеження максимуму", v => Math.min(v, CAP.dodge));
+  change("speed", "Обмеження максимуму", v => Math.min(v, CAP.speed));
+  change("blockPhys", "Обмеження максимуму", v => Math.min(v, CAP.block));
+  change("blockMag", "Обмеження максимуму", v => Math.min(v, CAP.block));
 
   for (const key in stats) {
     const raw = stats[key];
