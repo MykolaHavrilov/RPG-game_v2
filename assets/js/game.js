@@ -56,15 +56,72 @@
     return fmtNum(value) + (pct ? "%" : "");
   }
 
-  // Коротке повідомлення в блоці #msg (зникає через кілька секунд)
-  let msgTimer = null;
+  // Повідомлення / помилка — у невеликому спливаючому віконці посеред екрана (main.css → .toast).
+  // Закривається хрестиком або само через MSG_SEC секунд; кілька повідомлень стають стовпчиком (до MSG_MAX).
+  // node — старий параметр (блок #msg унизу сторінки), більше не використовується: виклики showMsg(msg, …) лишились як є.
+  // Контейнер — popover: так віконце видно й поверх відкритих діалогів (showModal); без підтримки popover — position: fixed.
+  // Поки відкритий модальний діалог, решта сторінки неактивна (inert) — тож віконце кладемо всередину
+  // верхнього відкритого діалогу; коли той закривається — повідомлення зникають разом із ним.
+  const MSG_SEC = 5, MSG_MAX = 3;
+  let toastBox = null;
+  function toastParent() {
+    const open = [...document.querySelectorAll("dialog")].filter(d => { try { return d.matches(":modal"); } catch (e) { return false; } });
+    return open.length ? open[open.length - 1] : document.body;
+  }
+  function raiseToasts() {   // перемістити до потрібного батька й підняти на самий верх
+    const host = toastBox;
+    if (!host || !host.children.length) return;
+    const parent = toastParent();
+    const isPop = !!host.showPopover;
+    if (isPop && host.matches(":popover-open")) { try { host.hidePopover(); } catch (e) {} }
+    if (host.parentNode !== parent) parent.append(host);
+    if (isPop) { try { host.showPopover(); } catch (e) {} }
+  }
+  function clearToasts() {   // прибрати всі повідомлення й сховати віконце
+    const host = toastBox;
+    if (!host) return;
+    for (const t of [...host.children]) { clearTimeout(t._t); t.remove(); }
+    if (host.hidePopover) { try { host.hidePopover(); } catch (e) {} }
+    if (host.parentNode !== document.body) document.body.append(host);
+  }
+  function toastHost() {
+    if (toastBox) return toastBox;
+    toastBox = el("div", "toast-host");
+    toastBox.id = "toast-host";
+    if (toastBox.showPopover) toastBox.setAttribute("popover", "manual");
+    document.body.append(toastBox);
+    // діалог закрився — повідомлення в ньому зникають теж
+    document.addEventListener("close", ev => {
+      if (ev.target.tagName === "DIALOG" && ev.target.contains(toastBox)) clearToasts();
+    }, true);
+    // новий діалог відкрився, поки віконце видно, — віконце переходить у нього (інакше опиниться під діалогом)
+    const D = window.HTMLDialogElement && HTMLDialogElement.prototype;
+    if (D && D.showModal && !D.showModal._toast) {
+      const orig = D.showModal;
+      D.showModal = function () { const r = orig.apply(this, arguments); raiseToasts(); return r; };
+      D.showModal._toast = true;
+    }
+    return toastBox;
+  }
   function showMsg(node, text, isError) {
-    if (!node) return;
-    node.textContent = text;
-    node.hidden = false;
-    node.classList.toggle("msg-error", !!isError);
-    clearTimeout(msgTimer);
-    msgTimer = setTimeout(() => { node.hidden = true; }, 4000);
+    if (!text) return;
+    const host = toastHost();
+    const box = el("div", "toast" + (isError ? " toast-error" : ""));
+    box.setAttribute("role", isError ? "alert" : "status");
+    const close = el("button", "toast-close", "×");
+    close.type = "button";
+    close.setAttribute("aria-label", "Закрити");
+    box.append(el("span", "toast-text", text), close);
+    const remove = () => {
+      clearTimeout(box._t);
+      box.remove();
+      if (!host.children.length && host.hidePopover) { try { host.hidePopover(); } catch (e) {} }
+    };
+    close.addEventListener("click", remove);
+    box._t = setTimeout(remove, MSG_SEC * 1000);
+    host.append(box);
+    while (host.children.length > MSG_MAX) { clearTimeout(host.firstChild._t); host.firstChild.remove(); }
+    raiseToasts();   // показати (або підняти на самий верх, якщо після попереднього повідомлення відкрився діалог)
   }
 
   // Якщо активної гри немає — замість сторінки показуємо підказку

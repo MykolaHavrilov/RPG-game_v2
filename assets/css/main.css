@@ -362,17 +362,35 @@ dialog::backdrop { background: var(--overlay); }
 .is-selected { outline: 3px solid var(--select); outline-offset: 1px; }
 [hidden] { display: none !important; }
 
-/* ---------- Повідомлення ---------- */
-.msg {
-  padding: 10px 14px;
+/* ---------- Повідомлення: спливаюче віконце посеред екрана (game.js → showMsg) ---------- */
+/* .toast-host — popover (верхній шар, поверх діалогів); скидаємо типові стилі popover */
+.toast-host {
+  position: fixed; inset: auto; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 32px)); margin: 0; padding: 0; border: 0;
+  background: transparent; color: var(--text); overflow: visible; z-index: 1000;
+  display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+}
+.toast-host[popover]:not(:popover-open) { display: none; }
+.toast {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 8px 10px 14px;
   border-radius: var(--radius-sm);
   background: var(--msg-bg);
   border: 1px solid var(--border-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  pointer-events: auto;
   animation: msg-in .25s ease-out;
 }
-.msg-error { background: var(--msg-error-bg); }
+.toast-error { background: var(--msg-error-bg); }
+.toast-text { flex: 1; line-height: 1.35; overflow-wrap: anywhere; }
+.toast-close {
+  flex: 0 0 auto; width: 28px; height: 28px; margin: -4px 0;
+  border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer; opacity: .8;
+}
+.toast-close:hover, .toast-close:focus-visible { opacity: 1; background: rgba(255, 255, 255, .12); }
 .note { margin: 0; font-size: .9rem; color: var(--text-dim); }
-@keyframes msg-in { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes msg-in { from { opacity: 0; transform: translateY(-6px); } }
 
 /* ---------- Список збережень ---------- */
 .save-row { display: flex; gap: 8px; }
